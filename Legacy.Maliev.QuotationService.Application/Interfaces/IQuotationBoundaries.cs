@@ -7,6 +7,7 @@ public interface IQuotationService
     Task<QuotationResponse> CreateQuotationAsync(UpsertQuotationRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteQuotationAsync(int id, CancellationToken cancellationToken);
     Task<QuotationResponse?> GetQuotationAsync(int id, CancellationToken cancellationToken);
+    Task<CustomerQuotationDetails?> GetCustomerQuotationAsync(int customerId, int id, CancellationToken cancellationToken);
     Task<QuotationResponse?> GetQuotationByInvoiceAsync(int invoiceId, CancellationToken cancellationToken);
     Task<PaginatedResponse<QuotationResponse>?> GetQuotationsAsync(int? customerId, QuotationSortType? sort, string? search, int pageIndex, int pageSize, CancellationToken cancellationToken);
     Task<QuotationStatsResponse> GetStatsAsync(CancellationToken cancellationToken);

@@ -4,6 +4,11 @@ public sealed record QuotationResponse(int Id, int? CustomerId, int? EmployeeId,
 public sealed record UpsertQuotationRequest(int? CustomerId, int? EmployeeId, int? InvoiceId, int Period, DateTime ExpirationDate, decimal Subtotal, decimal Vat, decimal Total, decimal? WithholdingTax, int CurrencyId, string? Comment, string? Fob, string? ShippedVia, string? Terms, bool? Accepted);
 public sealed record QuotationStatsResponse(int Accepted, int Declined, int Open);
 public sealed record QuotationDocumentSnapshot(QuotationResponse Quotation, IReadOnlyList<QuotationOrderItemResponse> OrderItems, IReadOnlyList<QuotationFileResponse> Files);
+public sealed record CustomerQuotationDetails(
+    QuotationResponse Quotation,
+    IReadOnlyList<QuotationOrderItemResponse> OrderItems,
+    IReadOnlyList<QuotationOrderLinkResponse> Orders,
+    IReadOnlyList<QuotationFileResponse> Files);
 public sealed record QuotationOrderItemResponse(int Id, int QuotationId, int? OrderId, string? Description, int? Quantity, decimal? UnitPrice, decimal? Subtotal, DateTime? CreatedDate, DateTime? ModifiedDate);
 public sealed record UpsertQuotationOrderItemRequest(int QuotationId, int? OrderId, string? Description, int? Quantity, decimal? UnitPrice);
 public sealed record QuotationOrderLinkResponse(int Id, int QuotationId, int OrderId, DateTime? CreatedDate, DateTime? ModifiedDate);
