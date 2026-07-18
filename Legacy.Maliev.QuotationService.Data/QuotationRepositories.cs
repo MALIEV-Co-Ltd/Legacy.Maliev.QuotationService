@@ -55,10 +55,16 @@ public sealed class QuotationRepository(
         return await PageAsync(Project(query), pageIndex, pageSize, cancellationToken);
     }
 
-    public async Task<QuotationStatsResponse> GetStatsAsync(CancellationToken cancellationToken) => new(
-        await quotations.Quotations.CountAsync(x => x.Accepted == true, cancellationToken),
-        await quotations.Quotations.CountAsync(x => x.Accepted == false, cancellationToken),
-        await quotations.Quotations.CountAsync(x => x.Accepted == null, cancellationToken));
+    public async Task<QuotationStatsResponse> GetStatsAsync(CancellationToken cancellationToken) =>
+        await quotations.Quotations
+            .AsNoTracking()
+            .GroupBy(_ => 1)
+            .Select(group => new QuotationStatsResponse(
+                group.Count(x => x.Accepted == true),
+                group.Count(x => x.Accepted == false),
+                group.Count(x => x.Accepted == null)))
+            .SingleOrDefaultAsync(cancellationToken)
+        ?? new QuotationStatsResponse(0, 0, 0);
 
     public async Task<UpdateResult> UpdateQuotationAsync(int id, UpsertQuotationRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken)
     {
