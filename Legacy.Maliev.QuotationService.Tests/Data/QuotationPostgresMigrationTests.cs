@@ -1,7 +1,9 @@
+using System.Data.Common;
 using Legacy.Maliev.QuotationService.Application.Interfaces;
 using Legacy.Maliev.QuotationService.Application.Models;
 using Legacy.Maliev.QuotationService.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Moq;
 using Testcontainers.PostgreSql;
 
@@ -52,6 +54,32 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Stats_UseOnePostgresCommandAndPreserveNullableStatusBuckets()
+    {
+        await using var setupQuotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await Task.WhenAll(
+            setupQuotationContext.Database.MigrateAsync(),
+            requestContext.Database.MigrateAsync());
+        var setupRepository = Repository(setupQuotationContext, requestContext);
+        var baseline = await setupRepository.GetStatsAsync(CancellationToken.None);
+        await setupRepository.CreateQuotationAsync(QuotationRequest(accepted: true), CancellationToken.None);
+        await setupRepository.CreateQuotationAsync(QuotationRequest(accepted: false), CancellationToken.None);
+        await setupRepository.CreateQuotationAsync(QuotationRequest(accepted: null), CancellationToken.None);
+
+        var commandCounter = new CommandCounter();
+        await using var measuredQuotationContext = QuotationContext(commandCounter);
+        var measuredRepository = Repository(measuredQuotationContext, requestContext);
+
+        var stats = await measuredRepository.GetStatsAsync(CancellationToken.None);
+
+        Assert.Equal(1, commandCounter.ReaderCommands);
+        Assert.Equal(baseline.Accepted + 1, stats.Accepted);
+        Assert.Equal(baseline.Declined + 1, stats.Declined);
+        Assert.Equal(baseline.Open + 1, stats.Open);
+    }
+
+    [Fact]
     public async Task CustomerQuotationDetails_EnforceOwnershipAndComposeReadOnlyMetadata()
     {
         await using var quotationContext = QuotationContext();
@@ -91,7 +119,24 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         return new(quotations, requests, cache.Object, TimeProvider.System);
     }
 
-    private static UpsertQuotationRequest QuotationRequest(DateTime? expiration = null, int? customerId = null) => new(customerId, null, null, 30, expiration ?? new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc), 100m, 7m, 107m, 3m, 764, "legacy", "FOB", "Courier", "30 days", null);
-    private QuotationDbContext QuotationContext() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(quotationPostgres.GetConnectionString()).Options);
+    private static UpsertQuotationRequest QuotationRequest(DateTime? expiration = null, int? customerId = null, bool? accepted = null) => new(customerId, null, null, 30, expiration ?? new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc), 100m, 7m, 107m, 3m, 764, "legacy", "FOB", "Courier", "30 days", accepted);
+    private QuotationDbContext QuotationContext(params IInterceptor[] interceptors) => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(quotationPostgres.GetConnectionString()).AddInterceptors(interceptors).Options);
     private QuotationRequestDbContext RequestContext() => new(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(requestPostgres.GetConnectionString()).Options);
+
+    private sealed class CommandCounter : DbCommandInterceptor
+    {
+        private int readerCommands;
+
+        public int ReaderCommands => Volatile.Read(ref readerCommands);
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref readerCommands);
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
 }
