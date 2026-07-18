@@ -59,3 +59,13 @@ public interface IIdempotencyStore
     Task<T?> GetAsync<T>(string scope, string key, CancellationToken cancellationToken) where T : class;
     Task SetAsync<T>(string scope, string key, T response, CancellationToken cancellationToken) where T : class;
 }
+
+public interface IQuotationDecisionWorkflow
+{
+    Task<QuotationDecisionResponse> DecideAsync(int quotationId, QuotationDecisionRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken);
+}
+
+public interface IOrderDecisionClient
+{
+    Task<OrderDecisionResult> TransitionAsync(int orderId, bool accepted, string idempotencyKey, CancellationToken cancellationToken);
+}

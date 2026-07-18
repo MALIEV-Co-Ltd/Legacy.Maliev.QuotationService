@@ -2,7 +2,7 @@
 
 ## Boundaries
 
-- Preserve 33 approved controller actions and 34 route templates across quotations, lines,
+- Preserve 34 approved controller actions and 35 route templates across quotations, decisions, lines,
   order links, quotation files, quotation requests, and request files.
 - Keep `Quotation` and `QuotationRequest` as separate databases and DbContexts on the same
   planned `legacy-postgres-quotation` cluster. Do not add cross-database foreign keys.

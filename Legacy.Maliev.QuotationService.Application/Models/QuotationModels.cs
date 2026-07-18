@@ -29,3 +29,7 @@ public sealed record PaginatedResponse<T>(IReadOnlyList<T> Items, int PageIndex,
 public enum QuotationSortType { QuotationId_Ascending, QuotationId_Descending, QuotationCreatedDate_Ascending, QuotationCreatedDate_Descending, QuotationModifiedDate_Ascending, QuotationModifiedDate_Descending }
 public enum RequestSortType { RequestId_Ascending, RequestId_Descending, RequestCreatedDate_Ascending, RequestCreatedDate_Descending, RequestModifiedDate_Ascending, RequestModifiedDate_Descending }
 public enum UpdateResult { Updated, NotFound, Conflict }
+public sealed record QuotationDecisionRequest(bool Accepted);
+public sealed record QuotationDecisionResponse(QuotationDecisionStatus Status, int CompletedOrders, int TotalOrders, DateTime? ModifiedDate);
+public enum QuotationDecisionStatus { Completed, NotFound, Conflict, DependencyConflict, DependencyUnavailable }
+public enum OrderDecisionResult { Completed, Conflict, NotFound, Unavailable }

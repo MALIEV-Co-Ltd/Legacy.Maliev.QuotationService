@@ -11,7 +11,8 @@ namespace Legacy.Maliev.QuotationService.Api.Controllers;
 public sealed class QuotationsController(
     IQuotationService service,
     IIdempotencyStore idempotency,
-    IAuthorizationService authorization) : ControllerBase
+    IAuthorizationService authorization,
+    IQuotationDecisionWorkflow decisions) : ControllerBase
 {
     [HttpPost, RequirePermission(QuotationPermissions.QuotationsCreate, RequireLiveCheck = true, IsCritical = true)]
     public async Task<IActionResult> CreateQuotationAsync(UpsertQuotationRequest item, [FromHeader(Name = "Idempotency-Key")] string? key, CancellationToken cancellationToken)
@@ -50,6 +51,24 @@ public sealed class QuotationsController(
 
     [HttpPut("{quotationId:int}"), RequirePermission(QuotationPermissions.QuotationsUpdate, ResourcePathTemplate = "/quotations/{quotationId}", RequireLiveCheck = true, IsCritical = true)]
     public async Task<IActionResult> UpdateQuotationAsync(int quotationId, UpsertQuotationRequest item, [FromHeader(Name = "X-Expected-Modified-Date")] DateTimeOffset? expected, CancellationToken cancellationToken) => (await service.UpdateQuotationAsync(quotationId, item, expected, cancellationToken)) switch { UpdateResult.Updated => NoContent(), UpdateResult.Conflict => Conflict("Quotation was modified by another request."), _ => NotFound() };
+
+    [HttpPut("{quotationId:int}/decision"), RequirePermission(QuotationPermissions.QuotationsUpdate, ResourcePathTemplate = "/quotations/{quotationId}", RequireLiveCheck = true, IsCritical = true)]
+    public async Task<IActionResult> DecideQuotationAsync(
+        int quotationId,
+        QuotationDecisionRequest request,
+        [FromHeader(Name = "X-Expected-Modified-Date")] DateTimeOffset? expected,
+        CancellationToken cancellationToken)
+    {
+        var result = await decisions.DecideAsync(quotationId, request, expected, cancellationToken);
+        return result.Status switch
+        {
+            QuotationDecisionStatus.Completed => Ok(result),
+            QuotationDecisionStatus.NotFound => NotFound(),
+            QuotationDecisionStatus.Conflict => Conflict("Quotation was modified by another request."),
+            QuotationDecisionStatus.DependencyConflict => Conflict(result),
+            _ => StatusCode(StatusCodes.Status503ServiceUnavailable, result),
+        };
+    }
 
     [HttpGet("{quotationId:int}/withholdingtax", Name = "GetQuotationWithholdingTax"), RequirePermission(QuotationPermissions.QuotationsRead, ResourcePathTemplate = "/quotations/{quotationId}", RequireLiveCheck = true)]
     public async Task<ActionResult<decimal>> GetQuotationWithholdingTaxAsync(int quotationId, CancellationToken cancellationToken) { var value = await service.GetWithholdingTaxAsync(quotationId, cancellationToken); return value is null ? NotFound() : value.Value; }

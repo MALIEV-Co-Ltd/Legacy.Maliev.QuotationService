@@ -36,6 +36,14 @@ action requires JWT authentication and an explicit permission.
 - Quotation and request creates support SHA-256-keyed Redis idempotency. Quotation, line, and
   request updates support `X-Expected-Modified-Date` and return HTTP 409 for stale writes.
 
+## Quotation decision workflow
+
+Quotation decisions use the server-side `ServiceAuthentication` client identity to call
+`Services:Order` through the legacy AuthService token exchange. Credentials are runtime-only;
+the QuotationService identity needs only `legacy.order-status.write`. `PUT
+/quotations/{quotationId}/decision` uses quotation optimistic concurrency and deterministic
+OrderService idempotency keys so an interrupted multi-order decision can be retried safely.
+
 ## Data ownership and deployment gate
 
 - Planned existing-cluster target: `legacy-postgres-quotation` in `maliev-legacy`.
