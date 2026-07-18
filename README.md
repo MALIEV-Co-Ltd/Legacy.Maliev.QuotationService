@@ -4,6 +4,11 @@ Public, sanitized .NET 10 compatibility extraction merging the legacy Quotation 
 QuotationRequest APIs from the private `maliev-web` monorepo. It is independently buildable and
 deployable while retaining separate database ownership and legacy HTTP/wire behavior.
 
+The runtime consumes the public `Legacy.Maliev.ServiceDefaults` package while preserving the
+existing `Maliev.Aspire.ServiceDefaults` CLR namespace. CI and image builds also use the public
+`Legacy.Maliev.CompatibilityContracts` source repository, removing new-platform shared-library
+source and private package credentials without changing quotation contracts.
+
 ## Preserved surface
 
 - `/Quotations[/{quotationId}]`, `/Quotations/customers/{customerId}`,
