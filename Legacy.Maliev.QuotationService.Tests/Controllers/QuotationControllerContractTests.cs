@@ -25,12 +25,24 @@ public sealed class QuotationControllerContractTests
     { Assert.Equal(route, controller.GetCustomAttribute<RouteAttribute>()?.Template); Assert.NotNull(controller.GetCustomAttribute<AuthorizeAttribute>()); }
 
     [Fact]
-    public void Controllers_PreserveThirtyThreeActionsAndThirtyFourRouteTemplates()
+    public void Controllers_PreserveThirtyFourActionsAndThirtyFiveRouteTemplates()
     {
         var methods = Controllers.SelectMany(row => ((Type)row[0]).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)).ToArray();
-        Assert.Equal(33, methods.Length);
-        Assert.Equal(34, methods.SelectMany(method => method.GetCustomAttributes<HttpMethodAttribute>()).Count());
+        Assert.Equal(34, methods.Length);
+        Assert.Equal(35, methods.SelectMany(method => method.GetCustomAttributes<HttpMethodAttribute>()).Count());
         Assert.All(methods, method => Assert.Single(method.GetCustomAttributes<RequirePermissionAttribute>()));
+    }
+
+    [Fact]
+    public void DecisionBoundary_IsCriticalAndUsesQuotationUpdatePermission()
+    {
+        var action = typeof(QuotationsController).GetMethod(nameof(QuotationsController.DecideQuotationAsync))!;
+        Assert.Equal("{quotationId:int}/decision", Assert.Single(action.GetCustomAttributes<HttpPutAttribute>()).Template);
+        var permission = Assert.Single(action.GetCustomAttributes<RequirePermissionAttribute>());
+        Assert.Equal("legacy.quotations.update", permission.Permission);
+        Assert.True(permission.RequireLiveCheck);
+        Assert.True(permission.IsCritical);
+        Assert.Equal("/quotations/{quotationId}", permission.ResourcePathTemplate);
     }
 
     [Fact]
@@ -101,7 +113,8 @@ public sealed class QuotationControllerContractTests
         var controller = new QuotationsController(
             service.Object,
             Mock.Of<IIdempotencyStore>(),
-            authorization.Object);
+            authorization.Object,
+            Mock.Of<IQuotationDecisionWorkflow>());
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext(),
