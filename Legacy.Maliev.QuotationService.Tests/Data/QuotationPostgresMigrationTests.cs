@@ -51,6 +51,38 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         Assert.Equal(3m, await repository.GetWithholdingTaxAsync(quotation.Id, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task CustomerQuotationDetails_EnforceOwnershipAndComposeReadOnlyMetadata()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await Task.WhenAll(
+            quotationContext.Database.MigrateAsync(),
+            requestContext.Database.MigrateAsync());
+        var repository = Repository(quotationContext, requestContext);
+        var quotation = await repository.CreateQuotationAsync(
+            QuotationRequest(customerId: 42),
+            CancellationToken.None);
+        await repository.CreateOrderItemAsync(
+            new(quotation.Id, 77, "Owned line", 2, 50m),
+            CancellationToken.None);
+        await repository.CreateOrderLinkAsync(quotation.Id, 77, CancellationToken.None);
+        await repository.CreateQuotationFileAsync(
+            quotation.Id,
+            "legacy-quotes",
+            "quotes/owned.pdf",
+            CancellationToken.None);
+
+        Assert.Null(await repository.GetCustomerQuotationAsync(41, quotation.Id, CancellationToken.None));
+        var details = await repository.GetCustomerQuotationAsync(42, quotation.Id, CancellationToken.None);
+
+        Assert.NotNull(details);
+        Assert.Equal(42, details.Quotation.CustomerId);
+        Assert.Equal("Owned line", Assert.Single(details.OrderItems).Description);
+        Assert.Equal(77, Assert.Single(details.Orders).OrderId);
+        Assert.Equal("quotes/owned.pdf", Assert.Single(details.Files).ObjectName);
+    }
+
     private QuotationRepository Repository(QuotationDbContext quotations, QuotationRequestDbContext requests)
     {
         var cache = new Mock<IQuotationCache>();
@@ -59,7 +91,7 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         return new(quotations, requests, cache.Object, TimeProvider.System);
     }
 
-    private static UpsertQuotationRequest QuotationRequest(DateTime? expiration = null) => new(null, null, null, 30, expiration ?? new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc), 100m, 7m, 107m, 3m, 764, "legacy", "FOB", "Courier", "30 days", null);
+    private static UpsertQuotationRequest QuotationRequest(DateTime? expiration = null, int? customerId = null) => new(customerId, null, null, 30, expiration ?? new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc), 100m, 7m, 107m, 3m, 764, "legacy", "FOB", "Courier", "30 days", null);
     private QuotationDbContext QuotationContext() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(quotationPostgres.GetConnectionString()).Options);
     private QuotationRequestDbContext RequestContext() => new(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(requestPostgres.GetConnectionString()).Options);
 }

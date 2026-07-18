@@ -3,6 +3,7 @@ namespace Legacy.Maliev.QuotationService.Api.Authorization;
 public static class QuotationPermissions
 {
     public const string QuotationsRead = "legacy.quotations.read";
+    public const string CustomerQuotationsRead = "legacy.customer-quotations.read";
     public const string QuotationsCreate = "legacy.quotations.create";
     public const string QuotationsUpdate = "legacy.quotations.update";
     public const string QuotationsDelete = "legacy.quotations.delete";

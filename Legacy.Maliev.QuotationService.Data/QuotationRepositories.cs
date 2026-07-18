@@ -31,6 +31,19 @@ public sealed class QuotationRepository(
         if (value is not null) await cache.SetAsync(QuotationKey(id), value, TimeSpan.FromMinutes(2), cancellationToken); return value;
     }
 
+    public async Task<CustomerQuotationDetails?> GetCustomerQuotationAsync(int customerId, int id, CancellationToken cancellationToken)
+    {
+        var quotation = await Project(quotations.Quotations.AsNoTracking()
+            .Where(x => x.Id == id && x.CustomerId == customerId))
+            .SingleOrDefaultAsync(cancellationToken);
+        if (quotation is null) return null;
+
+        var orderItems = await GetOrderItemsAsync(id, cancellationToken);
+        var orders = await GetOrderLinksAsync(id, cancellationToken);
+        var files = await GetQuotationFilesAsync(id, cancellationToken);
+        return new CustomerQuotationDetails(quotation, orderItems, orders, files);
+    }
+
     public Task<QuotationResponse?> GetQuotationByInvoiceAsync(int invoiceId, CancellationToken cancellationToken) =>
         Project(quotations.Quotations.AsNoTracking().Where(x => x.InvoiceId == invoiceId)).SingleOrDefaultAsync(cancellationToken);
 
