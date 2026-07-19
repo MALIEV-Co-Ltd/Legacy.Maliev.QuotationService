@@ -139,7 +139,52 @@ public sealed class QuotationRepository(
         var entity = await requests.Requests.FindAsync([id], cancellationToken); if (entity is null) return UpdateResult.NotFound; if (expectedModifiedDate is not null) requests.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = expectedModifiedDate.Value.UtcDateTime; Map(entity, request).ModifiedDate = Now(); try { await requests.SaveChangesAsync(cancellationToken); await cache.RemoveAsync(RequestKey(id), cancellationToken); return UpdateResult.Updated; } catch (DbUpdateConcurrencyException) { return UpdateResult.Conflict; }
     }
 
-    public async Task<QuotationRequestFileResponse?> CreateRequestFileAsync(int requestId, string bucket, string objectName, CancellationToken cancellationToken) { if (!await requests.Requests.AnyAsync(x => x.Id == requestId, cancellationToken)) return null; var now = Now(); var entity = new QuotationRequestFile { RequestId = requestId, Bucket = bucket.Trim(), ObjectName = objectName.Trim(), CreatedDate = now, ModifiedDate = now }; requests.Add(entity); await requests.SaveChangesAsync(cancellationToken); return ToResponse(entity); }
+    public async Task<QuotationRequestFileResponse?> CreateRequestFileAsync(
+        int requestId,
+        string bucket,
+        string objectName,
+        CancellationToken cancellationToken)
+    {
+        var normalizedBucket = bucket.Trim();
+        var normalizedObjectName = objectName.Trim();
+        var lockIdentity = $"{requestId}\n{normalizedBucket.Length}:{normalizedBucket}\n{normalizedObjectName.Length}:{normalizedObjectName}";
+
+        await using var transaction = await requests.Database.BeginTransactionAsync(cancellationToken);
+        await requests.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({lockIdentity}, 0))",
+            cancellationToken);
+
+        if (!await requests.Requests.AnyAsync(x => x.Id == requestId, cancellationToken))
+        {
+            return null;
+        }
+
+        var existing = await ProjectRequestFiles(requests.Files.AsNoTracking().Where(file =>
+                    file.RequestId == requestId
+                    && file.Bucket == normalizedBucket
+                    && file.ObjectName == normalizedObjectName)
+                .OrderBy(file => file.Id))
+            .FirstOrDefaultAsync(cancellationToken);
+        if (existing is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return existing;
+        }
+
+        var now = Now();
+        var entity = new QuotationRequestFile
+        {
+            RequestId = requestId,
+            Bucket = normalizedBucket,
+            ObjectName = normalizedObjectName,
+            CreatedDate = now,
+            ModifiedDate = now,
+        };
+        requests.Add(entity);
+        await requests.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return ToResponse(entity);
+    }
     public async Task<bool> DeleteRequestFileAsync(int id, CancellationToken cancellationToken) => await requests.Files.Where(x => x.Id == id).ExecuteDeleteAsync(cancellationToken) == 1;
     public Task<QuotationRequestFileResponse?> GetRequestFileAsync(int id, CancellationToken cancellationToken) => ProjectRequestFiles(requests.Files.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(cancellationToken);
     public async Task<IReadOnlyList<QuotationRequestFileResponse>> GetRequestFilesAsync(int requestId, CancellationToken cancellationToken) => await ProjectRequestFiles(requests.Files.AsNoTracking().Where(x => x.RequestId == requestId).OrderBy(x => x.Id)).ToListAsync(cancellationToken);
