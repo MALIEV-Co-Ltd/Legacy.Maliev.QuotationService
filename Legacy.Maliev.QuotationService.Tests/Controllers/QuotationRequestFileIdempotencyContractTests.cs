@@ -136,6 +136,35 @@ public sealed class QuotationRequestFileIdempotencyContractTests
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Theory]
+    [InlineData("", "instant-quotation/417/file.stl")]
+    [InlineData("legacy-requests", " ")]
+    public async Task CreateRequestFile_BlankStorageCoordinate_ReturnsStableProblemWithoutInsert(
+        string bucket,
+        string objectName)
+    {
+        var service = new Mock<IQuotationService>();
+        var controller = new QuotationRequestFilesController(service.Object, new MemoryIdempotencyStore());
+
+        var response = await controller.CreateQuotationRequestFileEntryAsync(
+            417,
+            bucket,
+            objectName,
+            "submission:file:1",
+            CancellationToken.None);
+
+        var result = Assert.IsType<ObjectResult>(response);
+        Assert.Equal(StatusCodes.Status400BadRequest, result.StatusCode);
+        var problem = Assert.IsType<ProblemDetails>(result.Value);
+        Assert.Equal("storage_coordinate_required", problem.Extensions["code"]);
+        Assert.Contains("application/problem+json", result.ContentTypes);
+        service.Verify(value => value.CreateRequestFileAsync(
+            It.IsAny<int>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact]
     public async Task CreateRequestFile_ConcurrentFirstUseWithDifferentTuple_CreatesOnlyBoundTuple()
     {

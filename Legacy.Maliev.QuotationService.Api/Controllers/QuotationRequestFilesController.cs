@@ -22,7 +22,13 @@ public sealed class QuotationRequestFilesController(IQuotationService service, I
         [FromHeader(Name = "Idempotency-Key")] string? key,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(bucket) || string.IsNullOrWhiteSpace(objectName)) return BadRequest();
+        if (string.IsNullOrWhiteSpace(bucket) || string.IsNullOrWhiteSpace(objectName))
+        {
+            return ProblemWithCode(
+                StatusCodes.Status400BadRequest,
+                "Bucket and object name are required.",
+                "storage_coordinate_required");
+        }
         if (key?.Length > MaximumIdempotencyKeyLength)
         {
             return ProblemWithCode(
