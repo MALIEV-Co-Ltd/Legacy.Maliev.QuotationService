@@ -2,6 +2,7 @@ using System.Data.Common;
 using Legacy.Maliev.QuotationService.Application.Interfaces;
 using Legacy.Maliev.QuotationService.Application.Models;
 using Legacy.Maliev.QuotationService.Data;
+using Legacy.Maliev.QuotationService.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Moq;
@@ -109,6 +110,136 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         Assert.Equal("Owned line", Assert.Single(details.OrderItems).Description);
         Assert.Equal(77, Assert.Single(details.Orders).OrderId);
         Assert.Equal("quotes/owned.pdf", Assert.Single(details.Files).ObjectName);
+    }
+
+    [Fact]
+    public async Task RequestFileCreate_RestartOrCacheLoss_ReconcilesExistingNaturalTuple()
+    {
+        await using var setupQuotationContext = QuotationContext();
+        await using var setupRequestContext = RequestContext();
+        await Task.WhenAll(
+            setupQuotationContext.Database.MigrateAsync(),
+            setupRequestContext.Database.MigrateAsync());
+        var setupRepository = Repository(setupQuotationContext, setupRequestContext);
+        var request = await setupRepository.CreateRequestAsync(
+            new("Replay", "Test", "replay@example.test", null, "TH", null, null, "request-file replay", null, null),
+            CancellationToken.None);
+        var first = await setupRepository.CreateRequestFileAsync(
+            request.Id,
+            "legacy-requests",
+            "instant-quotation/replay/model.stl",
+            CancellationToken.None);
+
+        await using var restartedQuotationContext = QuotationContext();
+        await using var restartedRequestContext = RequestContext();
+        var restartedRepository = Repository(restartedQuotationContext, restartedRequestContext);
+        var replay = await restartedRepository.CreateRequestFileAsync(
+            request.Id,
+            " legacy-requests ",
+            " instant-quotation/replay/model.stl ",
+            CancellationToken.None);
+
+        Assert.NotNull(first);
+        Assert.Equal(first.Id, replay?.Id);
+        Assert.Equal(
+            1,
+            await restartedRequestContext.Files.CountAsync(
+                file => file.RequestId == request.Id
+                    && file.Bucket == "legacy-requests"
+                    && file.ObjectName == "instant-quotation/replay/model.stl"));
+    }
+
+    [Fact]
+    public async Task RequestFileCreate_ConcurrentIdenticalAttempts_InsertOnce()
+    {
+        await using var setupQuotationContext = QuotationContext();
+        await using var setupRequestContext = RequestContext();
+        await Task.WhenAll(
+            setupQuotationContext.Database.MigrateAsync(),
+            setupRequestContext.Database.MigrateAsync());
+        var setupRepository = Repository(setupQuotationContext, setupRequestContext);
+        var request = await setupRepository.CreateRequestAsync(
+            new("Concurrent", "Test", "concurrent@example.test", null, "TH", null, null, "request-file concurrency", null, null),
+            CancellationToken.None);
+
+        await using var quotationContext1 = QuotationContext();
+        await using var requestContext1 = RequestContext();
+        await using var quotationContext2 = QuotationContext();
+        await using var requestContext2 = RequestContext();
+        var repository1 = Repository(quotationContext1, requestContext1);
+        var repository2 = Repository(quotationContext2, requestContext2);
+
+        var attempts = await Task.WhenAll(
+            repository1.CreateRequestFileAsync(
+                request.Id,
+                "legacy-requests",
+                "instant-quotation/concurrent/model.stl",
+                CancellationToken.None),
+            repository2.CreateRequestFileAsync(
+                request.Id,
+                "legacy-requests",
+                "instant-quotation/concurrent/model.stl",
+                CancellationToken.None));
+
+        Assert.All(attempts, Assert.NotNull);
+        Assert.Equal(attempts[0]!.Id, attempts[1]!.Id);
+        await using var verificationContext = RequestContext();
+        Assert.Equal(
+            1,
+            await verificationContext.Files.CountAsync(
+                file => file.RequestId == request.Id
+                    && file.Bucket == "legacy-requests"
+                    && file.ObjectName == "instant-quotation/concurrent/model.stl"));
+    }
+
+    [Fact]
+    public async Task RequestFileCreate_PreexistingDuplicateTuple_ReturnsOldestWithoutAddingAnother()
+    {
+        await using var setupQuotationContext = QuotationContext();
+        await using var setupRequestContext = RequestContext();
+        await Task.WhenAll(
+            setupQuotationContext.Database.MigrateAsync(),
+            setupRequestContext.Database.MigrateAsync());
+        var setupRepository = Repository(setupQuotationContext, setupRequestContext);
+        var request = await setupRepository.CreateRequestAsync(
+            new("Historical", "Duplicate", "historical@example.test", null, "TH", null, null, "legacy duplicate", null, null),
+            CancellationToken.None);
+        var now = DateTime.UtcNow;
+        setupRequestContext.Files.AddRange(
+            new QuotationRequestFile
+            {
+                RequestId = request.Id,
+                Bucket = "legacy-requests",
+                ObjectName = "instant-quotation/historical/model.stl",
+                CreatedDate = now,
+                ModifiedDate = now,
+            },
+            new QuotationRequestFile
+            {
+                RequestId = request.Id,
+                Bucket = "legacy-requests",
+                ObjectName = "instant-quotation/historical/model.stl",
+                CreatedDate = now.AddSeconds(1),
+                ModifiedDate = now.AddSeconds(1),
+            });
+        await setupRequestContext.SaveChangesAsync();
+        var oldestId = await setupRequestContext.Files
+            .Where(file => file.RequestId == request.Id)
+            .MinAsync(file => file.Id);
+
+        await using var restartedQuotationContext = QuotationContext();
+        await using var restartedRequestContext = RequestContext();
+        var replay = await Repository(restartedQuotationContext, restartedRequestContext)
+            .CreateRequestFileAsync(
+                request.Id,
+                "legacy-requests",
+                "instant-quotation/historical/model.stl",
+                CancellationToken.None);
+
+        Assert.Equal(oldestId, replay?.Id);
+        Assert.Equal(
+            2,
+            await restartedRequestContext.Files.CountAsync(file => file.RequestId == request.Id));
     }
 
     private QuotationRepository Repository(QuotationDbContext quotations, QuotationRequestDbContext requests)
