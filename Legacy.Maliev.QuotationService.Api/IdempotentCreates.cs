@@ -4,7 +4,11 @@ namespace Legacy.Maliev.QuotationService.Api;
 
 internal static class IdempotentCreates
 {
-    internal sealed record BoundCreateResult<T>(T? Response, bool Conflict) where T : class;
+    internal sealed record BoundCreateResult<T>(T? Response, IdempotencyBindingResult Binding) where T : class
+    {
+        public bool Conflict => Binding == IdempotencyBindingResult.Conflict;
+        public bool Unavailable => Binding == IdempotencyBindingResult.Unavailable;
+    }
 
     private sealed record BoundCreateEnvelope<T>(string Fingerprint, T Response) where T : class;
 
@@ -71,15 +75,21 @@ internal static class IdempotentCreates
     {
         if (string.IsNullOrWhiteSpace(key))
         {
-            return new(await create(), false);
+            return new(await create(), IdempotencyBindingResult.Acquired);
+        }
+
+        var binding = await store.BindAsync(scope, key, fingerprint, cancellationToken);
+        if (binding is IdempotencyBindingResult.Conflict or IdempotencyBindingResult.Unavailable)
+        {
+            return new(null, binding);
         }
 
         var existing = await store.GetAsync<BoundCreateEnvelope<T>>(scope, key, cancellationToken);
         if (existing is not null)
         {
             return string.Equals(existing.Fingerprint, fingerprint, StringComparison.Ordinal)
-                ? new(existing.Response, false)
-                : new(null, true);
+                ? new(existing.Response, binding)
+                : new(null, IdempotencyBindingResult.Conflict);
         }
 
         var response = await create();
@@ -92,6 +102,6 @@ internal static class IdempotentCreates
                 cancellationToken);
         }
 
-        return new(response, false);
+        return new(response, binding);
     }
 }

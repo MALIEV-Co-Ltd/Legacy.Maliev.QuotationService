@@ -12,6 +12,8 @@ namespace Legacy.Maliev.QuotationService.Api.Controllers;
 [ApiController, Route("quotationrequests/files"), Authorize]
 public sealed class QuotationRequestFilesController(IQuotationService service, IIdempotencyStore idempotency) : ControllerBase
 {
+    private const int MaximumIdempotencyKeyLength = 128;
+
     [HttpPost("/quotationrequests/{requestId:int}/files"), RequirePermission(QuotationPermissions.FilesWrite, RequireLiveCheck = true)]
     public async Task<IActionResult> CreateQuotationRequestFileEntryAsync(
         int requestId,
@@ -21,6 +23,13 @@ public sealed class QuotationRequestFilesController(IQuotationService service, I
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(bucket) || string.IsNullOrWhiteSpace(objectName)) return BadRequest();
+        if (key?.Length > MaximumIdempotencyKeyLength)
+        {
+            return ProblemWithCode(
+                StatusCodes.Status400BadRequest,
+                "Idempotency key is too long.",
+                "idempotency_key_too_long");
+        }
 
         var normalizedBucket = bucket.Trim();
         var normalizedObjectName = objectName.Trim();
@@ -34,7 +43,17 @@ public sealed class QuotationRequestFilesController(IQuotationService service, I
             ct);
         if (result.Conflict)
         {
-            return Conflict("Idempotency key was already used with different request data.");
+            return ProblemWithCode(
+                StatusCodes.Status409Conflict,
+                "Idempotency key was already used with different request data.",
+                "idempotency_key_conflict");
+        }
+        if (result.Unavailable)
+        {
+            return ProblemWithCode(
+                StatusCodes.Status503ServiceUnavailable,
+                "Idempotency protection is temporarily unavailable.",
+                "idempotency_store_unavailable");
         }
 
         return result.Response is null
@@ -53,5 +72,15 @@ public sealed class QuotationRequestFilesController(IQuotationService service, I
     {
         var canonical = $"{requestId}\n{bucket.Length}:{bucket}\n{objectName.Length}:{objectName}";
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+    }
+
+    private ObjectResult ProblemWithCode(int statusCode, string title, string code)
+    {
+        var result = Problem(
+            statusCode: statusCode,
+            title: title,
+            extensions: new Dictionary<string, object?> { ["code"] = code });
+        result.ContentTypes.Add("application/problem+json");
+        return result;
     }
 }

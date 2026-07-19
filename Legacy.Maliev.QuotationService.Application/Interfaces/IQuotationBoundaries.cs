@@ -56,8 +56,22 @@ public interface IQuotationCache
 
 public interface IIdempotencyStore
 {
+    Task<IdempotencyBindingResult> BindAsync(
+        string scope,
+        string key,
+        string fingerprint,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(IdempotencyBindingResult.Unavailable);
     Task<T?> GetAsync<T>(string scope, string key, CancellationToken cancellationToken) where T : class;
     Task SetAsync<T>(string scope, string key, T response, CancellationToken cancellationToken) where T : class;
+}
+
+public enum IdempotencyBindingResult
+{
+    Unavailable,
+    Acquired,
+    Matched,
+    Conflict,
 }
 
 public interface IQuotationDecisionWorkflow

@@ -20,4 +20,19 @@ public sealed class DistributedQuotationCacheTests
         Assert.Equal(response, await store.GetAsync<QuotationRequestResponse>("quotation-request", "external-key", CancellationToken.None));
         Assert.Null(await distributed.GetAsync("idempotency:quotation-request:external-key"));
     }
+
+    [Fact]
+    public async Task IdempotencyBinding_WithoutRedis_FailsClosed()
+    {
+        IDistributedCache distributed = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+        IIdempotencyStore store = new DistributedQuotationCache(distributed, NullLogger<DistributedQuotationCache>.Instance);
+
+        var result = await store.BindAsync(
+            "quotation-request-file",
+            "external-key",
+            "fingerprint",
+            CancellationToken.None);
+
+        Assert.Equal(IdempotencyBindingResult.Unavailable, result);
+    }
 }
