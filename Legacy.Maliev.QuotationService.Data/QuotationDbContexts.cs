@@ -45,6 +45,7 @@ public sealed class QuotationRequestDbContext(DbContextOptions<QuotationRequestD
 {
     public DbSet<QuotationRequest> Requests => Set<QuotationRequest>();
     public DbSet<QuotationRequestFile> Files => Set<QuotationRequestFile>();
+    public DbSet<RequestCreateIdempotency> RequestCreateIdempotency => Set<RequestCreateIdempotency>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -52,6 +53,12 @@ public sealed class QuotationRequestDbContext(DbContextOptions<QuotationRequestD
         request.ToTable("Request"); request.HasKey(x => x.Id); request.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd(); request.Property(x => x.Country).HasMaxLength(256); request.Property(x => x.TaxIdentification).HasMaxLength(256); request.Property(x => x.TelephoneNumber).HasMaxLength(256); Dates(request); request.Property(x => x.ModifiedDate).IsConcurrencyToken();
         var file = modelBuilder.Entity<QuotationRequestFile>();
         file.ToTable("RequestFile"); file.HasKey(x => x.Id); file.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd(); file.Property(x => x.RequestId).HasColumnName("RequestID"); file.Property(x => x.Bucket).HasMaxLength(50); Dates(file);
+        var idempotency = modelBuilder.Entity<RequestCreateIdempotency>();
+        idempotency.ToTable("RequestCreateIdempotency");
+        idempotency.HasKey(x => x.KeyHash);
+        idempotency.Property(x => x.KeyHash).HasMaxLength(64).IsFixedLength();
+        idempotency.Property(x => x.Fingerprint).HasMaxLength(64).IsFixedLength();
+        idempotency.Property(x => x.RequestId).HasColumnName("RequestID");
     }
 
     private static void Dates<TEntity>(EntityTypeBuilder<TEntity> entity) where TEntity : class

@@ -35,6 +35,11 @@ public interface IQuotationService
     Task<bool> UpdateQuotationFileAsync(int id, UpsertQuotationFileRequest request, CancellationToken cancellationToken);
 
     Task<QuotationRequestResponse> CreateRequestAsync(UpsertQuotationRequestRequest request, CancellationToken cancellationToken);
+    Task<IdempotentRequestCreateResult> CreateRequestIdempotentlyAsync(
+        UpsertQuotationRequestRequest request,
+        string keyHash,
+        string fingerprint,
+        CancellationToken cancellationToken);
     Task<bool> DeleteRequestAsync(int id, CancellationToken cancellationToken);
     Task<QuotationRequestResponse?> GetRequestAsync(int id, CancellationToken cancellationToken);
     Task<PaginatedResponse<QuotationRequestResponse>?> GetRequestsAsync(RequestSortType? sort, string? search, int pageIndex, int pageSize, CancellationToken cancellationToken);
@@ -73,6 +78,10 @@ public enum IdempotencyBindingResult
     Matched,
     Conflict,
 }
+
+public sealed record IdempotentRequestCreateResult(
+    QuotationRequestResponse? Response,
+    IdempotencyBindingResult Binding);
 
 public interface IQuotationDecisionWorkflow
 {

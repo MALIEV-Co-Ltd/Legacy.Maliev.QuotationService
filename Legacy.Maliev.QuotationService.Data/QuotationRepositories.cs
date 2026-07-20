@@ -127,6 +127,57 @@ public sealed class QuotationRepository(
     {
         var now = Now(); var entity = Map(new QuotationRequest(), request); entity.CreatedDate = now; entity.ModifiedDate = now; requests.Add(entity); await requests.SaveChangesAsync(cancellationToken); return ToResponse(entity);
     }
+    public async Task<IdempotentRequestCreateResult> CreateRequestIdempotentlyAsync(
+        UpsertQuotationRequestRequest request,
+        string keyHash,
+        string fingerprint,
+        CancellationToken cancellationToken)
+    {
+        if (!IsSha256(keyHash) || !IsSha256(fingerprint))
+        {
+            return new(null, IdempotencyBindingResult.Unavailable);
+        }
+
+        await using var transaction = await requests.Database.BeginTransactionAsync(cancellationToken);
+        await requests.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({$"quotation-request\n{keyHash}"}, 0))",
+            cancellationToken);
+
+        var existingBinding = await requests.RequestCreateIdempotency
+            .AsNoTracking()
+            .SingleOrDefaultAsync(value => value.KeyHash == keyHash, cancellationToken);
+        if (existingBinding is not null)
+        {
+            if (!string.Equals(existingBinding.Fingerprint, fingerprint, StringComparison.Ordinal))
+            {
+                return new(null, IdempotencyBindingResult.Conflict);
+            }
+
+            var existingResponse = await ProjectRequests(
+                    requests.Requests.AsNoTracking().Where(value => value.Id == existingBinding.RequestId))
+                .SingleOrDefaultAsync(cancellationToken);
+            return existingResponse is null
+                ? new(null, IdempotencyBindingResult.Unavailable)
+                : new(existingResponse, IdempotencyBindingResult.Matched);
+        }
+
+        var now = Now();
+        var entity = Map(new QuotationRequest(), request);
+        entity.CreatedDate = now;
+        entity.ModifiedDate = now;
+        requests.Add(entity);
+        await requests.SaveChangesAsync(cancellationToken);
+        requests.RequestCreateIdempotency.Add(new RequestCreateIdempotency
+        {
+            KeyHash = keyHash,
+            Fingerprint = fingerprint,
+            RequestId = entity.Id,
+        });
+        await requests.SaveChangesAsync(cancellationToken);
+        await requests.Entry(entity).ReloadAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new(ToResponse(entity), IdempotencyBindingResult.Acquired);
+    }
     public async Task<bool> DeleteRequestAsync(int id, CancellationToken cancellationToken) { var deleted = await requests.Requests.Where(x => x.Id == id).ExecuteDeleteAsync(cancellationToken) == 1; if (deleted) await cache.RemoveAsync(RequestKey(id), cancellationToken); return deleted; }
     public async Task<QuotationRequestResponse?> GetRequestAsync(int id, CancellationToken cancellationToken) { var cached = await cache.GetAsync<QuotationRequestResponse>(RequestKey(id), cancellationToken); if (cached is not null) return cached; var value = await ProjectRequests(requests.Requests.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(cancellationToken); if (value is not null) await cache.SetAsync(RequestKey(id), value, TimeSpan.FromMinutes(2), cancellationToken); return value; }
     public async Task<PaginatedResponse<QuotationRequestResponse>?> GetRequestsAsync(RequestSortType? sort, string? search, int pageIndex, int pageSize, CancellationToken cancellationToken)
@@ -193,6 +244,8 @@ public sealed class QuotationRepository(
     private DateTime Now() => timeProvider.GetUtcNow().UtcDateTime;
     private static string QuotationKey(int id) => $"quotation:{id}";
     private static string RequestKey(int id) => $"request:{id}";
+    private static bool IsSha256(string value) =>
+        value.Length == 64 && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
     private static async Task<PaginatedResponse<T>?> PageAsync<T>(IQueryable<T> query, int pageIndex, int pageSize, CancellationToken cancellationToken) { pageIndex = Math.Max(pageIndex, 1); pageSize = Math.Clamp(pageSize, 1, 250); var total = await query.CountAsync(cancellationToken); if (total == 0) return null; var items = await query.Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken); return new(items, pageIndex, (int)Math.Ceiling(total / (double)pageSize), total); }
     private static Quotation Map(Quotation x, UpsertQuotationRequest r) { x.CustomerId = r.CustomerId; x.EmployeeId = r.EmployeeId; x.InvoiceId = r.InvoiceId; x.Period = r.Period; x.ExpirationDate = r.ExpirationDate; x.Subtotal = r.Subtotal; x.Vat = r.Vat; x.Total = r.Total; x.WithholdingTax = r.WithholdingTax; x.CurrencyId = r.CurrencyId; x.Comment = r.Comment; x.Fob = r.Fob; x.ShippedVia = r.ShippedVia; x.Terms = r.Terms; x.Accepted = r.Accepted; return x; }
     private static QuotationRequest Map(QuotationRequest x, UpsertQuotationRequestRequest r) { x.FirstName = r.FirstName; x.LastName = r.LastName; x.Email = r.Email; x.TelephoneNumber = r.TelephoneNumber; x.Country = r.Country; x.CompanyName = r.CompanyName; x.TaxIdentification = r.TaxIdentification; x.Message = r.Message; x.InternalComment = r.InternalComment; x.Done = r.Done; return x; }
