@@ -3,6 +3,7 @@ using System;
 using Legacy.Maliev.QuotationService.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Legacy.Maliev.QuotationService.Data.Migrations.QuotationRequest
 {
     [DbContext(typeof(QuotationRequestDbContext))]
-    partial class QuotationRequestDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260720112732_AddRequestCreateIdempotency")]
+    partial class AddRequestCreateIdempotency
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

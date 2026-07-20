@@ -1,4 +1,6 @@
 using System.Data.Common;
+using System.Security.Cryptography;
+using System.Text;
 using Legacy.Maliev.QuotationService.Application.Interfaces;
 using Legacy.Maliev.QuotationService.Application.Models;
 using Legacy.Maliev.QuotationService.Data;
@@ -37,7 +39,12 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         Assert.Equal("Ada", request.FirstName); Assert.Equal("requests/1.stl", requestFile?.ObjectName);
         Assert.Single(snapshot!.OrderItems); Assert.Single(snapshot.Files);
         Assert.Equal(4, await quotationContext.Database.SqlQueryRaw<int>("SELECT COUNT(*)::int AS \"Value\" FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('Quotation','OrderItem','QuotationFile','QuotationHasOrder')").SingleAsync());
-        Assert.Equal(2, await requestContext.Database.SqlQueryRaw<int>("SELECT COUNT(*)::int AS \"Value\" FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('Request','RequestFile')").SingleAsync());
+        Assert.Equal(3, await requestContext.Database.SqlQueryRaw<int>("SELECT COUNT(*)::int AS \"Value\" FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('Request','RequestFile','RequestCreateIdempotency')").SingleAsync());
+        Assert.Equal(
+            ["Fingerprint", "KeyHash", "RequestID"],
+            await requestContext.Database.SqlQueryRaw<string>(
+                    "SELECT column_name AS \"Value\" FROM information_schema.columns WHERE table_schema='public' AND table_name='RequestCreateIdempotency' ORDER BY column_name")
+                .ToListAsync());
     }
 
     [Fact]
@@ -242,6 +249,130 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
             await restartedRequestContext.Files.CountAsync(file => file.RequestId == request.Id));
     }
 
+    [Fact]
+    public async Task RequestCreate_LostResponseAndRestart_ReplaysOriginalDurableResult()
+    {
+        await using var setupQuotationContext = QuotationContext();
+        await using var setupRequestContext = RequestContext();
+        await Task.WhenAll(
+            setupQuotationContext.Database.MigrateAsync(),
+            setupRequestContext.Database.MigrateAsync());
+        IQuotationService firstService = Repository(setupQuotationContext, setupRequestContext);
+        var request = Request("lost-response@example.test", "Lost response");
+        var keyHash = Hash("legacy-web-quotation-lost-response");
+        var fingerprint = Hash("lost-response-payload");
+
+        var first = await firstService.CreateRequestIdempotentlyAsync(
+            request,
+            keyHash,
+            fingerprint,
+            CancellationToken.None);
+
+        await using var restartedQuotationContext = QuotationContext();
+        await using var restartedRequestContext = RequestContext();
+        IQuotationService restartedService = Repository(restartedQuotationContext, restartedRequestContext);
+        var replay = await restartedService.CreateRequestIdempotentlyAsync(
+            request,
+            keyHash,
+            fingerprint,
+            CancellationToken.None);
+
+        Assert.Equal(IdempotencyBindingResult.Acquired, first.Binding);
+        Assert.Equal(IdempotencyBindingResult.Matched, replay.Binding);
+        Assert.NotNull(first.Response);
+        Assert.Equal(first.Response, replay.Response);
+        Assert.Equal(
+            1,
+            await restartedRequestContext.Requests.CountAsync(value => value.Email == "lost-response@example.test"));
+    }
+
+    [Fact]
+    public async Task RequestCreate_ConcurrentIdenticalAttempts_ConvergeToOneRequest()
+    {
+        await using var setupQuotationContext = QuotationContext();
+        await using var setupRequestContext = RequestContext();
+        await Task.WhenAll(
+            setupQuotationContext.Database.MigrateAsync(),
+            setupRequestContext.Database.MigrateAsync());
+        await using var quotationContext1 = QuotationContext();
+        await using var requestContext1 = RequestContext();
+        await using var quotationContext2 = QuotationContext();
+        await using var requestContext2 = RequestContext();
+        IQuotationService service1 = Repository(quotationContext1, requestContext1);
+        IQuotationService service2 = Repository(quotationContext2, requestContext2);
+        var request = Request("concurrent-request@example.test", "Concurrent request");
+        var keyHash = Hash("legacy-web-quotation-concurrent-request");
+        var fingerprint = Hash("concurrent-request-payload");
+
+        var outcomes = await Task.WhenAll(
+            service1.CreateRequestIdempotentlyAsync(request, keyHash, fingerprint, CancellationToken.None),
+            service2.CreateRequestIdempotentlyAsync(request, keyHash, fingerprint, CancellationToken.None));
+
+        Assert.Contains(outcomes, value => value.Binding == IdempotencyBindingResult.Acquired);
+        Assert.Contains(outcomes, value => value.Binding == IdempotencyBindingResult.Matched);
+        Assert.All(outcomes, value => Assert.NotNull(value.Response));
+        Assert.Equal(outcomes[0].Response!.Id, outcomes[1].Response!.Id);
+        await using var verificationContext = RequestContext();
+        Assert.Equal(
+            1,
+            await verificationContext.Requests.CountAsync(value => value.Email == "concurrent-request@example.test"));
+    }
+
+    [Fact]
+    public async Task RequestCreate_SameKeyAndChangedFingerprint_FailsClosedWithoutSecondRequest()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await Task.WhenAll(
+            quotationContext.Database.MigrateAsync(),
+            requestContext.Database.MigrateAsync());
+        IQuotationService service = Repository(quotationContext, requestContext);
+        var keyHash = Hash("legacy-web-quotation-conflict");
+        var first = await service.CreateRequestIdempotentlyAsync(
+            Request("conflict@example.test", "Original"),
+            keyHash,
+            Hash("original-payload"),
+            CancellationToken.None);
+        var conflict = await service.CreateRequestIdempotentlyAsync(
+            Request("conflict@example.test", "Changed"),
+            keyHash,
+            Hash("changed-payload"),
+            CancellationToken.None);
+
+        Assert.Equal(IdempotencyBindingResult.Acquired, first.Binding);
+        Assert.Equal(IdempotencyBindingResult.Conflict, conflict.Binding);
+        Assert.Null(conflict.Response);
+        Assert.Equal(
+            1,
+            await requestContext.Requests.CountAsync(value => value.Email == "conflict@example.test"));
+    }
+
+    [Fact]
+    public async Task RequestCreate_RedisCacheUnavailable_DoesNotAffectDurableCreate()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await Task.WhenAll(
+            quotationContext.Database.MigrateAsync(),
+            requestContext.Database.MigrateAsync());
+        var cache = new Mock<IQuotationCache>(MockBehavior.Strict);
+        IQuotationService service = new QuotationRepository(
+            quotationContext,
+            requestContext,
+            cache.Object,
+            TimeProvider.System);
+
+        var result = await service.CreateRequestIdempotentlyAsync(
+            Request("redis-independent@example.test", "Redis independent"),
+            Hash("legacy-web-quotation-redis-independent"),
+            Hash("redis-independent-payload"),
+            CancellationToken.None);
+
+        Assert.Equal(IdempotencyBindingResult.Acquired, result.Binding);
+        Assert.True(result.Response?.Id > 0);
+        cache.VerifyNoOtherCalls();
+    }
+
     private QuotationRepository Repository(QuotationDbContext quotations, QuotationRequestDbContext requests)
     {
         var cache = new Mock<IQuotationCache>();
@@ -251,6 +382,19 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
     }
 
     private static UpsertQuotationRequest QuotationRequest(DateTime? expiration = null, int? customerId = null, bool? accepted = null) => new(customerId, null, null, 30, expiration ?? new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc), 100m, 7m, 107m, 3m, 764, "legacy", "FOB", "Courier", "30 days", accepted);
+    private static UpsertQuotationRequestRequest Request(string email, string message) => new(
+        "Ada",
+        "Lovelace",
+        email,
+        null,
+        "TH",
+        null,
+        null,
+        message,
+        null,
+        null);
+    private static string Hash(string value) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     private QuotationDbContext QuotationContext(params IInterceptor[] interceptors) => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(quotationPostgres.GetConnectionString()).AddInterceptors(interceptors).Options);
     private QuotationRequestDbContext RequestContext() => new(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(requestPostgres.GetConnectionString()).Options);
 

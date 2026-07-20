@@ -93,3 +93,11 @@ public sealed class QuotationRequestFile
     public DateTime? CreatedDate { get; set; }
     public DateTime? ModifiedDate { get; set; }
 }
+
+/// <summary>Hash-only durable binding for replay-safe quotation request creation.</summary>
+public sealed class RequestCreateIdempotency
+{
+    public string KeyHash { get; set; } = string.Empty;
+    public string Fingerprint { get; set; } = string.Empty;
+    public int RequestId { get; set; }
+}
