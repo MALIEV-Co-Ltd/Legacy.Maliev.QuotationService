@@ -52,9 +52,9 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
     {
         await using var quotationContext = QuotationContext(); await using var requestContext = RequestContext();
         await Task.WhenAll(quotationContext.Database.MigrateAsync(), requestContext.Database.MigrateAsync()); var repository = Repository(quotationContext, requestContext);
-        var quotation = await repository.CreateQuotationAsync(QuotationRequest(expiration: new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc)), CancellationToken.None);
+        var quotation = await repository.CreateQuotationAsync(QuotationRequest(expiration: new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Unspecified)), CancellationToken.None);
         var stale = quotation.ModifiedDate!.Value;
-        Assert.Equal(1, await repository.DeclineExpiredAsync(new DateTime(2026, 7, 15, 0, 0, 0, DateTimeKind.Utc), CancellationToken.None));
+        Assert.Equal(1, await repository.DeclineExpiredAsync(new DateTime(2026, 7, 15, 0, 0, 0, DateTimeKind.Unspecified), CancellationToken.None));
         quotationContext.ChangeTracker.Clear();
         Assert.Equal(UpdateResult.Conflict, await repository.UpdateQuotationAsync(quotation.Id, QuotationRequest(), new DateTimeOffset(stale), CancellationToken.None));
         var stats = await repository.GetStatsAsync(CancellationToken.None); Assert.Equal(0, stats.Accepted); Assert.Equal(1, stats.Declined); Assert.Equal(0, stats.Open);
@@ -211,7 +211,7 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         var request = await setupRepository.CreateRequestAsync(
             new("Historical", "Duplicate", "historical@example.test", null, "TH", null, null, "legacy duplicate", null, null),
             CancellationToken.None);
-        var now = DateTime.UtcNow;
+        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
         setupRequestContext.Files.AddRange(
             new QuotationRequestFile
             {
@@ -381,7 +381,7 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         return new(quotations, requests, cache.Object, TimeProvider.System);
     }
 
-    private static UpsertQuotationRequest QuotationRequest(DateTime? expiration = null, int? customerId = null, bool? accepted = null) => new(customerId, null, null, 30, expiration ?? new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc), 100m, 7m, 107m, 3m, 764, "legacy", "FOB", "Courier", "30 days", accepted);
+    private static UpsertQuotationRequest QuotationRequest(DateTime? expiration = null, int? customerId = null, bool? accepted = null) => new(customerId, null, null, 30, expiration ?? new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Unspecified), 100m, 7m, 107m, 3m, 764, "legacy", "FOB", "Courier", "30 days", accepted);
     private static UpsertQuotationRequestRequest Request(string email, string message) => new(
         "Ada",
         "Lovelace",

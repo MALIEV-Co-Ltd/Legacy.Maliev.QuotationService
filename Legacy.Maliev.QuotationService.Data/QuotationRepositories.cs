@@ -69,7 +69,7 @@ public sealed class QuotationRepository(
     public async Task<UpdateResult> UpdateQuotationAsync(int id, UpsertQuotationRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken)
     {
         var entity = await quotations.Quotations.FindAsync([id], cancellationToken); if (entity is null) return UpdateResult.NotFound;
-        if (expectedModifiedDate is not null) quotations.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = expectedModifiedDate.Value.UtcDateTime;
+        if (expectedModifiedDate is not null) quotations.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified);
         Map(entity, request).ModifiedDate = Now();
         try { await quotations.SaveChangesAsync(cancellationToken); await cache.RemoveAsync(QuotationKey(id), cancellationToken); return UpdateResult.Updated; } catch (DbUpdateConcurrencyException) { return UpdateResult.Conflict; }
     }
@@ -100,7 +100,7 @@ public sealed class QuotationRepository(
     public async Task<IReadOnlyList<QuotationOrderItemResponse>> GetOrderItemsAsync(int quotationId, CancellationToken cancellationToken) => await ProjectItems(quotations.OrderItems.AsNoTracking().Where(x => x.QuotationId == quotationId).OrderBy(x => x.Id)).ToListAsync(cancellationToken);
     public async Task<UpdateResult> UpdateOrderItemAsync(int id, UpsertQuotationOrderItemRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken)
     {
-        var entity = await quotations.OrderItems.FindAsync([id], cancellationToken); if (entity is null) return UpdateResult.NotFound; if (expectedModifiedDate is not null) quotations.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = expectedModifiedDate.Value.UtcDateTime;
+        var entity = await quotations.OrderItems.FindAsync([id], cancellationToken); if (entity is null) return UpdateResult.NotFound; if (expectedModifiedDate is not null) quotations.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified);
         entity.QuotationId = request.QuotationId; entity.OrderId = request.OrderId; entity.Description = request.Description; entity.Quantity = request.Quantity; entity.UnitPrice = request.UnitPrice; entity.ModifiedDate = Now();
         try { await quotations.SaveChangesAsync(cancellationToken); return UpdateResult.Updated; } catch (DbUpdateConcurrencyException) { return UpdateResult.Conflict; }
     }
@@ -187,7 +187,7 @@ public sealed class QuotationRepository(
     }
     public async Task<UpdateResult> UpdateRequestAsync(int id, UpsertQuotationRequestRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken)
     {
-        var entity = await requests.Requests.FindAsync([id], cancellationToken); if (entity is null) return UpdateResult.NotFound; if (expectedModifiedDate is not null) requests.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = expectedModifiedDate.Value.UtcDateTime; Map(entity, request).ModifiedDate = Now(); try { await requests.SaveChangesAsync(cancellationToken); await cache.RemoveAsync(RequestKey(id), cancellationToken); return UpdateResult.Updated; } catch (DbUpdateConcurrencyException) { return UpdateResult.Conflict; }
+        var entity = await requests.Requests.FindAsync([id], cancellationToken); if (entity is null) return UpdateResult.NotFound; if (expectedModifiedDate is not null) requests.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified); Map(entity, request).ModifiedDate = Now(); try { await requests.SaveChangesAsync(cancellationToken); await cache.RemoveAsync(RequestKey(id), cancellationToken); return UpdateResult.Updated; } catch (DbUpdateConcurrencyException) { return UpdateResult.Conflict; }
     }
 
     public async Task<QuotationRequestFileResponse?> CreateRequestFileAsync(
@@ -241,7 +241,7 @@ public sealed class QuotationRepository(
     public async Task<IReadOnlyList<QuotationRequestFileResponse>> GetRequestFilesAsync(int requestId, CancellationToken cancellationToken) => await ProjectRequestFiles(requests.Files.AsNoTracking().Where(x => x.RequestId == requestId).OrderBy(x => x.Id)).ToListAsync(cancellationToken);
     public async Task<bool> UpdateRequestFileAsync(int id, UpsertQuotationRequestFileRequest request, CancellationToken cancellationToken) { var entity = await requests.Files.FindAsync([id], cancellationToken); if (entity is null) return false; entity.RequestId = request.RequestId; entity.Bucket = request.Bucket; entity.ObjectName = request.ObjectName; entity.ModifiedDate = Now(); await requests.SaveChangesAsync(cancellationToken); return true; }
 
-    private DateTime Now() => timeProvider.GetUtcNow().UtcDateTime;
+    private DateTime Now() => DateTime.SpecifyKind(timeProvider.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified);
     private static string QuotationKey(int id) => $"quotation:{id}";
     private static string RequestKey(int id) => $"request:{id}";
     private static bool IsSha256(string value) =>
