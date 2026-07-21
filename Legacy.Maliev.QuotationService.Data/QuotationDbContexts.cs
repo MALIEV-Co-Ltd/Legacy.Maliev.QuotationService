@@ -17,7 +17,7 @@ public sealed class QuotationDbContext(DbContextOptions<QuotationDbContext> opti
         quotation.ToTable("Quotation"); quotation.HasKey(x => x.Id); quotation.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd();
         quotation.Property(x => x.CustomerId).HasColumnName("CustomerID"); quotation.Property(x => x.EmployeeId).HasColumnName("EmployeeID"); quotation.Property(x => x.InvoiceId).HasColumnName("InvoiceID"); quotation.Property(x => x.CurrencyId).HasColumnName("CurrencyID");
         quotation.Property(x => x.Fob).HasColumnName("FOB").HasMaxLength(256); quotation.Property(x => x.ShippedVia).HasMaxLength(256); quotation.Property(x => x.Terms).HasMaxLength(256);
-        quotation.Property(x => x.ExpirationDate).HasColumnType("timestamp with time zone"); quotation.Property(x => x.Subtotal).HasPrecision(18, 2); quotation.Property(x => x.Vat).HasPrecision(18, 2); quotation.Property(x => x.Total).HasPrecision(18, 2); quotation.Property(x => x.WithholdingTax).HasPrecision(18, 2);
+        quotation.Property(x => x.ExpirationDate).HasColumnType("timestamp without time zone"); quotation.Property(x => x.Subtotal).HasPrecision(18, 2); quotation.Property(x => x.Vat).HasPrecision(18, 2); quotation.Property(x => x.Total).HasPrecision(18, 2); quotation.Property(x => x.WithholdingTax).HasPrecision(18, 2);
         quotation.Property(x => x.QuotedAmount).HasPrecision(18, 2).HasComputedColumnSql("(\"Total\" - \"WithholdingTax\")::numeric(18,2)", stored: true);
         Dates(quotation); quotation.Property(x => x.ModifiedDate).IsConcurrencyToken();
 
@@ -36,8 +36,8 @@ public sealed class QuotationDbContext(DbContextOptions<QuotationDbContext> opti
 
     private static void Dates<TEntity>(EntityTypeBuilder<TEntity> entity) where TEntity : class
     {
-        entity.Property<DateTime?>("CreatedDate").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
-        entity.Property<DateTime?>("ModifiedDate").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.Property<DateTime?>("CreatedDate").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP AT TIME ZONE 'UTC'");
+        entity.Property<DateTime?>("ModifiedDate").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP AT TIME ZONE 'UTC'");
     }
 }
 
@@ -63,7 +63,7 @@ public sealed class QuotationRequestDbContext(DbContextOptions<QuotationRequestD
 
     private static void Dates<TEntity>(EntityTypeBuilder<TEntity> entity) where TEntity : class
     {
-        entity.Property<DateTime?>("CreatedDate").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
-        entity.Property<DateTime?>("ModifiedDate").HasColumnType("timestamp with time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.Property<DateTime?>("CreatedDate").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP AT TIME ZONE 'UTC'");
+        entity.Property<DateTime?>("ModifiedDate").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP AT TIME ZONE 'UTC'");
     }
 }
