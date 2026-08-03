@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Security.Claims;
 using Legacy.Maliev.QuotationService.Api.Controllers;
 using Legacy.Maliev.QuotationService.Application.Interfaces;
 using Legacy.Maliev.QuotationService.Application.Models;
@@ -98,6 +99,38 @@ public sealed class QuotationControllerContractTests
 
         Assert.IsType<ForbidResult>(result.Result);
         service.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("permissions", "legacy.quotations.read", true)]
+    [InlineData("permission", "legacy.quotations.read", true)]
+    [InlineData("permissions", "*", false)]
+    [InlineData("permissions", "legacy.quotation-requests.read", false)]
+    public async Task UnscopedDetail_AcceptsOnlyExactSignedAdministrativeReadClaim(
+        string claimType,
+        string claimValue,
+        bool expected)
+    {
+        var service = new Mock<IQuotationService>();
+        service.Setup(value => value.GetQuotationAsync(7, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Quotation(7, 42));
+        var controller = Controller(service, AuthorizationResult.Failed());
+        controller.ControllerContext.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim("sub", "service:legacy-intranet"),
+            new Claim(claimType, claimValue),
+        ], "test"));
+
+        var result = await controller.GetQuotationAsync(7, null, CancellationToken.None);
+
+        if (expected)
+        {
+            Assert.Equal(7, Assert.IsType<QuotationResponse>(result.Value).Id);
+        }
+        else
+        {
+            Assert.IsType<ForbidResult>(result.Result);
+        }
     }
 
     private static QuotationsController Controller(
