@@ -73,7 +73,18 @@ public sealed class QuotationsController(
     [HttpGet("{quotationId:int}/withholdingtax", Name = "GetQuotationWithholdingTax"), RequirePermission(QuotationPermissions.QuotationsRead, ResourcePathTemplate = "/quotations/{quotationId}", RequireLiveCheck = true)]
     public async Task<ActionResult<decimal>> GetQuotationWithholdingTaxAsync(int quotationId, CancellationToken cancellationToken) { var value = await service.GetWithholdingTaxAsync(quotationId, cancellationToken); return value is null ? NotFound() : value.Value; }
 
-    private async Task<bool> HasAdministrativeReadAsync() =>
-        (await authorization.AuthorizeAsync(User, null, $"Permission:{QuotationPermissions.QuotationsRead}"))
-        .Succeeded;
+    private async Task<bool> HasAdministrativeReadAsync()
+    {
+        if (User.Claims.Any(claim =>
+                (claim.Type == "permissions" || claim.Type == "permission") &&
+                string.Equals(claim.Value, QuotationPermissions.QuotationsRead, StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        return (await authorization.AuthorizeAsync(
+            User,
+            null,
+            $"Permission:{QuotationPermissions.QuotationsRead}")).Succeeded;
+    }
 }
