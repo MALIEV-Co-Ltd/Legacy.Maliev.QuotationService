@@ -88,6 +88,69 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetQuotations_ModifiedDateDescending_ReturnsNewestNonNullActivityWithDescendingIdTieBreak()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await Task.WhenAll(
+            quotationContext.Database.MigrateAsync(),
+            requestContext.Database.MigrateAsync());
+        var repository = Repository(quotationContext, requestContext);
+        const int customerId = 1_000_001;
+        var createdDate = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        var newestModifiedDate = createdDate.AddDays(3);
+        var older = QuotationRecord(customerId, createdDate, createdDate.AddDays(1));
+        var newestLowerId = QuotationRecord(customerId, createdDate.AddDays(1), newestModifiedDate);
+        var newestHigherId = QuotationRecord(customerId, createdDate.AddDays(2), newestModifiedDate);
+        var nullModifiedDate = QuotationRecord(customerId, createdDate.AddDays(3), createdDate.AddDays(2));
+        quotationContext.Quotations.AddRange(older, newestLowerId, newestHigherId, nullModifiedDate);
+        await quotationContext.SaveChangesAsync();
+        await quotationContext.Quotations
+            .Where(value => value.Id == nullModifiedDate.Id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(value => value.ModifiedDate, (DateTime?)null));
+
+        var page = await repository.GetQuotationsAsync(
+            customerId,
+            QuotationSortType.QuotationModifiedDate_Descending,
+            search: null,
+            pageIndex: 1,
+            pageSize: 2,
+            CancellationToken.None);
+
+        Assert.NotNull(page);
+        Assert.Equal([newestHigherId.Id, newestLowerId.Id], page.Items.Select(value => value.Id));
+    }
+
+    [Fact]
+    public async Task GetQuotations_CreatedDateDescending_UsesDescendingIdTieBreak()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await Task.WhenAll(
+            quotationContext.Database.MigrateAsync(),
+            requestContext.Database.MigrateAsync());
+        var repository = Repository(quotationContext, requestContext);
+        const int customerId = 1_000_002;
+        var createdDate = new DateTime(2026, 8, 2, 0, 0, 0, DateTimeKind.Unspecified);
+        var lowestId = QuotationRecord(customerId, createdDate, createdDate);
+        var middleId = QuotationRecord(customerId, createdDate, createdDate.AddMinutes(1));
+        var highestId = QuotationRecord(customerId, createdDate, createdDate.AddMinutes(2));
+        quotationContext.Quotations.AddRange(lowestId, middleId, highestId);
+        await quotationContext.SaveChangesAsync();
+
+        var page = await repository.GetQuotationsAsync(
+            customerId,
+            QuotationSortType.QuotationCreatedDate_Descending,
+            search: null,
+            pageIndex: 1,
+            pageSize: 2,
+            CancellationToken.None);
+
+        Assert.NotNull(page);
+        Assert.Equal([highestId.Id, middleId.Id], page.Items.Select(value => value.Id));
+    }
+
+    [Fact]
     public async Task CustomerQuotationDetails_EnforceOwnershipAndComposeReadOnlyMetadata()
     {
         await using var quotationContext = QuotationContext();
@@ -382,6 +445,20 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
     }
 
     private static UpsertQuotationRequest QuotationRequest(DateTime? expiration = null, int? customerId = null, bool? accepted = null) => new(customerId, null, null, 30, expiration ?? new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Unspecified), 100m, 7m, 107m, 3m, 764, "legacy", "FOB", "Courier", "30 days", accepted);
+    private static Quotation QuotationRecord(int customerId, DateTime createdDate, DateTime? modifiedDate) => new()
+    {
+        CustomerId = customerId,
+        Period = 30,
+        ExpirationDate = new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Unspecified),
+        Subtotal = 100m,
+        Vat = 7m,
+        Total = 107m,
+        WithholdingTax = 3m,
+        CurrencyId = 764,
+        Comment = "activity-sort-regression",
+        CreatedDate = createdDate,
+        ModifiedDate = modifiedDate,
+    };
     private static UpsertQuotationRequestRequest Request(string email, string message) => new(
         "Ada",
         "Lovelace",

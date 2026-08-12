@@ -51,7 +51,7 @@ public sealed class QuotationRepository(
     {
         IQueryable<Quotation> query = quotations.Quotations.AsNoTracking(); if (customerId is not null) query = query.Where(x => x.CustomerId == customerId);
         if (!string.IsNullOrWhiteSpace(search)) { var value = search.Trim(); var numeric = int.TryParse(value, out var id); var pattern = $"%{value}%"; query = query.Where(x => (numeric && (x.Id == id || x.CustomerId == id)) || (x.Comment != null && EF.Functions.ILike(x.Comment, pattern))); }
-        query = sort switch { QuotationSortType.QuotationId_Descending => query.OrderByDescending(x => x.Id), QuotationSortType.QuotationCreatedDate_Ascending => query.OrderBy(x => x.CreatedDate), QuotationSortType.QuotationCreatedDate_Descending => query.OrderByDescending(x => x.CreatedDate), QuotationSortType.QuotationModifiedDate_Ascending => query.OrderBy(x => x.ModifiedDate), QuotationSortType.QuotationModifiedDate_Descending => query.OrderByDescending(x => x.ModifiedDate), _ => query.OrderBy(x => x.Id) };
+        query = sort switch { QuotationSortType.QuotationId_Descending => query.OrderByDescending(x => x.Id), QuotationSortType.QuotationCreatedDate_Ascending => query.OrderBy(x => x.CreatedDate), QuotationSortType.QuotationCreatedDate_Descending => query.OrderBy(x => x.CreatedDate == null).ThenByDescending(x => x.CreatedDate).ThenByDescending(x => x.Id), QuotationSortType.QuotationModifiedDate_Ascending => query.OrderBy(x => x.ModifiedDate), QuotationSortType.QuotationModifiedDate_Descending => query.OrderBy(x => x.ModifiedDate == null).ThenByDescending(x => x.ModifiedDate).ThenByDescending(x => x.Id), _ => query.OrderBy(x => x.Id) };
         return await PageAsync(Project(query), pageIndex, pageSize, cancellationToken);
     }
 
