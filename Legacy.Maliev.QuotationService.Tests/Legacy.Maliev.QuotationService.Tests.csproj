@@ -29,6 +29,7 @@
     <ProjectReference Include="..\Legacy.Maliev.QuotationService.Application\Legacy.Maliev.QuotationService.Application.csproj" />
     <ProjectReference Include="..\Legacy.Maliev.QuotationService.Data\Legacy.Maliev.QuotationService.Data.csproj" />
     <ProjectReference Include="..\Legacy.Maliev.QuotationService.Domain\Legacy.Maliev.QuotationService.Domain.csproj" />
+    <ProjectReference Include="..\Legacy.Maliev.QuotationService.MigrationRunner\Legacy.Maliev.QuotationService.MigrationRunner.csproj" />
   </ItemGroup>
 
 </Project>
