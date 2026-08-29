@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 
 namespace Legacy.Maliev.QuotationService.MigrationRunner;
 
@@ -83,8 +82,12 @@ public static class MigrationRunnerApplication
             return null;
         }
 
-        return JsonSerializer.Deserialize<SignedSchemaBaselineReceipt>(json)
-            ?? throw new MigrationConfigurationException("The schema-baseline receipt is empty.");
+        if (!SignedSchemaBaselineReceiptParser.TryParse(json, out var receipt))
+        {
+            throw new MigrationConfigurationException("The schema-baseline receipt envelope is invalid.");
+        }
+
+        return receipt;
     }
 
     private static async Task<string?> ReadOptionalFileAsync(

@@ -1,6 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using Npgsql;
 
 namespace Legacy.Maliev.QuotationService.MigrationRunner;
@@ -68,6 +66,7 @@ public sealed record SchemaBaselineExpectation(
 }
 
 public sealed record SchemaBaselineReceiptPayload(
+    string SchemaVersion,
     string Workload,
     string SourceSnapshotId,
     string CopyPlanId,
@@ -104,19 +103,24 @@ public sealed class EcdsaSchemaBaselineReceiptVerifier(
             return ReceiptVerificationResult.Invalid("trusted public key is unavailable");
         }
 
-        SchemaBaselineReceiptPayload? payload;
+        SchemaBaselineReceiptPayload payload;
+        byte[] canonicalPayload;
         byte[] signature;
         try
         {
-            payload = JsonSerializer.Deserialize<SchemaBaselineReceiptPayload>(receipt.Payload);
+            if (!SchemaBaselineReceiptCanonicalizer.TryParseAndCreatePayload(receipt.Payload, out payload, out canonicalPayload))
+            {
+                return ReceiptVerificationResult.Invalid("receipt schema or encoding is invalid");
+            }
+
             signature = Convert.FromBase64String(receipt.Signature);
         }
-        catch (Exception exception) when (exception is JsonException or FormatException)
+        catch (FormatException)
         {
             return ReceiptVerificationResult.Invalid("receipt encoding is invalid");
         }
 
-        if (payload is null || payload.ExpiresUtc <= timeProvider.GetUtcNow())
+        if (payload.ExpiresUtc <= timeProvider.GetUtcNow())
         {
             return ReceiptVerificationResult.Invalid("receipt is missing or expired");
         }
@@ -128,17 +132,23 @@ public sealed class EcdsaSchemaBaselineReceiptVerifier(
 
         try
         {
-            using var ecdsa = ECDsa.Create();
-            ecdsa.ImportFromPem(trustedPublicKeyPem);
-            var curve = ecdsa.ExportParameters(false).Curve;
-            if (ecdsa.KeySize != 256 || !string.Equals(curve.Oid.Value, "1.2.840.10045.3.1.7", StringComparison.Ordinal))
+            if (!TryImportSingleP256SubjectPublicKeyInfo(trustedPublicKeyPem, out var ecdsa))
             {
-                return ReceiptVerificationResult.Invalid("trusted key algorithm or curve is invalid");
+                return ReceiptVerificationResult.Invalid("trusted key encoding, algorithm, or curve is invalid");
             }
 
-            return ecdsa.VerifyData(Encoding.UTF8.GetBytes(receipt.Payload), signature, HashAlgorithmName.SHA256)
-                ? ReceiptVerificationResult.Valid()
-                : ReceiptVerificationResult.Invalid("receipt signature is invalid");
+            using (ecdsa)
+            {
+                var curve = ecdsa.ExportParameters(false).Curve;
+                if (ecdsa.KeySize != 256 || !string.Equals(curve.Oid.Value, "1.2.840.10045.3.1.7", StringComparison.Ordinal))
+                {
+                    return ReceiptVerificationResult.Invalid("trusted key algorithm or curve is invalid");
+                }
+
+                return ecdsa.VerifyData(canonicalPayload, signature, HashAlgorithmName.SHA256)
+                    ? ReceiptVerificationResult.Valid()
+                    : ReceiptVerificationResult.Invalid("receipt signature is invalid");
+            }
         }
         catch (Exception exception) when (exception is CryptographicException or ArgumentException)
         {
@@ -147,6 +157,7 @@ public sealed class EcdsaSchemaBaselineReceiptVerifier(
     }
 
     private bool Matches(SchemaBaselineReceiptPayload payload, SchemaBaselineExpectation expected) =>
+        string.Equals(payload.SchemaVersion, "1.0", StringComparison.Ordinal) &&
         string.Equals(payload.Workload, expected.WorkloadName, StringComparison.Ordinal) &&
         string.Equals(payload.SourceSnapshotId, expected.SourceSnapshotId, StringComparison.Ordinal) &&
         string.Equals(payload.CopyPlanId, expected.CopyPlanId, StringComparison.Ordinal) &&
@@ -156,6 +167,51 @@ public sealed class EcdsaSchemaBaselineReceiptVerifier(
         string.Equals(payload.Host, expected.Host, StringComparison.OrdinalIgnoreCase) &&
         payload.Port == expected.Port &&
         string.Equals(payload.Database, expected.Database, StringComparison.Ordinal);
+
+    private static bool TryImportSingleP256SubjectPublicKeyInfo(string pem, out ECDsa ecdsa)
+    {
+        ecdsa = ECDsa.Create();
+        try
+        {
+            var characters = pem.AsSpan();
+            if (!PemEncoding.TryFind(characters, out var fields) ||
+                !characters[fields.Label].SequenceEqual("PUBLIC KEY") ||
+                !characters[..fields.Location.Start.Value].Trim().IsEmpty ||
+                !characters[fields.Location.End.Value..].Trim().IsEmpty)
+            {
+                ecdsa.Dispose();
+                ecdsa = null!;
+                return false;
+            }
+
+            var subjectPublicKeyInfo = new byte[fields.DecodedDataLength];
+            if (!Convert.TryFromBase64Chars(characters[fields.Base64Data], subjectPublicKeyInfo, out var bytesWritten) ||
+                bytesWritten != subjectPublicKeyInfo.Length)
+            {
+                ecdsa.Dispose();
+                ecdsa = null!;
+                return false;
+            }
+
+            ecdsa.ImportSubjectPublicKeyInfo(subjectPublicKeyInfo, out var bytesRead);
+            var curve = ecdsa.ExportParameters(false).Curve;
+            if (bytesRead != subjectPublicKeyInfo.Length || ecdsa.KeySize != 256 ||
+                !string.Equals(curve.Oid.Value, "1.2.840.10045.3.1.7", StringComparison.Ordinal))
+            {
+                ecdsa.Dispose();
+                ecdsa = null!;
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception exception) when (exception is CryptographicException or ArgumentException or FormatException)
+        {
+            ecdsa.Dispose();
+            ecdsa = null!;
+            return false;
+        }
+    }
 }
 
 public static class MigrationLogSanitizer

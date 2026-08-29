@@ -97,6 +97,85 @@ public sealed class MigrationRunnerContractTests
     }
 
     [Fact]
+    public void ReceiptVerifier_AcceptsReorderedWhitespaceOnlyByCanonicalRederivation()
+    {
+        using var signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var expected = Expected("quotation");
+        var payload = Payload(expected, DateTimeOffset.UtcNow.AddMinutes(5));
+        var reordered = $$"""
+            {
+              "Database": {{JsonSerializer.Serialize(payload.Database)}},
+              "ExpiresUtc": {{JsonSerializer.Serialize(payload.ExpiresUtc)}},
+              "Port": {{payload.Port}},
+              "Host": {{JsonSerializer.Serialize(payload.Host)}},
+              "AttestationKeyId": {{JsonSerializer.Serialize(payload.AttestationKeyId)}},
+              "SchemaHash": {{JsonSerializer.Serialize(payload.SchemaHash)}},
+              "CopyPlanId": {{JsonSerializer.Serialize(payload.CopyPlanId)}},
+              "SourceSnapshotId": {{JsonSerializer.Serialize(payload.SourceSnapshotId)}},
+              "Workload": {{JsonSerializer.Serialize(payload.Workload)}},
+              "SchemaVersion": {{JsonSerializer.Serialize(payload.SchemaVersion)}}
+            }
+            """;
+        var signature = signer.SignData(SchemaBaselineReceiptCanonicalizer.CreatePayload(payload), HashAlgorithmName.SHA256);
+        var receipt = new SignedSchemaBaselineReceipt(reordered, Convert.ToBase64String(signature));
+        var verifier = new EcdsaSchemaBaselineReceiptVerifier("production-key", signer.ExportSubjectPublicKeyInfoPem(), TimeProvider.System);
+
+        Assert.True(verifier.Verify(receipt, expected).IsValid);
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("duplicate")]
+    public void ReceiptVerifier_RejectsUnknownOrDuplicatePayloadFields(string mutation)
+    {
+        using var signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var expected = Expected("quotation");
+        var valid = Sign(expected, DateTimeOffset.UtcNow.AddMinutes(5), signer);
+        var suffix = mutation == "unknown" ? ",\"Unknown\":true}" : ",\"Database\":\"quotation\"}";
+        var receipt = valid with { Payload = valid.Payload[..^1] + suffix };
+        var verifier = new EcdsaSchemaBaselineReceiptVerifier("production-key", signer.ExportSubjectPublicKeyInfoPem(), TimeProvider.System);
+
+        Assert.False(verifier.Verify(receipt, expected).IsValid);
+    }
+
+    [Theory]
+    [InlineData("{\"Payload\":\"{}\",\"Signature\":\"AA==\",\"Unknown\":true}")]
+    [InlineData("{\"Payload\":\"{}\",\"Payload\":\"{}\",\"Signature\":\"AA==\"}")]
+    public void SignedReceiptParser_RejectsUnknownOrDuplicateEnvelopeFields(string json) =>
+        Assert.False(SignedSchemaBaselineReceiptParser.TryParse(json, out _));
+
+    [Fact]
+    public void ReceiptVerifier_RejectsCrossProtocolRawJsonSignatureReplay()
+    {
+        using var signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var expected = Expected("quotation");
+        var json = JsonSerializer.Serialize(Payload(expected, DateTimeOffset.UtcNow.AddMinutes(5)));
+        var replaySignature = signer.SignData(Encoding.UTF8.GetBytes(json), HashAlgorithmName.SHA256);
+        var verifier = new EcdsaSchemaBaselineReceiptVerifier("production-key", signer.ExportSubjectPublicKeyInfoPem(), TimeProvider.System);
+
+        Assert.False(verifier.Verify(new(json, Convert.ToBase64String(replaySignature)), expected).IsValid);
+    }
+
+    [Fact]
+    public void ReceiptVerifier_AcceptsOnlyOneExactP256SubjectPublicKeyInfoPem()
+    {
+        using var signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var p384 = ECDsa.Create(ECCurve.NamedCurves.nistP384);
+        using var rsa = RSA.Create(2048);
+        var expected = Expected("quotation");
+        var receipt = Sign(expected, DateTimeOffset.UtcNow.AddMinutes(5), signer);
+        var publicPem = signer.ExportSubjectPublicKeyInfoPem();
+
+        Assert.True(new EcdsaSchemaBaselineReceiptVerifier("production-key", publicPem, TimeProvider.System).Verify(receipt, expected).IsValid);
+        Assert.False(new EcdsaSchemaBaselineReceiptVerifier("production-key", signer.ExportECPrivateKeyPem(), TimeProvider.System).Verify(receipt, expected).IsValid);
+        Assert.False(new EcdsaSchemaBaselineReceiptVerifier("production-key", signer.ExportPkcs8PrivateKeyPem(), TimeProvider.System).Verify(receipt, expected).IsValid);
+        Assert.False(new EcdsaSchemaBaselineReceiptVerifier("production-key", publicPem + Environment.NewLine + publicPem, TimeProvider.System).Verify(receipt, expected).IsValid);
+        Assert.False(new EcdsaSchemaBaselineReceiptVerifier("production-key", publicPem + "trailing", TimeProvider.System).Verify(receipt, expected).IsValid);
+        Assert.False(new EcdsaSchemaBaselineReceiptVerifier("production-key", p384.ExportSubjectPublicKeyInfoPem(), TimeProvider.System).Verify(receipt, expected).IsValid);
+        Assert.False(new EcdsaSchemaBaselineReceiptVerifier("production-key", rsa.ExportSubjectPublicKeyInfoPem(), TimeProvider.System).Verify(receipt, expected).IsValid);
+    }
+
+    [Fact]
     public void Redaction_NeverReturnsCredentialsOrRawConnectionString()
     {
         var secret = Connection("quotation");
@@ -151,10 +230,12 @@ public sealed class MigrationRunnerContractTests
         DateTimeOffset expiresUtc,
         ECDsa signer)
     {
-        var payload = JsonSerializer.Serialize(new SchemaBaselineReceiptPayload(
-            expected.WorkloadName, expected.SourceSnapshotId, expected.CopyPlanId, expected.SchemaHash, expected.AttestationKeyId,
-            expected.Host, expected.Port, expected.Database, expiresUtc));
-        var signature = signer.SignData(Encoding.UTF8.GetBytes(payload), HashAlgorithmName.SHA256);
-        return new(payload, Convert.ToBase64String(signature));
+        var payload = Payload(expected, expiresUtc);
+        var signature = signer.SignData(SchemaBaselineReceiptCanonicalizer.CreatePayload(payload), HashAlgorithmName.SHA256);
+        return new(JsonSerializer.Serialize(payload), Convert.ToBase64String(signature));
     }
+
+    private static SchemaBaselineReceiptPayload Payload(SchemaBaselineExpectation expected, DateTimeOffset expiresUtc) => new(
+        "1.0", expected.WorkloadName, expected.SourceSnapshotId, expected.CopyPlanId, expected.SchemaHash,
+        expected.AttestationKeyId, expected.Host, expected.Port, expected.Database, expiresUtc);
 }

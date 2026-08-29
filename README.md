@@ -76,10 +76,12 @@ or downgrade data.
 
 An empty database may be initialized directly. A non-empty database fails closed unless it is
 accompanied by a signed, unexpired production schema-baseline receipt. The ECDSA P-256 trust model
-and externally projected trusted key identifier match the DataMigration attestation boundary. The signed payload is bound
+and externally projected trusted key identifier match the DataMigration attestation boundary. The versioned receipt schema
+is parsed strictly, then re-derived into a domain-separated canonical binary payload before signature verification; JSON
+property order and insignificant whitespace cannot change the signed meaning. The signed payload is bound
 to the exact workload, source snapshot, copy plan, schema hash, PostgreSQL host/port/database, and
-expiry. Production composition must project the trusted RSA public key as a read-only file; an
-absent, invalid, expired, tampered, or mismatched receipt is rejected before `MigrateAsync`.
+expiry. Production composition must project exactly one trusted ECDSA P-256 SPKI `PUBLIC KEY` as a read-only file; an
+absent, invalid, expired, tampered, duplicate/unmapped, or mismatched receipt is rejected before `MigrateAsync`.
 Required configuration is `Migration__SourceSnapshotId`, `Migration__CopyPlanId`,
 `Migration__SchemaHash`, and `Migration__TrustedKeyId`; optional file projections are `Migration__ReceiptPath` and
 `Migration__TrustedPublicKeyPath`. `Migration__LockTimeoutSeconds` is bounded to 1-30 seconds.

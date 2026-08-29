@@ -66,6 +66,26 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
         }
     }
 
+    [Theory]
+    [InlineData("CREATE VIEW legacy_view AS SELECT 1 AS id")]
+    [InlineData("CREATE SEQUENCE legacy_sequence")]
+    [InlineData("CREATE TYPE legacy_state AS ENUM ('open','closed')")]
+    public async Task UserOwnedSchemaObject_RequiresValidReceiptBeforeMigration(string objectSql)
+    {
+        await ResetBothAsync();
+        await ExecuteAsync(quotation.GetConnectionString(), objectSql);
+
+        await Assert.ThrowsAsync<SchemaBaselineRejectedException>(() =>
+            Runner(quotation.GetConnectionString(), MigrationWorkload.Quotation).RunAsync(CancellationToken.None));
+        Assert.Equal(0, await HistoryCountAsync(quotation.GetConnectionString()));
+
+        await Runner(
+            quotation.GetConnectionString(),
+            MigrationWorkload.Quotation,
+            ValidReceipt(quotation.GetConnectionString(), MigrationWorkload.Quotation)).RunAsync(CancellationToken.None);
+        Assert.Equal(5, await ApplicationTableCountAsync(quotation.GetConnectionString()));
+    }
+
     [Fact]
     public async Task IdempotentRerun_SucceedsWithoutSeeding()
     {
@@ -135,11 +155,12 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
         var target = Identity(connectionString);
         var expected = new SchemaBaselineExpectation(
             workload, "source-20260829", "copy-plan-v1", "schema-sha256", "production-key", target.Host, target.Port, target.Database);
-        var payload = JsonSerializer.Serialize(new SchemaBaselineReceiptPayload(
-            expected.WorkloadName, expected.SourceSnapshotId, expected.CopyPlanId, expected.SchemaHash, expected.AttestationKeyId,
-            expected.Host, expected.Port, expected.Database, expiry ?? DateTimeOffset.UtcNow.AddMinutes(5)));
+        var typedPayload = new SchemaBaselineReceiptPayload(
+            "1.0", expected.WorkloadName, expected.SourceSnapshotId, expected.CopyPlanId, expected.SchemaHash, expected.AttestationKeyId,
+            expected.Host, expected.Port, expected.Database, expiry ?? DateTimeOffset.UtcNow.AddMinutes(5));
+        var payload = JsonSerializer.Serialize(typedPayload);
         return new(payload, Convert.ToBase64String(signer.SignData(
-            Encoding.UTF8.GetBytes(payload), HashAlgorithmName.SHA256)));
+            SchemaBaselineReceiptCanonicalizer.CreatePayload(typedPayload), HashAlgorithmName.SHA256)));
     }
 
     private IEnumerable<SignedSchemaBaselineReceipt> InvalidReceipts()
