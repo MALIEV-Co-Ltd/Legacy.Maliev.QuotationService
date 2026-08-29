@@ -81,7 +81,7 @@ public sealed class QuotationsController(
         [FromHeader(Name = "X-Expected-Modified-Date")] DateTimeOffset? expected,
         CancellationToken cancellationToken)
     {
-        if (request.EmployeeInitiated && !User.IsInRole("Employee"))
+        if (request.EmployeeInitiated && !IsTrustedEmployeeDecisionCaller())
         {
             return Forbid();
         }
@@ -113,5 +113,27 @@ public sealed class QuotationsController(
             User,
             null,
             $"Permission:{QuotationPermissions.QuotationsRead}")).Succeeded;
+    }
+
+    private bool IsTrustedEmployeeDecisionCaller()
+    {
+        var identityKinds = User.FindAll("identity_kind").Select(claim => claim.Value).ToArray();
+        if (User.IsInRole("Employee"))
+        {
+            return identityKinds.Length == 0
+                || identityKinds is ["employee"];
+        }
+
+        if (identityKinds is not ["service"])
+        {
+            return false;
+        }
+
+        var subjects = User.FindAll("sub").Select(claim => claim.Value).ToArray();
+        var permissions = User.FindAll("permissions").Select(claim => claim.Value).ToArray();
+        return subjects is ["service:legacy-intranet"]
+            && !User.HasClaim(claim => claim.Type == "permission")
+            && permissions.Contains(QuotationPermissions.QuotationsUpdate, StringComparer.Ordinal)
+            && permissions.All(permission => !permission.Contains('*', StringComparison.Ordinal));
     }
 }

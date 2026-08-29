@@ -15,6 +15,20 @@ namespace Legacy.Maliev.QuotationService.Tests.Controllers;
 
 public sealed class QuotationControllerContractTests
 {
+    public static TheoryData<Claim[], bool> EmployeeDecisionCallers => new()
+    {
+        { [new Claim(ClaimTypes.Role, "Employee"), new Claim("identity_kind", "employee")], true },
+        { [new Claim("identity_kind", "service"), new Claim("sub", "service:legacy-intranet"), new Claim("permissions", "legacy.quotations.update")], true },
+        { [new Claim(ClaimTypes.Role, "Customer"), new Claim("identity_kind", "customer"), new Claim("permissions", "legacy.quotations.update")], false },
+        { [new Claim("identity_kind", "service"), new Claim("sub", "service:other"), new Claim("permissions", "legacy.quotations.update")], false },
+        { [new Claim("identity_kind", "service"), new Claim("sub", "service:legacy-intranet")], false },
+        { [new Claim("identity_kind", "service"), new Claim("sub", "service:legacy-intranet"), new Claim("permissions", "*")], false },
+        { [new Claim("identity_kind", "service"), new Claim("sub", "service:legacy-intranet"), new Claim("permissions", "legacy.quotations.update"), new Claim("permissions", "legacy.quotations.*")], false },
+        { [new Claim("identity_kind", "service"), new Claim("identity_kind", "employee"), new Claim("sub", "service:legacy-intranet"), new Claim("permissions", "legacy.quotations.update")], false },
+        { [new Claim("identity_kind", "service"), new Claim("sub", "service:legacy-intranet"), new Claim("permission", "legacy.quotations.update")], false },
+        { [new Claim(ClaimTypes.Role, "Employee"), new Claim("identity_kind", "customer")], false },
+    };
+
     public static TheoryData<Type, string> Controllers => new()
     {
         { typeof(QuotationsController), "[controller]" }, { typeof(OrderItemsController), "quotations/[controller]" },
@@ -78,6 +92,59 @@ public sealed class QuotationControllerContractTests
 
         Assert.IsType<ForbidResult>(result);
         decisions.VerifyNoOtherCalls();
+    }
+
+    [Theory, MemberData(nameof(EmployeeDecisionCallers))]
+    public async Task EmployeeInitiatedDecision_AcceptsOnlyEmployeeOrExactLegacyIntranetService(
+        Claim[] claims,
+        bool allowed)
+    {
+        var decisions = new Mock<IQuotationDecisionWorkflow>(MockBehavior.Strict);
+        if (allowed)
+        {
+            decisions.Setup(value => value.DecideAsync(
+                    7,
+                    new QuotationDecisionRequest(Accepted: true, EmployeeInitiated: true),
+                    null,
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new QuotationDecisionResponse(
+                    QuotationDecisionStatus.Completed,
+                    CompletedOrders: 0,
+                    TotalOrders: 0,
+                    ModifiedDate: null));
+        }
+
+        var controller = new QuotationsController(
+            Mock.Of<IQuotationService>(),
+            Mock.Of<IIdempotencyStore>(),
+            Mock.Of<IAuthorizationService>(),
+            decisions.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test")),
+                },
+            },
+        };
+
+        var result = await controller.DecideQuotationAsync(
+            7,
+            new QuotationDecisionRequest(Accepted: true, EmployeeInitiated: true),
+            expected: null,
+            CancellationToken.None);
+
+        if (allowed)
+        {
+            Assert.IsType<OkObjectResult>(result);
+            decisions.VerifyAll();
+        }
+        else
+        {
+            Assert.IsType<ForbidResult>(result);
+            decisions.VerifyNoOtherCalls();
+        }
     }
 
     [Fact]
