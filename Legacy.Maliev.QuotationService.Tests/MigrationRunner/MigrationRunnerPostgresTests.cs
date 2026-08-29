@@ -70,6 +70,7 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
     [InlineData("CREATE VIEW legacy_view AS SELECT 1 AS id")]
     [InlineData("CREATE SEQUENCE legacy_sequence")]
     [InlineData("CREATE TYPE legacy_state AS ENUM ('open','closed')")]
+    [InlineData("CREATE TYPE legacy_pair AS (left_value integer, right_value integer)")]
     public async Task UserOwnedSchemaObject_RequiresValidReceiptBeforeMigration(string objectSql)
     {
         await ResetBothAsync();
@@ -84,6 +85,20 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
             MigrationWorkload.Quotation,
             ValidReceipt(quotation.GetConnectionString(), MigrationWorkload.Quotation)).RunAsync(CancellationToken.None);
         Assert.Equal(5, await ApplicationTableCountAsync(quotation.GetConnectionString()));
+    }
+
+    [Fact]
+    public async Task ExtensionOnlyFreshDatabase_RemainsEligibleForUnsignedInitialization()
+    {
+        await ResetBothAsync();
+        await ExecuteAsync(quotation.GetConnectionString(), "CREATE EXTENSION pgcrypto");
+
+        await Runner(quotation.GetConnectionString(), MigrationWorkload.Quotation).RunAsync(CancellationToken.None);
+
+        Assert.Equal(5, await ApplicationTableCountAsync(quotation.GetConnectionString()));
+        Assert.Equal(1, await ScalarAsync(
+            quotation.GetConnectionString(),
+            "SELECT count(*)::int FROM pg_extension WHERE extname='pgcrypto'"));
     }
 
     [Fact]
@@ -206,6 +221,14 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand(
             "SELECT count(*)::int FROM information_schema.tables WHERE table_schema='public' AND table_name='__EFMigrationsHistory'", connection);
+        return (int)(await command.ExecuteScalarAsync())!;
+    }
+
+    private static async Task<int> ScalarAsync(string connectionString, string sql)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(sql, connection);
         return (int)(await command.ExecuteScalarAsync())!;
     }
 
