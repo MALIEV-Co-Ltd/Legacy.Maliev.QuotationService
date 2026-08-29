@@ -59,6 +59,34 @@ databases, golden PDF comparison, GCS reconciliation, Web/Intranet consumer test
 legacy Workload Identity, and GitOps manifests. It must use the existing cluster with no new node
 pool, Cloud SQL, or other paid service.
 
+## Dormant schema migration runner
+
+`Legacy.Maliev.QuotationService.MigrationRunner` is a service-owned .NET 10 executable and
+dedicated non-root container image. It is intentionally dormant: this repository contains no Job,
+CronJob, publish, or deployment command. Central GitOps may add a one-shot Job only after the
+DataMigration copy/parity gate, immutable image digest, capacity review, Aspire validation, and
+owner approval are complete.
+
+The workload is selected exactly once with the `quotation` or `quotation-request` argument (or
+`Migration__Workload`). Only the selected `ConnectionStrings__QuotationDbContext` or
+`ConnectionStrings__QuotationRequestDbContext` value is required or opened. The runner acquires a
+context-specific PostgreSQL advisory lock before inspecting or changing schema and releases it on
+success or failure. It applies existing EF Core migrations only; it does not seed, copy, truncate,
+or downgrade data.
+
+An empty database may be initialized directly. A non-empty database fails closed unless it is
+accompanied by a signed, unexpired production schema-baseline receipt. The ECDSA P-256 trust model
+and externally projected trusted key identifier match the DataMigration attestation boundary. The versioned receipt schema
+is parsed strictly, then re-derived into a domain-separated canonical binary payload before signature verification; JSON
+property order and insignificant whitespace cannot change the signed meaning. The signed payload is bound
+to the exact workload, source snapshot, copy plan, schema hash, PostgreSQL host/port/database, and
+expiry. Production composition must project exactly one trusted ECDSA P-256 SPKI `PUBLIC KEY` as a read-only file; an
+absent, invalid, expired, tampered, duplicate/unmapped, or mismatched receipt is rejected before `MigrateAsync`.
+Required configuration is `Migration__SourceSnapshotId`, `Migration__CopyPlanId`,
+`Migration__SchemaHash`, and `Migration__TrustedKeyId`; optional file projections are `Migration__ReceiptPath` and
+`Migration__TrustedPublicKeyPath`. `Migration__LockTimeoutSeconds` is bounded to 1-30 seconds.
+Neither the receipt nor logs contain credentials or a raw connection string.
+
 ## Validate
 
 ```powershell

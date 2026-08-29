@@ -25,7 +25,7 @@ public sealed class DistributedQuotationCache(
             var bytes = await cache.GetAsync(key, cancellationToken);
             return bytes is null ? default : JsonSerializer.Deserialize<T>(bytes, JsonOptions);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogWarning(exception, "Quotation cache read failed; using PostgreSQL");
             return default;
@@ -42,7 +42,7 @@ public sealed class DistributedQuotationCache(
                 AbsoluteExpirationRelativeToNow = lifetime,
             }, cancellationToken);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogWarning(exception, "Quotation cache write failed; continuing without cache");
         }
@@ -55,7 +55,7 @@ public sealed class DistributedQuotationCache(
         {
             await cache.RemoveAsync(key, cancellationToken);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogWarning(exception, "Quotation cache invalidation failed");
         }
@@ -95,7 +95,7 @@ public sealed class DistributedQuotationCache(
                 ? IdempotencyBindingResult.Matched
                 : IdempotencyBindingResult.Conflict;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogWarning(exception, "Idempotency binding failed; rejecting replay-sensitive create");
             return IdempotencyBindingResult.Unavailable;

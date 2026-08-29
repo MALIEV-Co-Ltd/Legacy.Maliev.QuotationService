@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: legacy-maliev-quotation-service
+  namespace: maliev-legacy
+  labels:
+    app.kubernetes.io/name: legacy-maliev-quotation-service
+    app.kubernetes.io/part-of: maliev-legacy
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: legacy-maliev-quotation-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: legacy-maliev-quotation-service
+        app.kubernetes.io/part-of: maliev-legacy
+    spec:
+      serviceAccountName: legacy-maliev-quotation
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1654
+        runAsGroup: 1654
+        fsGroup: 1654
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: quotation
+          image: registry.invalid/maliev-legacy/legacy-maliev-quotation-service@sha256:1111111111111111111111111111111111111111111111111111111111111111
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: legacy-maliev-quotation-runtime
+          env:
+            - name: ServiceAuthentication__ClientId
+              value: legacy-quotation
+            - name: Services__Auth
+              value: http://legacy-maliev-auth-service
+            - name: Services__Order
+              value: http://legacy-maliev-order-service
+            - name: Cache__RedisEnabled
+              value: "true"
+            - name: Cache__AllowInMemoryFallback
+              value: "false"
+            - name: Features__AllowExactServiceClaimsForLiveCheck
+              value: "false"
+            - name: DOTNET_GCHeapHardLimit
+              value: "134217728"
+            - name: DOTNET_GCConserveMemory
+              value: "3"
+            - name: NPGSQL_GSSAPI_AUTHENTICATION
+              value: "false"
+            - name: PGGSSENCMODE
+              value: disable
+            - name: TMPDIR
+              value: /tmp
+          startupProbe:
+            httpGet:
+              path: /quotation/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /quotation/liveness
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /quotation/readiness
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: temporary-files
+          emptyDir:
+            sizeLimit: 32Mi

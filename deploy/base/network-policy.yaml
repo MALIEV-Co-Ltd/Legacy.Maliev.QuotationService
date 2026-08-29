@@ -1,0 +1,87 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: legacy-maliev-quotation-service
+  namespace: maliev-legacy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: legacy-maliev-quotation-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maliev-legacy
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: legacy-maliev-web
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maliev-legacy
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: legacy-maliev-intranet-bff
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maliev-legacy
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: legacy-maliev-accounting-service
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # The CloudNativePG PgBouncer service selects generated pooler pods. The
+    # service-owned template deliberately avoids guessing operator-owned labels.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maliev-legacy
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maliev-legacy
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: legacy-redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maliev-legacy
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: legacy-maliev-auth-service
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maliev-legacy
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: legacy-maliev-order-service
+      ports:
+        # Include both the Service port and its pod target port because the
+        # policy evaluation point around Service DNAT is CNI-dependent.
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 8080

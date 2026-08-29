@@ -3,5 +3,6 @@
   <Project Path="Legacy.Maliev.QuotationService.Application/Legacy.Maliev.QuotationService.Application.csproj" />
   <Project Path="Legacy.Maliev.QuotationService.Data/Legacy.Maliev.QuotationService.Data.csproj" />
   <Project Path="Legacy.Maliev.QuotationService.Domain/Legacy.Maliev.QuotationService.Domain.csproj" />
+  <Project Path="Legacy.Maliev.QuotationService.MigrationRunner/Legacy.Maliev.QuotationService.MigrationRunner.csproj" />
   <Project Path="Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj" />
 </Solution>

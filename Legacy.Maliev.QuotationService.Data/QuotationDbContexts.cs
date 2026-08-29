@@ -10,6 +10,7 @@ public sealed class QuotationDbContext(DbContextOptions<QuotationDbContext> opti
     public DbSet<QuotationOrderItem> OrderItems => Set<QuotationOrderItem>();
     public DbSet<QuotationFile> Files => Set<QuotationFile>();
     public DbSet<QuotationOrderLink> OrderLinks => Set<QuotationOrderLink>();
+    public DbSet<QuotationAcceptedOutcome> AcceptedOutcomes => Set<QuotationAcceptedOutcome>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -19,7 +20,13 @@ public sealed class QuotationDbContext(DbContextOptions<QuotationDbContext> opti
         quotation.Property(x => x.Fob).HasColumnName("FOB").HasMaxLength(256); quotation.Property(x => x.ShippedVia).HasMaxLength(256); quotation.Property(x => x.Terms).HasMaxLength(256);
         quotation.Property(x => x.ExpirationDate).HasColumnType("timestamp without time zone"); quotation.Property(x => x.Subtotal).HasPrecision(18, 2); quotation.Property(x => x.Vat).HasPrecision(18, 2); quotation.Property(x => x.Total).HasPrecision(18, 2); quotation.Property(x => x.WithholdingTax).HasPrecision(18, 2);
         quotation.Property(x => x.QuotedAmount).HasPrecision(18, 2).HasComputedColumnSql("(\"Total\" - \"WithholdingTax\")::numeric(18,2)", stored: true);
+        quotation.Property(x => x.SourceRequestId).HasColumnName("SourceRequestID"); quotation.Property(x => x.SourceJourneyId).HasColumnName("SourceJourneyID"); quotation.Property(x => x.AcceptedUtc).HasColumnType("timestamp without time zone"); quotation.Property(x => x.AcceptanceOrigin).HasMaxLength(16);
+        quotation.HasIndex(x => x.SourceRequestId); quotation.HasIndex(x => x.SourceJourneyId);
         Dates(quotation); quotation.Property(x => x.ModifiedDate).IsConcurrencyToken();
+
+        var acceptedOutcome = modelBuilder.Entity<QuotationAcceptedOutcome>();
+        acceptedOutcome.ToTable("QuotationAcceptedOutcome"); acceptedOutcome.HasKey(x => x.Id); acceptedOutcome.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd(); acceptedOutcome.Property(x => x.QuotationId).HasColumnName("QuotationID"); acceptedOutcome.Property(x => x.SourceRequestId).HasColumnName("SourceRequestID"); acceptedOutcome.Property(x => x.SourceJourneyId).HasColumnName("SourceJourneyID"); acceptedOutcome.Property(x => x.EventKey).HasMaxLength(128).IsRequired(); acceptedOutcome.Property(x => x.AcceptedUtc).HasColumnType("timestamp without time zone"); acceptedOutcome.Property(x => x.AcceptanceOrigin).HasMaxLength(16).IsRequired();
+        acceptedOutcome.HasIndex(x => x.EventKey).IsUnique(); acceptedOutcome.HasIndex(x => x.QuotationId); acceptedOutcome.HasIndex(x => x.AcceptedUtc); acceptedOutcome.HasIndex(x => x.SourceRequestId); acceptedOutcome.HasIndex(x => x.SourceJourneyId);
 
         var item = modelBuilder.Entity<QuotationOrderItem>();
         item.ToTable("OrderItem"); item.HasKey(x => x.Id); item.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd(); item.Property(x => x.QuotationId).HasColumnName("QuotationID"); item.Property(x => x.OrderId).HasColumnName("OrderID"); item.Property(x => x.UnitPrice).HasPrecision(18, 2); item.Property(x => x.Subtotal).HasPrecision(18, 2).HasComputedColumnSql("(\"UnitPrice\" * \"Quantity\")::numeric(18,2)", stored: true); Dates(item); item.Property(x => x.ModifiedDate).IsConcurrencyToken();

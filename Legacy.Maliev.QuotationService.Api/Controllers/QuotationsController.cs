@@ -49,6 +49,28 @@ public sealed class QuotationsController(
     [HttpGet("stats"), RequirePermission(QuotationPermissions.QuotationsRead, RequireLiveCheck = true)]
     public async Task<ActionResult<QuotationStatsResponse>> GetQuotationStatsAsync(CancellationToken cancellationToken) => await service.GetStatsAsync(cancellationToken);
 
+    [HttpGet("outcomes/readback"), Authorize(Roles = "Employee"), RequirePermission(QuotationPermissions.QuotationsRead, RequireLiveCheck = true)]
+    public async Task<ActionResult<QuotationOutcomeReadback>> GetOutcomeReadbackAsync(
+        DateTime fromUtc,
+        DateTime toUtc,
+        CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole("Employee"))
+        {
+            return Forbid();
+        }
+
+        if (fromUtc.Kind != DateTimeKind.Utc
+            || toUtc.Kind != DateTimeKind.Utc
+            || fromUtc >= toUtc
+            || toUtc - fromUtc > TimeSpan.FromDays(31))
+        {
+            return BadRequest();
+        }
+
+        return await service.GetOutcomeReadbackAsync(fromUtc, toUtc, cancellationToken);
+    }
+
     [HttpPut("{quotationId:int}"), RequirePermission(QuotationPermissions.QuotationsUpdate, ResourcePathTemplate = "/quotations/{quotationId}", RequireLiveCheck = true, IsCritical = true)]
     public async Task<IActionResult> UpdateQuotationAsync(int quotationId, UpsertQuotationRequest item, [FromHeader(Name = "X-Expected-Modified-Date")] DateTimeOffset? expected, CancellationToken cancellationToken) => (await service.UpdateQuotationAsync(quotationId, item, expected, cancellationToken)) switch { UpdateResult.Updated => NoContent(), UpdateResult.Conflict => Conflict("Quotation was modified by another request."), _ => NotFound() };
 
@@ -59,6 +81,11 @@ public sealed class QuotationsController(
         [FromHeader(Name = "X-Expected-Modified-Date")] DateTimeOffset? expected,
         CancellationToken cancellationToken)
     {
+        if (request.EmployeeInitiated && !IsTrustedEmployeeDecisionCaller())
+        {
+            return Forbid();
+        }
+
         var result = await decisions.DecideAsync(quotationId, request, expected, cancellationToken);
         return result.Status switch
         {
@@ -86,5 +113,27 @@ public sealed class QuotationsController(
             User,
             null,
             $"Permission:{QuotationPermissions.QuotationsRead}")).Succeeded;
+    }
+
+    private bool IsTrustedEmployeeDecisionCaller()
+    {
+        var identityKinds = User.FindAll("identity_kind").Select(claim => claim.Value).ToArray();
+        if (User.IsInRole("Employee"))
+        {
+            return identityKinds.Length == 0
+                || identityKinds is ["employee"];
+        }
+
+        if (identityKinds is not ["service"])
+        {
+            return false;
+        }
+
+        var subjects = User.FindAll("sub").Select(claim => claim.Value).ToArray();
+        var permissions = User.FindAll("permissions").Select(claim => claim.Value).ToArray();
+        return subjects is ["service:legacy-intranet"]
+            && !User.HasClaim(claim => claim.Type == "permission")
+            && permissions.Contains(QuotationPermissions.QuotationsUpdate, StringComparer.Ordinal)
+            && permissions.All(permission => !permission.Contains('*', StringComparison.Ordinal));
     }
 }

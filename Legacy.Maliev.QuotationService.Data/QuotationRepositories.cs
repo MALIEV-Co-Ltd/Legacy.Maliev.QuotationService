@@ -3,6 +3,7 @@ using Legacy.Maliev.QuotationService.Application.Models;
 using Legacy.Maliev.QuotationService.Application.Services;
 using Legacy.Maliev.QuotationService.Domain;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Legacy.Maliev.QuotationService.Data;
 
@@ -14,7 +15,7 @@ public sealed class QuotationRepository(
 {
     public async Task<QuotationResponse> CreateQuotationAsync(UpsertQuotationRequest request, CancellationToken cancellationToken)
     {
-        var now = Now(); var entity = Map(new Quotation(), request); entity.CreatedDate = now; entity.ModifiedDate = now;
+        var now = Now(); var entity = Map(new Quotation(), request); entity.Accepted = null; entity.SourceRequestId = request.SourceRequestId; entity.SourceJourneyId = request.SourceJourneyId; entity.CreatedDate = now; entity.ModifiedDate = now;
         quotations.Add(entity); await quotations.SaveChangesAsync(cancellationToken); return ToResponse(entity);
     }
 
@@ -66,9 +67,153 @@ public sealed class QuotationRepository(
             .SingleOrDefaultAsync(cancellationToken)
         ?? new QuotationStatsResponse(0, 0, 0);
 
+    public async Task<QuotationOutcomeReadback> GetOutcomeReadbackAsync(
+        DateTime fromUtc,
+        DateTime toUtc,
+        CancellationToken cancellationToken)
+    {
+        var fromInclusive = DateTime.SpecifyKind(fromUtc, DateTimeKind.Unspecified);
+        var toExclusive = DateTime.SpecifyKind(toUtc, DateTimeKind.Unspecified);
+        var persisted = await quotations.Quotations
+            .AsNoTracking()
+            .Where(quotation => quotation.CreatedDate != null
+                && quotation.CreatedDate >= fromInclusive
+                && quotation.CreatedDate < toExclusive)
+            .GroupBy(quotation => quotation.CreatedDate!.Value.Date)
+            .Select(group => new { Day = group.Key, Count = group.Count() })
+            .OrderBy(group => group.Day)
+            .ToListAsync(cancellationToken);
+        var accepted = await (
+            from outcome in quotations.AcceptedOutcomes.AsNoTracking()
+            join quotation in quotations.Quotations.AsNoTracking()
+                on outcome.QuotationId equals quotation.Id
+            where outcome.AcceptedUtc >= fromInclusive && outcome.AcceptedUtc < toExclusive
+            group quotation by new { Day = outcome.AcceptedUtc.Date, quotation.CurrencyId }
+            into outcomesByDayCurrency
+            orderby outcomesByDayCurrency.Key.Day, outcomesByDayCurrency.Key.CurrencyId
+            select new
+            {
+                outcomesByDayCurrency.Key.Day,
+                outcomesByDayCurrency.Key.CurrencyId,
+                AcceptedCount = outcomesByDayCurrency.Count(),
+                QuotedAmount = outcomesByDayCurrency.Sum(quotation => quotation.QuotedAmount),
+                QuotedAmountCount = outcomesByDayCurrency.Count(quotation => quotation.QuotedAmount != null),
+            }).ToListAsync(cancellationToken);
+
+        var persistedByDay = persisted.ToDictionary(value => value.Day, value => value.Count);
+        var acceptedByDay = accepted.GroupBy(value => value.Day).ToDictionary(value => value.Key);
+        var days = persistedByDay.Keys
+            .Concat(acceptedByDay.Keys)
+            .Distinct()
+            .OrderBy(day => day)
+            .Select(day =>
+            {
+                var currencyGroups = acceptedByDay.GetValueOrDefault(day)?.ToList() ?? [];
+                return new QuotationOutcomeReadbackDay(
+                    DateTime.SpecifyKind(day, DateTimeKind.Utc),
+                    persistedByDay.GetValueOrDefault(day),
+                    currencyGroups.Sum(value => value.AcceptedCount),
+                    currencyGroups
+                        .Where(value => value.QuotedAmountCount > 0 && value.QuotedAmount is not null)
+                        .OrderBy(value => value.CurrencyId)
+                        .Select(value => new AcceptedQuotedAmountByCurrency(
+                            value.CurrencyId,
+                            value.QuotedAmount!.Value,
+                            value.QuotedAmountCount))
+                        .ToList());
+            })
+            .ToList();
+
+        return new(fromUtc, toUtc, days);
+    }
+
+    public async Task<QuotationDecisionPersistenceResult> ApplyDecisionAsync(
+        int id,
+        bool accepted,
+        QuotationAcceptanceOrigin? acceptanceOrigin,
+        DateTimeOffset? expectedModifiedDate,
+        CancellationToken cancellationToken)
+    {
+        var entity = await quotations.Quotations.FindAsync([id], cancellationToken);
+        if (entity is null)
+        {
+            return new(QuotationDecisionPersistenceStatus.NotFound, null);
+        }
+
+        if (expectedModifiedDate is not null)
+        {
+            quotations.Entry(entity).Property(x => x.ModifiedDate).OriginalValue =
+                DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified);
+        }
+
+        if (accepted
+            && entity.Accepted == false
+            && acceptanceOrigin != QuotationAcceptanceOrigin.Employee)
+        {
+            return new(QuotationDecisionPersistenceStatus.Conflict, null);
+        }
+
+        var eventKey = $"quotation-{id}:accepted:v1";
+        if (entity.Accepted == accepted
+            && (!accepted
+                || entity.AcceptedUtc is not null
+                && await quotations.AcceptedOutcomes.AnyAsync(
+                    outcome => outcome.EventKey == eventKey,
+                    cancellationToken)))
+        {
+            return new(QuotationDecisionPersistenceStatus.Completed, ToResponse(entity));
+        }
+
+        var now = Now();
+        entity.Accepted = accepted;
+        entity.ModifiedDate = now;
+        if (accepted)
+        {
+            var origin = acceptanceOrigin
+                ?? throw new ArgumentException("Accepted decisions require an acceptance origin.", nameof(acceptanceOrigin));
+            entity.AcceptedUtc ??= now;
+            entity.AcceptanceOrigin ??= origin.ToString().ToLowerInvariant();
+            if (!await quotations.AcceptedOutcomes.AnyAsync(
+                    outcome => outcome.EventKey == eventKey,
+                    cancellationToken))
+            {
+                quotations.AcceptedOutcomes.Add(new QuotationAcceptedOutcome
+                {
+                    EventKey = eventKey,
+                    QuotationId = id,
+                    SourceRequestId = entity.SourceRequestId,
+                    SourceJourneyId = entity.SourceJourneyId,
+                    AcceptedUtc = entity.AcceptedUtc.Value,
+                    AcceptanceOrigin = entity.AcceptanceOrigin,
+                });
+            }
+        }
+
+        try
+        {
+            await quotations.SaveChangesAsync(cancellationToken);
+            await cache.RemoveAsync(QuotationKey(id), cancellationToken);
+            return new(QuotationDecisionPersistenceStatus.Completed, ToResponse(entity));
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return await ReconcileDecisionAsync(id, accepted, eventKey, cancellationToken);
+        }
+        catch (DbUpdateException exception) when (
+            exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "IX_QuotationAcceptedOutcome_EventKey",
+            })
+        {
+            return await ReconcileDecisionAsync(id, accepted, eventKey, cancellationToken);
+        }
+    }
+
     public async Task<UpdateResult> UpdateQuotationAsync(int id, UpsertQuotationRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken)
     {
         var entity = await quotations.Quotations.FindAsync([id], cancellationToken); if (entity is null) return UpdateResult.NotFound;
+        if (request.Accepted == true && entity.Accepted != true) return UpdateResult.Conflict;
         if (expectedModifiedDate is not null) quotations.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified);
         Map(entity, request).ModifiedDate = Now();
         try { await quotations.SaveChangesAsync(cancellationToken); await cache.RemoveAsync(QuotationKey(id), cancellationToken); return UpdateResult.Updated; } catch (DbUpdateConcurrencyException) { return UpdateResult.Conflict; }
@@ -242,6 +387,29 @@ public sealed class QuotationRepository(
     public async Task<bool> UpdateRequestFileAsync(int id, UpsertQuotationRequestFileRequest request, CancellationToken cancellationToken) { var entity = await requests.Files.FindAsync([id], cancellationToken); if (entity is null) return false; entity.RequestId = request.RequestId; entity.Bucket = request.Bucket; entity.ObjectName = request.ObjectName; entity.ModifiedDate = Now(); await requests.SaveChangesAsync(cancellationToken); return true; }
 
     private DateTime Now() => DateTime.SpecifyKind(timeProvider.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified);
+    private async Task<QuotationDecisionPersistenceResult> ReconcileDecisionAsync(
+        int id,
+        bool accepted,
+        string eventKey,
+        CancellationToken cancellationToken)
+    {
+        quotations.ChangeTracker.Clear();
+        var current = await quotations.Quotations.AsNoTracking().SingleOrDefaultAsync(
+            value => value.Id == id,
+            cancellationToken);
+        if (current is not null
+            && current.Accepted == accepted
+            && (!accepted
+                || await quotations.AcceptedOutcomes.AsNoTracking().AnyAsync(
+                    outcome => outcome.EventKey == eventKey,
+                    cancellationToken)))
+        {
+            return new(QuotationDecisionPersistenceStatus.Completed, ToResponse(current));
+        }
+
+        return new(QuotationDecisionPersistenceStatus.Conflict, null);
+    }
+
     private static string QuotationKey(int id) => $"quotation:{id}";
     private static string RequestKey(int id) => $"request:{id}";
     private static bool IsSha256(string value) =>

@@ -20,11 +20,27 @@ public sealed class Quotation
     public string? ShippedVia { get; set; }
     public string? Terms { get; set; }
     public bool? Accepted { get; set; }
+    public int? SourceRequestId { get; set; }
+    public Guid? SourceJourneyId { get; set; }
+    public DateTime? AcceptedUtc { get; set; }
+    public string? AcceptanceOrigin { get; set; }
     public DateTime? CreatedDate { get; set; }
     public DateTime? ModifiedDate { get; set; }
     public ICollection<QuotationOrderItem> OrderItems { get; } = [];
     public ICollection<QuotationFile> Files { get; } = [];
     public ICollection<QuotationOrderLink> Orders { get; } = [];
+}
+
+/// <summary>Immutable, provider-neutral first-acceptance fact for a quotation.</summary>
+public sealed class QuotationAcceptedOutcome
+{
+    public long Id { get; set; }
+    public string EventKey { get; set; } = string.Empty;
+    public int QuotationId { get; set; }
+    public int? SourceRequestId { get; set; }
+    public Guid? SourceJourneyId { get; set; }
+    public DateTime AcceptedUtc { get; set; }
+    public string AcceptanceOrigin { get; set; } = string.Empty;
 }
 
 /// <summary>Legacy quotation line.</summary>
