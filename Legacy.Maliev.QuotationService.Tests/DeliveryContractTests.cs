@@ -141,6 +141,24 @@ public sealed class DeliveryContractTests
         var spec = Map(policy, "spec");
         Assert.Equal(["Ingress", "Egress"], Sequence(spec, "policyTypes").Children.Select(Scalar).ToArray());
 
+        var ingress = Sequence(spec, "ingress").Children.Select(Mapping).Single();
+        Assert.Equal(
+            ["legacy-maliev-accounting-service", "legacy-maliev-intranet-bff", "legacy-maliev-web"],
+            SelectedAppNames(ingress, "from"));
+        Assert.Equal(["8080"], PortValues(ingress));
+        foreach (var source in Sequence(ingress, "from").Children.Select(Mapping))
+        {
+            Assert.Equal(2, source.Children.Count);
+            var namespaceLabels = Map(Map(source, "namespaceSelector"), "matchLabels");
+            Assert.Equal("maliev-legacy", Scalar(namespaceLabels, "kubernetes.io/metadata.name"));
+        }
+
+        var apiEgress = Sequence(spec, "egress").Children.Select(Mapping).Single(rule =>
+            SelectedAppNames(rule, "to").SequenceEqual(
+                ["legacy-maliev-auth-service", "legacy-maliev-order-service"],
+                StringComparer.Ordinal));
+        Assert.Equal(["80", "8080"], PortValues(apiEgress));
+
         Assert.Contains("kubernetes.io/metadata.name: maliev-legacy", text, StringComparison.Ordinal);
         Assert.Contains("kubernetes.io/metadata.name: kube-system", text, StringComparison.Ordinal);
         Assert.Contains("app.kubernetes.io/name: legacy-redis", text, StringComparison.Ordinal);
@@ -256,6 +274,24 @@ public sealed class DeliveryContractTests
     private static string Scalar(YamlMappingNode parent, string key) => Scalar(Node(parent, key));
     private static string Scalar(YamlNode node) => Assert.IsType<YamlScalarNode>(node).Value ?? string.Empty;
 
+    private static string[] PortValues(YamlMappingNode rule) => Sequence(rule, "ports").Children
+        .Select(Mapping)
+        .Select(port => Scalar(port, "port"))
+        .Order(StringComparer.Ordinal)
+        .ToArray();
+
+    private static string[] SelectedAppNames(YamlMappingNode rule, string peersKey) => Sequence(rule, peersKey).Children
+        .Select(Mapping)
+        .Select(peer => OptionalNode(peer, "podSelector"))
+        .OfType<YamlMappingNode>()
+        .Select(selector => OptionalNode(selector, "matchLabels"))
+        .OfType<YamlMappingNode>()
+        .Select(labels => OptionalNode(labels, "app.kubernetes.io/name"))
+        .OfType<YamlScalarNode>()
+        .Select(label => label.Value ?? string.Empty)
+        .Order(StringComparer.Ordinal)
+        .ToArray();
+
     private static IEnumerable<YamlNode> Descendants(YamlNode node)
     {
         yield return node;
@@ -283,6 +319,11 @@ public sealed class DeliveryContractTests
 
     private static YamlNode Node(YamlMappingNode parent, string key) => parent.Children
         .Single(entry => string.Equals(Scalar(entry.Key), key, StringComparison.Ordinal)).Value;
+
+    private static YamlNode? OptionalNode(YamlMappingNode parent, string key) => parent.Children
+        .Where(entry => string.Equals(Scalar(entry.Key), key, StringComparison.Ordinal))
+        .Select(entry => entry.Value)
+        .SingleOrDefault();
 
     private static string Read(params string[] parts) => File.ReadAllText(Path.Combine([DeployRoot(), .. parts]));
     private static int Count(string text, string value) => (text.Length - text.Replace(value, string.Empty, StringComparison.Ordinal).Length) / value.Length;

@@ -24,11 +24,13 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: legacy-maliev-intranet-bff
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: maliev-legacy
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: legacy-maliev-accounting-service
       ports:
-        # Include both the Service port and its pod target port because the
-        # policy evaluation point around Service DNAT is CNI-dependent.
-        - protocol: TCP
-          port: 80
         - protocol: TCP
           port: 8080
   egress:
@@ -77,5 +79,9 @@ spec:
             matchLabels:
               app.kubernetes.io/name: legacy-maliev-order-service
       ports:
+        # Include both the Service port and its pod target port because the
+        # policy evaluation point around Service DNAT is CNI-dependent.
+        - protocol: TCP
+          port: 80
         - protocol: TCP
           port: 8080

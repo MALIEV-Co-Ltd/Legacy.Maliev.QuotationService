@@ -20,7 +20,7 @@ The API Deployment contains no migrator credentials. It receives no signing priv
 
 ## Network assumptions
 
-Ingress is restricted to the expected Web and Intranet BFF consumers in `maliev-legacy`. Kubernetes NetworkPolicy cannot meaningfully select kubelet-originated health probes; supported GKE networking permits node-local probe traffic independently, and central GitOps must verify that behavior in the selected dataplane before release.
+Ingress is restricted to the expected Web, Intranet BFF, and AccountingService consumers in `maliev-legacy`. AccountingService requires this boundary for invoice creation/linking and accepted-quotation processing. Kubernetes NetworkPolicy cannot meaningfully select kubelet-originated health probes; supported GKE networking permits node-local probe traffic independently, and central GitOps must verify that behavior in the selected dataplane before release.
 
 Egress is restricted to cluster DNS, the same-namespace PostgreSQL/PgBouncer endpoint on 5432, the dedicated Redis workload on 6379, and the Auth and Order APIs on HTTP ports 80/8080. Both the Service port and pod target port are explicit because the NetworkPolicy evaluation point around Service DNAT varies by CNI. CloudNativePG owns the generated PgBouncer pod labels, so this base intentionally selects the `maliev-legacy` namespace for port 5432 instead of guessing operator labels. Central GitOps must verify the actual CloudNativePG pooler service, endpoint slices, Redis label, Auth label, Order label, and service target ports against the deployed environment.
 
