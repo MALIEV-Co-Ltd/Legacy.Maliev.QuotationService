@@ -29,7 +29,6 @@ public sealed class Quotation
     public ICollection<QuotationOrderItem> OrderItems { get; } = [];
     public ICollection<QuotationFile> Files { get; } = [];
     public ICollection<QuotationOrderLink> Orders { get; } = [];
-    public ICollection<QuotationAcceptedOutcome> AcceptedOutcomes { get; } = [];
 }
 
 /// <summary>Immutable, provider-neutral first-acceptance fact for a quotation.</summary>
@@ -42,7 +41,6 @@ public sealed class QuotationAcceptedOutcome
     public Guid? SourceJourneyId { get; set; }
     public DateTime AcceptedUtc { get; set; }
     public string AcceptanceOrigin { get; set; } = string.Empty;
-    public Quotation? Quotation { get; set; }
 }
 
 /// <summary>Legacy quotation line.</summary>

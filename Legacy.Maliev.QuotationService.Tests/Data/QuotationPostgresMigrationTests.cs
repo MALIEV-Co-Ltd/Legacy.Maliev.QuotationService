@@ -217,7 +217,7 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
                     "SELECT indexname AS \"Value\" FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'QuotationAcceptedOutcome' AND indexname LIKE 'IX_%' ORDER BY indexname")
                 .ToListAsync());
         Assert.Equal(
-            1,
+            0,
             await quotationContext.Database.SqlQueryRaw<int>(
                     "SELECT COUNT(*)::int AS \"Value\" FROM pg_constraint WHERE conname = 'FK_QuotationAcceptedOutcome_Quotation'")
                 .SingleAsync());
@@ -337,6 +337,78 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DeclinedQuotation_RejectsCustomerAcceptanceButAllowsEmployeeOverride()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await Task.WhenAll(
+            quotationContext.Database.MigrateAsync(),
+            requestContext.Database.MigrateAsync());
+        var repository = Repository(quotationContext, requestContext);
+        var quotation = await repository.CreateQuotationAsync(QuotationRequest(), CancellationToken.None);
+        await repository.ApplyDecisionAsync(
+            quotation.Id,
+            accepted: false,
+            acceptanceOrigin: null,
+            expectedModifiedDate: null,
+            CancellationToken.None);
+
+        var customerAcceptance = await repository.ApplyDecisionAsync(
+            quotation.Id,
+            accepted: true,
+            QuotationAcceptanceOrigin.Customer,
+            expectedModifiedDate: null,
+            CancellationToken.None);
+
+        Assert.Equal(QuotationDecisionPersistenceStatus.Conflict, customerAcceptance.Status);
+        quotationContext.ChangeTracker.Clear();
+        Assert.False((await quotationContext.Quotations.SingleAsync(value => value.Id == quotation.Id)).Accepted);
+        Assert.Empty(await quotationContext.AcceptedOutcomes.ToListAsync());
+
+        var employeeAcceptance = await repository.ApplyDecisionAsync(
+            quotation.Id,
+            accepted: true,
+            QuotationAcceptanceOrigin.Employee,
+            expectedModifiedDate: null,
+            CancellationToken.None);
+
+        Assert.Equal(QuotationDecisionPersistenceStatus.Completed, employeeAcceptance.Status);
+        quotationContext.ChangeTracker.Clear();
+        var stored = await quotationContext.Quotations.SingleAsync(value => value.Id == quotation.Id);
+        var outcome = Assert.Single(await quotationContext.AcceptedOutcomes.ToListAsync());
+        Assert.True(stored.Accepted);
+        Assert.Equal("employee", stored.AcceptanceOrigin);
+        Assert.Equal("employee", outcome.AcceptanceOrigin);
+    }
+
+    [Fact]
+    public async Task AcceptedQuotation_DeletePreservesImmutableOutcome()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await Task.WhenAll(
+            quotationContext.Database.MigrateAsync(),
+            requestContext.Database.MigrateAsync());
+        var repository = Repository(quotationContext, requestContext);
+        var quotation = await repository.CreateQuotationAsync(QuotationRequest(), CancellationToken.None);
+        await repository.ApplyDecisionAsync(
+            quotation.Id,
+            accepted: true,
+            QuotationAcceptanceOrigin.Customer,
+            expectedModifiedDate: null,
+            CancellationToken.None);
+
+        var deleted = await repository.DeleteQuotationAsync(quotation.Id, CancellationToken.None);
+
+        Assert.True(deleted);
+        quotationContext.ChangeTracker.Clear();
+        Assert.False(await quotationContext.Quotations.AnyAsync(value => value.Id == quotation.Id));
+        var outcome = Assert.Single(await quotationContext.AcceptedOutcomes.ToListAsync());
+        Assert.Equal(quotation.Id, outcome.QuotationId);
+        Assert.Equal($"quotation-{quotation.Id}:accepted:v1", outcome.EventKey);
+    }
+
+    [Fact]
     public async Task OutcomeReadback_UsesHalfOpenUtcWindowAndReturnsDeterministicPrivacySafeAggregates()
     {
         await using var quotationContext = QuotationContext();
@@ -377,6 +449,9 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
 
         Assert.Equal(fromUtc, readback.FromUtc);
         Assert.Equal(toUtc, readback.ToUtc);
+        Assert.Equal("unavailable", readback.TechnicalConversionAvailability);
+        Assert.Equal("unavailable", readback.QualifiedCustomerAvailability);
+        Assert.Equal("unavailable", readback.RevenueAvailability);
         Assert.Collection(
             readback.Days,
             day =>
@@ -402,6 +477,9 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
             });
 
         var json = JsonSerializer.Serialize(readback, new JsonSerializerOptions { PropertyNamingPolicy = null });
+        Assert.Contains("\"TechnicalConversionAvailability\":\"unavailable\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"QualifiedCustomerAvailability\":\"unavailable\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"RevenueAvailability\":\"unavailable\"", json, StringComparison.Ordinal);
         foreach (var forbiddenProperty in new[]
         {
             "QuotationId", "CustomerId", "EmployeeId", "InvoiceId", "OrderId",

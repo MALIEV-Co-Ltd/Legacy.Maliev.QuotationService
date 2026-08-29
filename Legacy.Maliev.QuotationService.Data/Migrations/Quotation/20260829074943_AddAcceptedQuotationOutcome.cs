@@ -53,11 +53,6 @@ namespace Legacy.Maliev.QuotationService.Data.Migrations.Quotation
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_QuotationAcceptedOutcome", x => x.ID);
-                    table.ForeignKey(
-                        name: "FK_QuotationAcceptedOutcome_Quotation",
-                        column: x => x.QuotationID,
-                        principalTable: "Quotation",
-                        principalColumn: "ID");
                 });
 
             migrationBuilder.CreateIndex(

@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Legacy.Maliev.QuotationService.Data.Migrations.Quotation
 {
     [DbContext(typeof(QuotationDbContext))]
-    [Migration("20260829071207_AddAcceptedQuotationOutcome")]
+    [Migration("20260829074943_AddAcceptedQuotationOutcome")]
     partial class AddAcceptedQuotationOutcome
     {
         /// <inheritdoc />
@@ -306,18 +306,6 @@ namespace Legacy.Maliev.QuotationService.Data.Migrations.Quotation
                     b.ToTable("QuotationHasOrder", (string)null);
                 });
 
-            modelBuilder.Entity("Legacy.Maliev.QuotationService.Domain.QuotationAcceptedOutcome", b =>
-                {
-                    b.HasOne("Legacy.Maliev.QuotationService.Domain.Quotation", "Quotation")
-                        .WithMany("AcceptedOutcomes")
-                        .HasForeignKey("QuotationId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired()
-                        .HasConstraintName("FK_QuotationAcceptedOutcome_Quotation");
-
-                    b.Navigation("Quotation");
-                });
-
             modelBuilder.Entity("Legacy.Maliev.QuotationService.Domain.QuotationFile", b =>
                 {
                     b.HasOne("Legacy.Maliev.QuotationService.Domain.Quotation", "Quotation")
@@ -356,8 +344,6 @@ namespace Legacy.Maliev.QuotationService.Data.Migrations.Quotation
 
             modelBuilder.Entity("Legacy.Maliev.QuotationService.Domain.Quotation", b =>
                 {
-                    b.Navigation("AcceptedOutcomes");
-
                     b.Navigation("Files");
 
                     b.Navigation("OrderItems");

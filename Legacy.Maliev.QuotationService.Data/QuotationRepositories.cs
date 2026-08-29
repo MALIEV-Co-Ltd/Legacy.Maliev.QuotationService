@@ -146,6 +146,13 @@ public sealed class QuotationRepository(
                 DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified);
         }
 
+        if (accepted
+            && entity.Accepted == false
+            && acceptanceOrigin != QuotationAcceptanceOrigin.Employee)
+        {
+            return new(QuotationDecisionPersistenceStatus.Conflict, null);
+        }
+
         var eventKey = $"quotation-{id}:accepted:v1";
         if (entity.Accepted == accepted
             && (!accepted

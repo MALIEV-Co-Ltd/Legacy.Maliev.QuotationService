@@ -6,7 +6,12 @@ public sealed record QuotationStatsResponse(int Accepted, int Declined, int Open
 public sealed record QuotationOutcomeReadback(
     DateTime FromUtc,
     DateTime ToUtc,
-    IReadOnlyList<QuotationOutcomeReadbackDay> Days);
+    IReadOnlyList<QuotationOutcomeReadbackDay> Days)
+{
+    public string TechnicalConversionAvailability { get; } = "unavailable";
+    public string QualifiedCustomerAvailability { get; } = "unavailable";
+    public string RevenueAvailability { get; } = "unavailable";
+}
 public sealed record QuotationOutcomeReadbackDay(
     DateTime DayUtc,
     int PersistedQuotationCount,
