@@ -1,8 +1,21 @@
 namespace Legacy.Maliev.QuotationService.Application.Models;
 
 public sealed record QuotationResponse(int Id, int? CustomerId, int? EmployeeId, int? InvoiceId, int Period, DateTime ExpirationDate, decimal Subtotal, decimal Vat, decimal Total, decimal? WithholdingTax, decimal? QuotedAmount, int CurrencyId, string? Comment, string? Fob, string? ShippedVia, string? Terms, bool? Accepted, DateTime? CreatedDate, DateTime? ModifiedDate);
-public sealed record UpsertQuotationRequest(int? CustomerId, int? EmployeeId, int? InvoiceId, int Period, DateTime ExpirationDate, decimal Subtotal, decimal Vat, decimal Total, decimal? WithholdingTax, int CurrencyId, string? Comment, string? Fob, string? ShippedVia, string? Terms, bool? Accepted);
+public sealed record UpsertQuotationRequest(int? CustomerId, int? EmployeeId, int? InvoiceId, int Period, DateTime ExpirationDate, decimal Subtotal, decimal Vat, decimal Total, decimal? WithholdingTax, int CurrencyId, string? Comment, string? Fob, string? ShippedVia, string? Terms, bool? Accepted, int? SourceRequestId = null, Guid? SourceJourneyId = null);
 public sealed record QuotationStatsResponse(int Accepted, int Declined, int Open);
+public sealed record QuotationOutcomeReadback(
+    DateTime FromUtc,
+    DateTime ToUtc,
+    IReadOnlyList<QuotationOutcomeReadbackDay> Days);
+public sealed record QuotationOutcomeReadbackDay(
+    DateTime DayUtc,
+    int PersistedQuotationCount,
+    int AcceptedQuotationCount,
+    IReadOnlyList<AcceptedQuotedAmountByCurrency> AcceptedQuotedAmountsByCurrency);
+public sealed record AcceptedQuotedAmountByCurrency(
+    int CurrencyId,
+    decimal QuotedAmount,
+    int AcceptedQuotationCount);
 public sealed record QuotationDocumentSnapshot(QuotationResponse Quotation, IReadOnlyList<QuotationOrderItemResponse> OrderItems, IReadOnlyList<QuotationFileResponse> Files);
 public sealed record CustomerQuotationDetails(
     QuotationResponse Quotation,
@@ -29,7 +42,12 @@ public sealed record PaginatedResponse<T>(IReadOnlyList<T> Items, int PageIndex,
 public enum QuotationSortType { QuotationId_Ascending, QuotationId_Descending, QuotationCreatedDate_Ascending, QuotationCreatedDate_Descending, QuotationModifiedDate_Ascending, QuotationModifiedDate_Descending }
 public enum RequestSortType { RequestId_Ascending, RequestId_Descending, RequestCreatedDate_Ascending, RequestCreatedDate_Descending, RequestModifiedDate_Ascending, RequestModifiedDate_Descending }
 public enum UpdateResult { Updated, NotFound, Conflict }
-public sealed record QuotationDecisionRequest(bool Accepted);
+public sealed record QuotationDecisionRequest(bool Accepted, bool EmployeeInitiated = false);
 public sealed record QuotationDecisionResponse(QuotationDecisionStatus Status, int CompletedOrders, int TotalOrders, DateTime? ModifiedDate);
 public enum QuotationDecisionStatus { Completed, NotFound, Conflict, DependencyConflict, DependencyUnavailable }
+public sealed record QuotationDecisionPersistenceResult(
+    QuotationDecisionPersistenceStatus Status,
+    QuotationResponse? Quotation);
+public enum QuotationDecisionPersistenceStatus { Completed, NotFound, Conflict }
+public enum QuotationAcceptanceOrigin { Customer, Employee }
 public enum OrderDecisionResult { Completed, Conflict, NotFound, Unavailable }

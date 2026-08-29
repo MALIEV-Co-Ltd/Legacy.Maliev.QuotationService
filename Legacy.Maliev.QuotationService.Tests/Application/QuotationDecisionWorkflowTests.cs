@@ -14,15 +14,15 @@ public sealed class QuotationDecisionWorkflowTests
     public async Task DecideAsync_Accepted_UpdatesQuotationThenTransitionsEveryLinkedOrder()
     {
         var quotations = new Mock<IQuotationService>(MockBehavior.Strict);
-        quotations.SetupSequence(value => value.GetQuotationAsync(7, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Quotation(null, InitialVersion))
-            .ReturnsAsync(Quotation(true, DecisionVersion));
-        quotations.Setup(value => value.UpdateQuotationAsync(
+        quotations.Setup(value => value.ApplyDecisionAsync(
                 7,
-                It.Is<UpsertQuotationRequest>(request => request.Accepted == true),
+                true,
+                QuotationAcceptanceOrigin.Employee,
                 new DateTimeOffset(InitialVersion),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(UpdateResult.Updated);
+            .ReturnsAsync(new QuotationDecisionPersistenceResult(
+                QuotationDecisionPersistenceStatus.Completed,
+                Quotation(true, DecisionVersion)));
         quotations.Setup(value => value.GetOrderLinksAsync(7, It.IsAny<CancellationToken>()))
             .ReturnsAsync([Link(11), Link(12)]);
         var orders = new Mock<IOrderDecisionClient>(MockBehavior.Strict);
@@ -36,7 +36,7 @@ public sealed class QuotationDecisionWorkflowTests
 
         var result = await workflow.DecideAsync(
             7,
-            new QuotationDecisionRequest(true),
+            new QuotationDecisionRequest(true, EmployeeInitiated: true),
             new DateTimeOffset(InitialVersion),
             CancellationToken.None);
 
@@ -52,8 +52,15 @@ public sealed class QuotationDecisionWorkflowTests
     public async Task DecideAsync_AlreadyDesired_ResumesWithSameDeterministicOrderKey()
     {
         var quotations = new Mock<IQuotationService>(MockBehavior.Strict);
-        quotations.Setup(value => value.GetQuotationAsync(7, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Quotation(false, DecisionVersion));
+        quotations.Setup(value => value.ApplyDecisionAsync(
+                7,
+                false,
+                null,
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new QuotationDecisionPersistenceResult(
+                QuotationDecisionPersistenceStatus.Completed,
+                Quotation(false, DecisionVersion)));
         quotations.Setup(value => value.GetOrderLinksAsync(7, It.IsAny<CancellationToken>()))
             .ReturnsAsync([Link(11)]);
         string? firstKey = null;
@@ -69,18 +76,23 @@ public sealed class QuotationDecisionWorkflowTests
         Assert.Equal(QuotationDecisionStatus.Completed, first.Status);
         Assert.Equal(QuotationDecisionStatus.Completed, second.Status);
         orders.Verify(value => value.TransitionAsync(11, false, firstKey!, It.IsAny<CancellationToken>()), Times.Exactly(2));
-        quotations.Verify(value => value.UpdateQuotationAsync(
-            It.IsAny<int>(), It.IsAny<UpsertQuotationRequest>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()), Times.Never);
+        quotations.Verify(value => value.ApplyDecisionAsync(
+            7, false, null, null, It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
     [Fact]
     public async Task DecideAsync_OptimisticConflict_DoesNotTransitionOrders()
     {
         var quotations = new Mock<IQuotationService>();
-        quotations.Setup(value => value.GetQuotationAsync(7, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Quotation(null, InitialVersion));
-        quotations.Setup(value => value.UpdateQuotationAsync(7, It.IsAny<UpsertQuotationRequest>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(UpdateResult.Conflict);
+        quotations.Setup(value => value.ApplyDecisionAsync(
+                7,
+                true,
+                QuotationAcceptanceOrigin.Customer,
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new QuotationDecisionPersistenceResult(
+                QuotationDecisionPersistenceStatus.Conflict,
+                null));
         var orders = new Mock<IOrderDecisionClient>(MockBehavior.Strict);
         var workflow = new QuotationDecisionWorkflow(quotations.Object, orders.Object);
 
@@ -94,8 +106,15 @@ public sealed class QuotationDecisionWorkflowTests
     public async Task DecideAsync_DependencyUnavailable_ReturnsRetryablePartialProgress()
     {
         var quotations = new Mock<IQuotationService>();
-        quotations.Setup(value => value.GetQuotationAsync(7, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Quotation(true, DecisionVersion));
+        quotations.Setup(value => value.ApplyDecisionAsync(
+                7,
+                true,
+                QuotationAcceptanceOrigin.Customer,
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new QuotationDecisionPersistenceResult(
+                QuotationDecisionPersistenceStatus.Completed,
+                Quotation(true, DecisionVersion)));
         quotations.Setup(value => value.GetOrderLinksAsync(7, It.IsAny<CancellationToken>()))
             .ReturnsAsync([Link(11), Link(12)]);
         var orders = new Mock<IOrderDecisionClient>();

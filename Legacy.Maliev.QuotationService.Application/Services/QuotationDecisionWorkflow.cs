@@ -15,22 +15,29 @@ public sealed class QuotationDecisionWorkflow(
         DateTimeOffset? expectedModifiedDate,
         CancellationToken cancellationToken)
     {
-        var quotation = await quotations.GetQuotationAsync(quotationId, cancellationToken);
-        if (quotation is null) return Result(QuotationDecisionStatus.NotFound);
-
-        if (quotation.Accepted != request.Accepted)
+        var persistence = await quotations.ApplyDecisionAsync(
+            quotationId,
+            request.Accepted,
+            request.Accepted
+                ? request.EmployeeInitiated
+                    ? QuotationAcceptanceOrigin.Employee
+                    : QuotationAcceptanceOrigin.Customer
+                : null,
+            expectedModifiedDate,
+            cancellationToken);
+        if (persistence.Status == QuotationDecisionPersistenceStatus.NotFound)
         {
-            var update = await quotations.UpdateQuotationAsync(
-                quotationId,
-                ToUpdateRequest(quotation, request.Accepted),
-                expectedModifiedDate ?? ToOffset(quotation.ModifiedDate),
-                cancellationToken);
-            if (update == UpdateResult.NotFound) return Result(QuotationDecisionStatus.NotFound);
-            if (update == UpdateResult.Conflict) return Result(QuotationDecisionStatus.Conflict);
+            return Result(QuotationDecisionStatus.NotFound);
+        }
+        if (persistence.Status == QuotationDecisionPersistenceStatus.Conflict)
+        {
+            return Result(QuotationDecisionStatus.Conflict);
+        }
 
-            quotation = await quotations.GetQuotationAsync(quotationId, cancellationToken);
-            if (quotation is null || quotation.Accepted != request.Accepted)
-                return Result(QuotationDecisionStatus.DependencyUnavailable);
+        var quotation = persistence.Quotation;
+        if (quotation is null || quotation.Accepted != request.Accepted)
+        {
+            return Result(QuotationDecisionStatus.DependencyUnavailable);
         }
 
         var links = await quotations.GetOrderLinksAsync(quotationId, cancellationToken);
@@ -66,10 +73,6 @@ public sealed class QuotationDecisionWorkflow(
 
     private static QuotationDecisionResponse Result(QuotationDecisionStatus status) => new(status, 0, 0, null);
 
-    private static DateTimeOffset? ToOffset(DateTime? value) => value is null
-        ? null
-        : new DateTimeOffset(DateTime.SpecifyKind(value.Value, DateTimeKind.Utc));
-
     private static string CreateIdempotencyKey(int quotationId, int orderId, bool accepted, DateTime? version)
     {
         var normalizedVersion = version is null
@@ -77,21 +80,4 @@ public sealed class QuotationDecisionWorkflow(
             : DateTime.SpecifyKind(version.Value, DateTimeKind.Utc);
         return $"quotation-{quotationId}-{(accepted ? "accepted" : "declined")}-{normalizedVersion.Ticks:x}-order-{orderId}";
     }
-
-    private static UpsertQuotationRequest ToUpdateRequest(QuotationResponse quotation, bool accepted) => new(
-        quotation.CustomerId,
-        quotation.EmployeeId,
-        quotation.InvoiceId,
-        quotation.Period,
-        quotation.ExpirationDate,
-        quotation.Subtotal,
-        quotation.Vat,
-        quotation.Total,
-        quotation.WithholdingTax,
-        quotation.CurrencyId,
-        quotation.Comment,
-        quotation.Fob,
-        quotation.ShippedVia,
-        quotation.Terms,
-        accepted);
 }

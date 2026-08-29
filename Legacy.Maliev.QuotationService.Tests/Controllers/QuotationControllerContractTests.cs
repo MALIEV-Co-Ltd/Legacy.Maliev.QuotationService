@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Security.Claims;
+using Legacy.Maliev.QuotationService.Api.Authorization;
 using Legacy.Maliev.QuotationService.Api.Controllers;
 using Legacy.Maliev.QuotationService.Application.Interfaces;
 using Legacy.Maliev.QuotationService.Application.Models;
@@ -26,11 +27,11 @@ public sealed class QuotationControllerContractTests
     { Assert.Equal(route, controller.GetCustomAttribute<RouteAttribute>()?.Template); Assert.NotNull(controller.GetCustomAttribute<AuthorizeAttribute>()); }
 
     [Fact]
-    public void Controllers_PreserveThirtyFourActionsAndThirtyFiveRouteTemplates()
+    public void Controllers_PreserveLegacyRoutesAndAddOneOutcomeReadbackRoute()
     {
         var methods = Controllers.SelectMany(row => ((Type)row[0]).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)).ToArray();
-        Assert.Equal(34, methods.Length);
-        Assert.Equal(35, methods.SelectMany(method => method.GetCustomAttributes<HttpMethodAttribute>()).Count());
+        Assert.Equal(35, methods.Length);
+        Assert.Equal(36, methods.SelectMany(method => method.GetCustomAttributes<HttpMethodAttribute>()).Count());
         Assert.All(methods, method => Assert.Single(method.GetCustomAttributes<RequirePermissionAttribute>()));
     }
 
@@ -44,6 +45,91 @@ public sealed class QuotationControllerContractTests
         Assert.True(permission.RequireLiveCheck);
         Assert.True(permission.IsCritical);
         Assert.Equal("/quotations/{quotationId}", permission.ResourcePathTemplate);
+    }
+
+    [Fact]
+    public async Task EmployeeInitiatedDecision_RequiresEmployeeRoleBeforeWorkflow()
+    {
+        var decisions = new Mock<IQuotationDecisionWorkflow>(MockBehavior.Strict);
+        var controller = new QuotationsController(
+            Mock.Of<IQuotationService>(),
+            Mock.Of<IIdempotencyStore>(),
+            Mock.Of<IAuthorizationService>(),
+            decisions.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [
+                        new Claim(ClaimTypes.NameIdentifier, "customer-42"),
+                        new Claim(ClaimTypes.Role, "Customer"),
+                    ], "test")),
+                },
+            },
+        };
+
+        var result = await controller.DecideQuotationAsync(
+            7,
+            new QuotationDecisionRequest(Accepted: true, EmployeeInitiated: true),
+            expected: null,
+            CancellationToken.None);
+
+        Assert.IsType<ForbidResult>(result);
+        decisions.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void OutcomeReadbackBoundary_IsEmployeeOnlyAndUsesLiveAdministrativeRead()
+    {
+        var action = typeof(QuotationsController).GetMethod(nameof(QuotationsController.GetOutcomeReadbackAsync))!;
+        Assert.Equal("outcomes/readback", Assert.Single(action.GetCustomAttributes<HttpGetAttribute>()).Template);
+        var roles = Assert.Single(action.GetCustomAttributes<AuthorizeAttribute>(), value => value.Roles is not null);
+        Assert.Equal("Employee", roles.Roles);
+        var permission = Assert.Single(action.GetCustomAttributes<RequirePermissionAttribute>());
+        Assert.Equal(QuotationPermissions.QuotationsRead, permission.Permission);
+        Assert.True(permission.RequireLiveCheck);
+    }
+
+    [Fact]
+    public async Task OutcomeReadback_RejectsNonEmployeeAndInvalidUtcWindowsBeforeRepository()
+    {
+        var service = new Mock<IQuotationService>(MockBehavior.Strict);
+        var fromUtc = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+        var customerController = Controller(service, AuthorizationResult.Failed());
+        customerController.ControllerContext.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.Role, "Customer"),
+        ], "test"));
+        var employeeController = Controller(service, AuthorizationResult.Failed());
+        employeeController.ControllerContext.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.Role, "Employee"),
+        ], "test"));
+
+        var forbidden = await customerController.GetOutcomeReadbackAsync(
+            fromUtc,
+            fromUtc.AddDays(1),
+            CancellationToken.None);
+        var empty = await employeeController.GetOutcomeReadbackAsync(
+            fromUtc,
+            fromUtc,
+            CancellationToken.None);
+        var nonUtc = await employeeController.GetOutcomeReadbackAsync(
+            DateTime.SpecifyKind(fromUtc, DateTimeKind.Unspecified),
+            fromUtc.AddDays(1),
+            CancellationToken.None);
+        var unbounded = await employeeController.GetOutcomeReadbackAsync(
+            fromUtc,
+            fromUtc.AddDays(31).AddTicks(1),
+            CancellationToken.None);
+
+        Assert.IsType<ForbidResult>(forbidden.Result);
+        Assert.IsType<BadRequestResult>(empty.Result);
+        Assert.IsType<BadRequestResult>(nonUtc.Result);
+        Assert.IsType<BadRequestResult>(unbounded.Result);
+        service.VerifyNoOtherCalls();
     }
 
     [Fact]

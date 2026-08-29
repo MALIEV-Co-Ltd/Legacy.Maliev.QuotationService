@@ -1,12 +1,22 @@
 using System.Data.Common;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using Legacy.Maliev.QuotationService.Api.Controllers;
 using Legacy.Maliev.QuotationService.Application.Interfaces;
 using Legacy.Maliev.QuotationService.Application.Models;
+using Legacy.Maliev.QuotationService.Application.Services;
 using Legacy.Maliev.QuotationService.Data;
 using Legacy.Maliev.QuotationService.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.Time.Testing;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Testcontainers.PostgreSql;
 
@@ -38,7 +48,7 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         Assert.Equal(104m, loaded?.QuotedAmount); Assert.Equal(100m, line.Subtotal); Assert.Equal("quotes/1.pdf", file?.ObjectName); Assert.Equal(77, order?.OrderId);
         Assert.Equal("Ada", request.FirstName); Assert.Equal("requests/1.stl", requestFile?.ObjectName);
         Assert.Single(snapshot!.OrderItems); Assert.Single(snapshot.Files);
-        Assert.Equal(4, await quotationContext.Database.SqlQueryRaw<int>("SELECT COUNT(*)::int AS \"Value\" FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('Quotation','OrderItem','QuotationFile','QuotationHasOrder')").SingleAsync());
+        Assert.Equal(5, await quotationContext.Database.SqlQueryRaw<int>("SELECT COUNT(*)::int AS \"Value\" FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('Quotation','OrderItem','QuotationFile','QuotationHasOrder','QuotationAcceptedOutcome')").SingleAsync());
         Assert.Equal(3, await requestContext.Database.SqlQueryRaw<int>("SELECT COUNT(*)::int AS \"Value\" FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('Request','RequestFile','RequestCreateIdempotency')").SingleAsync());
         Assert.Equal(
             ["Fingerprint", "KeyHash", "RequestID"],
@@ -71,9 +81,12 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
             requestContext.Database.MigrateAsync());
         var setupRepository = Repository(setupQuotationContext, requestContext);
         var baseline = await setupRepository.GetStatsAsync(CancellationToken.None);
-        await setupRepository.CreateQuotationAsync(QuotationRequest(accepted: true), CancellationToken.None);
-        await setupRepository.CreateQuotationAsync(QuotationRequest(accepted: false), CancellationToken.None);
-        await setupRepository.CreateQuotationAsync(QuotationRequest(accepted: null), CancellationToken.None);
+        var createdUtc = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+        var accepted = OutcomeQuotation(createdUtc, 764, 107m, 3m); accepted.Accepted = true;
+        var declined = OutcomeQuotation(createdUtc, 764, 107m, 3m); declined.Accepted = false;
+        var open = OutcomeQuotation(createdUtc, 764, 107m, 3m);
+        setupQuotationContext.Quotations.AddRange(accepted, declined, open);
+        await setupQuotationContext.SaveChangesAsync();
 
         var commandCounter = new CommandCounter();
         await using var measuredQuotationContext = QuotationContext(commandCounter);
@@ -85,6 +98,319 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         Assert.Equal(baseline.Accepted + 1, stats.Accepted);
         Assert.Equal(baseline.Declined + 1, stats.Declined);
         Assert.Equal(baseline.Open + 1, stats.Open);
+    }
+
+    [Fact]
+    public async Task AcceptedDecision_PersistsFirstProviderNeutralOutcomeWithProvenanceExactlyOnce()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await Task.WhenAll(
+            quotationContext.Database.MigrateAsync(),
+            requestContext.Database.MigrateAsync());
+        var acceptedUtc = new DateTimeOffset(2026, 8, 29, 3, 15, 0, TimeSpan.Zero);
+        var journeyId = Guid.Parse("6cf84f7b-f909-4f4b-b573-43de8cefe789");
+        var timeProvider = new FakeTimeProvider(acceptedUtc);
+        var repository = Repository(quotationContext, requestContext, timeProvider);
+        var quotation = await repository.CreateQuotationAsync(
+            QuotationRequest(sourceRequestId: 91, sourceJourneyId: journeyId),
+            CancellationToken.None);
+
+        var first = await repository.ApplyDecisionAsync(
+            quotation.Id,
+            accepted: true,
+            QuotationAcceptanceOrigin.Customer,
+            expectedModifiedDate: null,
+            CancellationToken.None);
+        timeProvider.Advance(TimeSpan.FromHours(1));
+        var replay = await repository.ApplyDecisionAsync(
+            quotation.Id,
+            accepted: true,
+            QuotationAcceptanceOrigin.Customer,
+            expectedModifiedDate: null,
+            CancellationToken.None);
+
+        Assert.Equal(QuotationDecisionPersistenceStatus.Completed, first.Status);
+        Assert.Equal(QuotationDecisionPersistenceStatus.Completed, replay.Status);
+        quotationContext.ChangeTracker.Clear();
+        var storedQuotation = await quotationContext.Quotations.SingleAsync(value => value.Id == quotation.Id);
+        var outcome = Assert.Single(await quotationContext.AcceptedOutcomes.ToListAsync());
+        Assert.True(storedQuotation.Accepted);
+        Assert.Equal(acceptedUtc.UtcDateTime, storedQuotation.AcceptedUtc);
+        Assert.Equal("customer", storedQuotation.AcceptanceOrigin);
+        Assert.Equal(91, storedQuotation.SourceRequestId);
+        Assert.Equal(journeyId, storedQuotation.SourceJourneyId);
+        Assert.Equal($"quotation-{quotation.Id}:accepted:v1", outcome.EventKey);
+        Assert.Equal(quotation.Id, outcome.QuotationId);
+        Assert.Equal(91, outcome.SourceRequestId);
+        Assert.Equal(journeyId, outcome.SourceJourneyId);
+        Assert.Equal(acceptedUtc.UtcDateTime, outcome.AcceptedUtc);
+        Assert.Equal("customer", outcome.AcceptanceOrigin);
+    }
+
+    [Fact]
+    public async Task CreateAndGenericUpdate_CannotBypassAtomicAcceptedDecision()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await Task.WhenAll(
+            quotationContext.Database.MigrateAsync(),
+            requestContext.Database.MigrateAsync());
+        var repository = Repository(quotationContext, requestContext);
+
+        var quotation = await repository.CreateQuotationAsync(
+            QuotationRequest(accepted: true),
+            CancellationToken.None);
+        var update = await repository.UpdateQuotationAsync(
+            quotation.Id,
+            QuotationRequest(accepted: true),
+            expectedModifiedDate: null,
+            CancellationToken.None);
+
+        Assert.Null(quotation.Accepted);
+        Assert.Equal(UpdateResult.Conflict, update);
+        quotationContext.ChangeTracker.Clear();
+        var stored = await quotationContext.Quotations.SingleAsync(value => value.Id == quotation.Id);
+        Assert.Null(stored.Accepted);
+        Assert.Null(stored.AcceptedUtc);
+        Assert.Empty(await quotationContext.AcceptedOutcomes.ToListAsync());
+    }
+
+    [Fact]
+    public async Task AcceptedOutcomeMigration_PreservesExistingQuotationAndAddsIndexedPostgresSchema()
+    {
+        await using var quotationContext = QuotationContext();
+        var migrator = quotationContext.GetService<IMigrator>();
+        const string previousMigration = "20260721032128_FixTimestampColumnType";
+        await migrator.MigrateAsync(previousMigration);
+        await quotationContext.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO "Quotation"
+                ("CustomerID", "Period", "ExpirationDate", "Subtotal", "Vat", "Total", "WithholdingTax", "CurrencyID", "Comment", "Accepted")
+            VALUES
+                (42, 30, TIMESTAMP '2026-12-31 00:00:00', 100.00, 7.00, 107.00, 3.00, 764, 'pre-outcome-migration', TRUE);
+            """);
+        var quotationId = await quotationContext.Database.SqlQueryRaw<int>(
+            "SELECT \"ID\" AS \"Value\" FROM \"Quotation\" WHERE \"Comment\" = 'pre-outcome-migration'")
+            .SingleAsync();
+
+        await migrator.MigrateAsync();
+
+        quotationContext.ChangeTracker.Clear();
+        var preserved = await quotationContext.Quotations.SingleAsync(value => value.Id == quotationId);
+        Assert.True(preserved.Accepted);
+        Assert.Equal(104m, preserved.QuotedAmount);
+        Assert.Null(preserved.AcceptedUtc);
+        Assert.Null(preserved.AcceptanceOrigin);
+        Assert.Null(preserved.SourceRequestId);
+        Assert.Null(preserved.SourceJourneyId);
+        Assert.Empty(await quotationContext.AcceptedOutcomes.ToListAsync());
+        Assert.Equal(
+        [
+            "IX_QuotationAcceptedOutcome_AcceptedUtc",
+            "IX_QuotationAcceptedOutcome_EventKey",
+            "IX_QuotationAcceptedOutcome_QuotationID",
+            "IX_QuotationAcceptedOutcome_SourceJourneyID",
+            "IX_QuotationAcceptedOutcome_SourceRequestID",
+        ],
+            await quotationContext.Database.SqlQueryRaw<string>(
+                    "SELECT indexname AS \"Value\" FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'QuotationAcceptedOutcome' AND indexname LIKE 'IX_%' ORDER BY indexname")
+                .ToListAsync());
+        Assert.Equal(
+            1,
+            await quotationContext.Database.SqlQueryRaw<int>(
+                    "SELECT COUNT(*)::int AS \"Value\" FROM pg_constraint WHERE conname = 'FK_QuotationAcceptedOutcome_Quotation'")
+                .SingleAsync());
+        Assert.Equal(
+            0,
+            await quotationContext.Database.SqlQueryRaw<int>(
+                    "SELECT COUNT(*)::int AS \"Value\" FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('Quotation', 'QuotationAcceptedOutcome') AND column_name = 'xmin'")
+                .SingleAsync());
+    }
+
+    [Fact]
+    public void AcceptedOutcomeMigration_GeneratesAdditivePostgresOnlyUpgradeSql()
+    {
+        using var quotationContext = QuotationContext();
+        var migrations = quotationContext.Database.GetMigrations().ToList();
+        var latestMigration = migrations[^1];
+
+        var script = quotationContext.GetService<IMigrator>().GenerateScript(
+            "20260721032128_FixTimestampColumnType",
+            latestMigration);
+
+        Assert.Contains("CREATE TABLE \"QuotationAcceptedOutcome\"", script, StringComparison.Ordinal);
+        Assert.Contains("CREATE UNIQUE INDEX \"IX_QuotationAcceptedOutcome_EventKey\"", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DROP COLUMN", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DELETE FROM", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("TRUNCATE", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ALTER COLUMN", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SqlServer", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("datetime2", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("nvarchar", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("[dbo]", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("xmin", script, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AcceptedOutcomeMigration_RefusesDestructiveDowngrade()
+    {
+        using var quotationContext = QuotationContext();
+        var migrations = quotationContext.Database.GetMigrations().ToList();
+        var latestMigration = migrations[^1];
+
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            quotationContext.GetService<IMigrator>().GenerateScript(
+                latestMigration,
+                "20260721032128_FixTimestampColumnType"));
+
+        Assert.Contains("compensating migration", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ConcurrentAcceptedControllerDecisions_ConvergeToOneOutcome()
+    {
+        await using var setupQuotationContext = QuotationContext();
+        await using var setupRequestContext = RequestContext();
+        await Task.WhenAll(
+            setupQuotationContext.Database.MigrateAsync(),
+            setupRequestContext.Database.MigrateAsync());
+        var quotation = await Repository(setupQuotationContext, setupRequestContext)
+            .CreateQuotationAsync(QuotationRequest(), CancellationToken.None);
+
+        var updateBarrier = new DecisionUpdateBarrier();
+        await using var quotationContext1 = QuotationContext(updateBarrier);
+        await using var quotationContext2 = QuotationContext(updateBarrier);
+        await using var requestContext1 = RequestContext();
+        await using var requestContext2 = RequestContext();
+        var acceptedUtc = new DateTimeOffset(2026, 8, 29, 4, 0, 0, TimeSpan.Zero);
+        var repository1 = Repository(quotationContext1, requestContext1, new FakeTimeProvider(acceptedUtc));
+        var repository2 = Repository(quotationContext2, requestContext2, new FakeTimeProvider(acceptedUtc));
+        var controller1 = DecisionController(repository1);
+        var controller2 = DecisionController(repository2);
+
+        var responses = await Task.WhenAll(
+            controller1.DecideQuotationAsync(
+                quotation.Id,
+                new QuotationDecisionRequest(Accepted: true, EmployeeInitiated: true),
+                expected: null,
+                CancellationToken.None),
+            controller2.DecideQuotationAsync(
+                quotation.Id,
+                new QuotationDecisionRequest(Accepted: true, EmployeeInitiated: true),
+                expected: null,
+                CancellationToken.None));
+
+        Assert.All(responses, response => Assert.IsType<OkObjectResult>(response));
+        await using var verificationContext = QuotationContext();
+        var outcome = Assert.Single(await verificationContext.AcceptedOutcomes.ToListAsync());
+        Assert.Equal($"quotation-{quotation.Id}:accepted:v1", outcome.EventKey);
+        Assert.Equal("employee", outcome.AcceptanceOrigin);
+    }
+
+    [Fact]
+    public async Task DeclinedDecision_DoesNotCreateAcceptedOutcome()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await Task.WhenAll(
+            quotationContext.Database.MigrateAsync(),
+            requestContext.Database.MigrateAsync());
+        var repository = Repository(quotationContext, requestContext);
+        var quotation = await repository.CreateQuotationAsync(QuotationRequest(), CancellationToken.None);
+
+        var result = await repository.ApplyDecisionAsync(
+            quotation.Id,
+            accepted: false,
+            acceptanceOrigin: null,
+            expectedModifiedDate: null,
+            CancellationToken.None);
+
+        Assert.Equal(QuotationDecisionPersistenceStatus.Completed, result.Status);
+        quotationContext.ChangeTracker.Clear();
+        var stored = await quotationContext.Quotations.SingleAsync(value => value.Id == quotation.Id);
+        Assert.False(stored.Accepted);
+        Assert.Null(stored.AcceptedUtc);
+        Assert.Null(stored.AcceptanceOrigin);
+        Assert.Empty(await quotationContext.AcceptedOutcomes.ToListAsync());
+    }
+
+    [Fact]
+    public async Task OutcomeReadback_UsesHalfOpenUtcWindowAndReturnsDeterministicPrivacySafeAggregates()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await Task.WhenAll(
+            quotationContext.Database.MigrateAsync(),
+            requestContext.Database.MigrateAsync());
+        var fromUtc = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+        var toUtc = fromUtc.AddDays(2);
+        var sourceJourneyId = Guid.Parse("39a14dce-9ca2-460b-a807-7ac3f7c2cb10");
+        var dayZeroAccepted = OutcomeQuotation(
+            fromUtc.AddHours(2),
+            currencyId: 764,
+            total: 107m,
+            withholdingTax: 3m,
+            sourceRequestId: 91,
+            sourceJourneyId);
+        var dayZeroOpen = OutcomeQuotation(fromUtc.AddHours(8), 764, 25m, 0m);
+        var dayOneThb = OutcomeQuotation(fromUtc.AddDays(1).AddHours(6), 764, 50m, 0m);
+        var dayOneUsd = OutcomeQuotation(fromUtc.AddDays(1).AddHours(3), 840, 200m, 0m);
+        var exclusiveBoundary = OutcomeQuotation(toUtc, 392, 300m, 0m);
+        quotationContext.Quotations.AddRange(
+            dayZeroAccepted,
+            dayZeroOpen,
+            dayOneThb,
+            dayOneUsd,
+            exclusiveBoundary);
+        await quotationContext.SaveChangesAsync();
+        quotationContext.AcceptedOutcomes.AddRange(
+            Outcome(dayZeroAccepted, fromUtc.AddHours(5), "customer"),
+            Outcome(dayOneThb, fromUtc.AddDays(1).AddHours(7), "employee"),
+            Outcome(dayOneUsd, fromUtc.AddDays(1).AddHours(4), "customer"),
+            Outcome(exclusiveBoundary, toUtc, "customer"));
+        await quotationContext.SaveChangesAsync();
+
+        var readback = await Repository(quotationContext, requestContext)
+            .GetOutcomeReadbackAsync(fromUtc, toUtc, CancellationToken.None);
+
+        Assert.Equal(fromUtc, readback.FromUtc);
+        Assert.Equal(toUtc, readback.ToUtc);
+        Assert.Collection(
+            readback.Days,
+            day =>
+            {
+                Assert.Equal(fromUtc, day.DayUtc);
+                Assert.Equal(2, day.PersistedQuotationCount);
+                Assert.Equal(1, day.AcceptedQuotationCount);
+                Assert.Equal(
+                    new AcceptedQuotedAmountByCurrency(764, 104m, 1),
+                    Assert.Single(day.AcceptedQuotedAmountsByCurrency));
+            },
+            day =>
+            {
+                Assert.Equal(fromUtc.AddDays(1), day.DayUtc);
+                Assert.Equal(2, day.PersistedQuotationCount);
+                Assert.Equal(2, day.AcceptedQuotationCount);
+                Assert.Equal(
+                [
+                    new AcceptedQuotedAmountByCurrency(764, 50m, 1),
+                    new AcceptedQuotedAmountByCurrency(840, 200m, 1),
+                ],
+                    day.AcceptedQuotedAmountsByCurrency);
+            });
+
+        var json = JsonSerializer.Serialize(readback, new JsonSerializerOptions { PropertyNamingPolicy = null });
+        foreach (var forbiddenProperty in new[]
+        {
+            "QuotationId", "CustomerId", "EmployeeId", "InvoiceId", "OrderId",
+            "SourceRequestId", "SourceJourneyId", "EventKey", "AcceptanceOrigin",
+            "FirstName", "LastName", "Email", "TelephoneNumber", "TaxIdentification",
+        })
+        {
+            Assert.DoesNotContain(forbiddenProperty, json, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -436,15 +762,100 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         cache.VerifyNoOtherCalls();
     }
 
-    private QuotationRepository Repository(QuotationDbContext quotations, QuotationRequestDbContext requests)
+    private QuotationRepository Repository(
+        QuotationDbContext quotations,
+        QuotationRequestDbContext requests,
+        TimeProvider? timeProvider = null)
     {
         var cache = new Mock<IQuotationCache>();
         cache.Setup(x => x.GetAsync<QuotationResponse>(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((QuotationResponse?)null);
         cache.Setup(x => x.GetAsync<QuotationRequestResponse>(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((QuotationRequestResponse?)null);
-        return new(quotations, requests, cache.Object, TimeProvider.System);
+        return new(quotations, requests, cache.Object, timeProvider ?? TimeProvider.System);
     }
 
-    private static UpsertQuotationRequest QuotationRequest(DateTime? expiration = null, int? customerId = null, bool? accepted = null) => new(customerId, null, null, 30, expiration ?? new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Unspecified), 100m, 7m, 107m, 3m, 764, "legacy", "FOB", "Courier", "30 days", accepted);
+    private static QuotationsController DecisionController(IQuotationService service)
+    {
+        var controller = new QuotationsController(
+            service,
+            Mock.Of<IIdempotencyStore>(),
+            Mock.Of<IAuthorizationService>(),
+            new QuotationDecisionWorkflow(service, Mock.Of<IOrderDecisionClient>()))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [
+                        new Claim(ClaimTypes.NameIdentifier, "employee-7"),
+                        new Claim(ClaimTypes.Role, "Employee"),
+                    ], "test")),
+                },
+            },
+        };
+        return controller;
+    }
+
+    private static UpsertQuotationRequest QuotationRequest(
+        DateTime? expiration = null,
+        int? customerId = null,
+        bool? accepted = null,
+        int? sourceRequestId = null,
+        Guid? sourceJourneyId = null) =>
+        new(
+            customerId,
+            null,
+            null,
+            30,
+            expiration ?? new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Unspecified),
+            100m,
+            7m,
+            107m,
+            3m,
+            764,
+            "legacy",
+            "FOB",
+            "Courier",
+            "30 days",
+            accepted,
+            sourceRequestId,
+            sourceJourneyId);
+
+    private static Quotation OutcomeQuotation(
+        DateTime createdUtc,
+        int currencyId,
+        decimal total,
+        decimal withholdingTax,
+        int? sourceRequestId = null,
+        Guid? sourceJourneyId = null) =>
+        new()
+        {
+            Period = 30,
+            ExpirationDate = DateTime.SpecifyKind(createdUtc.AddDays(30), DateTimeKind.Unspecified),
+            Subtotal = total,
+            Vat = 0m,
+            Total = total,
+            WithholdingTax = withholdingTax,
+            CurrencyId = currencyId,
+            SourceRequestId = sourceRequestId,
+            SourceJourneyId = sourceJourneyId,
+            CreatedDate = DateTime.SpecifyKind(createdUtc, DateTimeKind.Unspecified),
+            ModifiedDate = DateTime.SpecifyKind(createdUtc, DateTimeKind.Unspecified),
+        };
+
+    private static QuotationAcceptedOutcome Outcome(
+        Quotation quotation,
+        DateTime acceptedUtc,
+        string origin) =>
+        new()
+        {
+            EventKey = $"quotation-{quotation.Id}:accepted:v1",
+            QuotationId = quotation.Id,
+            SourceRequestId = quotation.SourceRequestId,
+            SourceJourneyId = quotation.SourceJourneyId,
+            AcceptedUtc = DateTime.SpecifyKind(acceptedUtc, DateTimeKind.Unspecified),
+            AcceptanceOrigin = origin,
+        };
     private static Quotation QuotationRecord(int customerId, DateTime createdDate, DateTime? modifiedDate) => new()
     {
         CustomerId = customerId,
@@ -489,6 +900,31 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         {
             Interlocked.Increment(ref readerCommands);
             return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
+    private sealed class DecisionUpdateBarrier : DbCommandInterceptor
+    {
+        private readonly TaskCompletionSource arrivals = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int arrivalCount;
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("UPDATE \"Quotation\"", StringComparison.Ordinal))
+            {
+                if (Interlocked.Increment(ref arrivalCount) == 2)
+                {
+                    arrivals.TrySetResult();
+                }
+
+                await arrivals.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+            }
+
+            return result;
         }
     }
 }

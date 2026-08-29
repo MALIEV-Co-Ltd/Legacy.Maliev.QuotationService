@@ -11,6 +11,16 @@ public interface IQuotationService
     Task<QuotationResponse?> GetQuotationByInvoiceAsync(int invoiceId, CancellationToken cancellationToken);
     Task<PaginatedResponse<QuotationResponse>?> GetQuotationsAsync(int? customerId, QuotationSortType? sort, string? search, int pageIndex, int pageSize, CancellationToken cancellationToken);
     Task<QuotationStatsResponse> GetStatsAsync(CancellationToken cancellationToken);
+    Task<QuotationOutcomeReadback> GetOutcomeReadbackAsync(
+        DateTime fromUtc,
+        DateTime toUtc,
+        CancellationToken cancellationToken);
+    Task<QuotationDecisionPersistenceResult> ApplyDecisionAsync(
+        int id,
+        bool accepted,
+        QuotationAcceptanceOrigin? acceptanceOrigin,
+        DateTimeOffset? expectedModifiedDate,
+        CancellationToken cancellationToken);
     Task<UpdateResult> UpdateQuotationAsync(int id, UpsertQuotationRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken);
     Task<decimal?> GetWithholdingTaxAsync(int id, CancellationToken cancellationToken);
     Task<QuotationDocumentSnapshot?> GetDocumentSnapshotAsync(int id, CancellationToken cancellationToken);
