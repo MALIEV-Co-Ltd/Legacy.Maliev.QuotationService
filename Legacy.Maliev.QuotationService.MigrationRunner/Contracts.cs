@@ -59,6 +59,7 @@ public sealed record SchemaBaselineExpectation(
     string SourceSnapshotId,
     string CopyPlanId,
     string SchemaHash,
+    string AttestationKeyId,
     string Host,
     int Port,
     string Database)
@@ -71,6 +72,7 @@ public sealed record SchemaBaselineReceiptPayload(
     string SourceSnapshotId,
     string CopyPlanId,
     string SchemaHash,
+    string AttestationKeyId,
     string Host,
     int Port,
     string Database,
@@ -89,7 +91,10 @@ public interface ISchemaBaselineReceiptVerifier
     ReceiptVerificationResult Verify(SignedSchemaBaselineReceipt receipt, SchemaBaselineExpectation expected);
 }
 
-public sealed class RsaSchemaBaselineReceiptVerifier(string? trustedPublicKeyPem, TimeProvider timeProvider)
+public sealed class EcdsaSchemaBaselineReceiptVerifier(
+    string trustedKeyId,
+    string? trustedPublicKeyPem,
+    TimeProvider timeProvider)
     : ISchemaBaselineReceiptVerifier
 {
     public ReceiptVerificationResult Verify(SignedSchemaBaselineReceipt receipt, SchemaBaselineExpectation expected)
@@ -123,9 +128,15 @@ public sealed class RsaSchemaBaselineReceiptVerifier(string? trustedPublicKeyPem
 
         try
         {
-            using var rsa = RSA.Create();
-            rsa.ImportFromPem(trustedPublicKeyPem);
-            return rsa.VerifyData(Encoding.UTF8.GetBytes(receipt.Payload), signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pss)
+            using var ecdsa = ECDsa.Create();
+            ecdsa.ImportFromPem(trustedPublicKeyPem);
+            var curve = ecdsa.ExportParameters(false).Curve;
+            if (ecdsa.KeySize != 256 || !string.Equals(curve.Oid.Value, "1.2.840.10045.3.1.7", StringComparison.Ordinal))
+            {
+                return ReceiptVerificationResult.Invalid("trusted key algorithm or curve is invalid");
+            }
+
+            return ecdsa.VerifyData(Encoding.UTF8.GetBytes(receipt.Payload), signature, HashAlgorithmName.SHA256)
                 ? ReceiptVerificationResult.Valid()
                 : ReceiptVerificationResult.Invalid("receipt signature is invalid");
         }
@@ -135,11 +146,13 @@ public sealed class RsaSchemaBaselineReceiptVerifier(string? trustedPublicKeyPem
         }
     }
 
-    private static bool Matches(SchemaBaselineReceiptPayload payload, SchemaBaselineExpectation expected) =>
+    private bool Matches(SchemaBaselineReceiptPayload payload, SchemaBaselineExpectation expected) =>
         string.Equals(payload.Workload, expected.WorkloadName, StringComparison.Ordinal) &&
         string.Equals(payload.SourceSnapshotId, expected.SourceSnapshotId, StringComparison.Ordinal) &&
         string.Equals(payload.CopyPlanId, expected.CopyPlanId, StringComparison.Ordinal) &&
         string.Equals(payload.SchemaHash, expected.SchemaHash, StringComparison.Ordinal) &&
+        string.Equals(payload.AttestationKeyId, expected.AttestationKeyId, StringComparison.Ordinal) &&
+        string.Equals(payload.AttestationKeyId, trustedKeyId, StringComparison.Ordinal) &&
         string.Equals(payload.Host, expected.Host, StringComparison.OrdinalIgnoreCase) &&
         payload.Port == expected.Port &&
         string.Equals(payload.Database, expected.Database, StringComparison.Ordinal);

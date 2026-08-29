@@ -12,7 +12,7 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
 {
     private readonly PostgreSqlContainer quotation = new PostgreSqlBuilder("postgres:18-alpine").Build();
     private readonly PostgreSqlContainer request = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly RSA signer = RSA.Create(2048);
+    private readonly ECDsa signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
     public Task InitializeAsync() => Task.WhenAll(quotation.StartAsync(), request.StartAsync());
 
@@ -123,10 +123,10 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
     {
         var target = Identity(connectionString);
         var expectation = new SchemaBaselineExpectation(
-            workload, "source-20260829", "copy-plan-v1", "schema-sha256", target.Host, target.Port, target.Database);
+            workload, "source-20260829", "copy-plan-v1", "schema-sha256", "production-key", target.Host, target.Port, target.Database);
         return new(
             new MigrationRunnerOptions(workload, connectionString, target), expectation, receipt,
-            new RsaSchemaBaselineReceiptVerifier(signer.ExportSubjectPublicKeyInfoPem(), TimeProvider.System),
+            new EcdsaSchemaBaselineReceiptVerifier("production-key", signer.ExportSubjectPublicKeyInfoPem(), TimeProvider.System),
             lockTimeout ?? TimeSpan.FromSeconds(2));
     }
 
@@ -134,12 +134,12 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
     {
         var target = Identity(connectionString);
         var expected = new SchemaBaselineExpectation(
-            workload, "source-20260829", "copy-plan-v1", "schema-sha256", target.Host, target.Port, target.Database);
+            workload, "source-20260829", "copy-plan-v1", "schema-sha256", "production-key", target.Host, target.Port, target.Database);
         var payload = JsonSerializer.Serialize(new SchemaBaselineReceiptPayload(
-            expected.WorkloadName, expected.SourceSnapshotId, expected.CopyPlanId, expected.SchemaHash,
+            expected.WorkloadName, expected.SourceSnapshotId, expected.CopyPlanId, expected.SchemaHash, expected.AttestationKeyId,
             expected.Host, expected.Port, expected.Database, expiry ?? DateTimeOffset.UtcNow.AddMinutes(5)));
         return new(payload, Convert.ToBase64String(signer.SignData(
-            Encoding.UTF8.GetBytes(payload), HashAlgorithmName.SHA256, RSASignaturePadding.Pss)));
+            Encoding.UTF8.GetBytes(payload), HashAlgorithmName.SHA256)));
     }
 
     private IEnumerable<SignedSchemaBaselineReceipt> InvalidReceipts()

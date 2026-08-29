@@ -104,6 +104,7 @@ public sealed class QuotationMigrationRunner
             string.IsNullOrWhiteSpace(expectation.SourceSnapshotId) ||
             string.IsNullOrWhiteSpace(expectation.CopyPlanId) ||
             string.IsNullOrWhiteSpace(expectation.SchemaHash) ||
+            string.IsNullOrWhiteSpace(expectation.AttestationKeyId) ||
             lockTimeout <= TimeSpan.Zero || lockTimeout > TimeSpan.FromSeconds(30))
         {
             throw new MigrationConfigurationException("Migration target, attestation identifiers, or lock timeout are invalid or ambiguous.");

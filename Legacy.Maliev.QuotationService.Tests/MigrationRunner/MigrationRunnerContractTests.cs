@@ -65,15 +65,16 @@ public sealed class MigrationRunnerContractTests
     [Fact]
     public void ReceiptVerifier_RequiresValidUnexpiredTargetBoundSignature()
     {
-        using var rsa = RSA.Create(2048);
+        using var signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var now = new DateTimeOffset(2026, 8, 29, 12, 0, 0, TimeSpan.Zero);
         var time = new FakeTimeProvider(now);
         var expected = Expected("quotation");
-        var receipt = Sign(expected, now.AddMinutes(5), rsa);
-        var verifier = new RsaSchemaBaselineReceiptVerifier(rsa.ExportSubjectPublicKeyInfoPem(), time);
+        var receipt = Sign(expected, now.AddMinutes(5), signer);
+        var verifier = new EcdsaSchemaBaselineReceiptVerifier("production-key", signer.ExportSubjectPublicKeyInfoPem(), time);
 
         Assert.True(verifier.Verify(receipt, expected).IsValid);
         Assert.False(verifier.Verify(receipt, expected with { Database = "other" }).IsValid);
+        Assert.False(verifier.Verify(receipt, expected with { AttestationKeyId = "caller-selected-key" }).IsValid);
         Assert.False(verifier.Verify(receipt with { Signature = Convert.ToBase64String([1, 2, 3]) }, expected).IsValid);
         time.Advance(TimeSpan.FromMinutes(6));
         Assert.False(verifier.Verify(receipt, expected).IsValid);
@@ -82,16 +83,16 @@ public sealed class MigrationRunnerContractTests
     [Fact]
     public void ReceiptVerifier_FailsClosedWithoutTrustedPublicKey()
     {
-        var verifier = new RsaSchemaBaselineReceiptVerifier(null, TimeProvider.System);
+        var verifier = new EcdsaSchemaBaselineReceiptVerifier("production-key", null, TimeProvider.System);
         Assert.False(verifier.Verify(new SignedSchemaBaselineReceipt("{}", "invalid"), Expected("quotation")).IsValid);
     }
 
     [Fact]
     public void ReceiptVerifier_FailsClosedWithMalformedTrustedPublicKey()
     {
-        using var signer = RSA.Create(2048);
+        using var signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var expected = Expected("quotation");
-        var verifier = new RsaSchemaBaselineReceiptVerifier("not-a-public-key", TimeProvider.System);
+        var verifier = new EcdsaSchemaBaselineReceiptVerifier("production-key", "not-a-public-key", TimeProvider.System);
         Assert.False(verifier.Verify(Sign(expected, DateTimeOffset.UtcNow.AddMinutes(5), signer), expected).IsValid);
     }
 
@@ -143,17 +144,17 @@ public sealed class MigrationRunnerContractTests
     private static string Connection(string database) => $"Host=localhost;Port=5432;Database={database};Username=runner;Password=super-secret";
 
     private static SchemaBaselineExpectation Expected(string database) => new(
-        MigrationWorkload.Quotation, "source-20260829", "copy-plan-v1", "schema-sha256", "localhost", 5432, database);
+        MigrationWorkload.Quotation, "source-20260829", "copy-plan-v1", "schema-sha256", "production-key", "localhost", 5432, database);
 
     private static SignedSchemaBaselineReceipt Sign(
         SchemaBaselineExpectation expected,
         DateTimeOffset expiresUtc,
-        RSA rsa)
+        ECDsa signer)
     {
         var payload = JsonSerializer.Serialize(new SchemaBaselineReceiptPayload(
-            expected.WorkloadName, expected.SourceSnapshotId, expected.CopyPlanId, expected.SchemaHash,
+            expected.WorkloadName, expected.SourceSnapshotId, expected.CopyPlanId, expected.SchemaHash, expected.AttestationKeyId,
             expected.Host, expected.Port, expected.Database, expiresUtc));
-        var signature = rsa.SignData(Encoding.UTF8.GetBytes(payload), HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
+        var signature = signer.SignData(Encoding.UTF8.GetBytes(payload), HashAlgorithmName.SHA256);
         return new(payload, Convert.ToBase64String(signature));
     }
 }

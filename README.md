@@ -75,12 +75,13 @@ success or failure. It applies existing EF Core migrations only; it does not see
 or downgrade data.
 
 An empty database may be initialized directly. A non-empty database fails closed unless it is
-accompanied by a signed, unexpired production schema-baseline receipt. The signed payload is bound
+accompanied by a signed, unexpired production schema-baseline receipt. The ECDSA P-256 trust model
+and externally projected trusted key identifier match the DataMigration attestation boundary. The signed payload is bound
 to the exact workload, source snapshot, copy plan, schema hash, PostgreSQL host/port/database, and
 expiry. Production composition must project the trusted RSA public key as a read-only file; an
 absent, invalid, expired, tampered, or mismatched receipt is rejected before `MigrateAsync`.
 Required configuration is `Migration__SourceSnapshotId`, `Migration__CopyPlanId`,
-`Migration__SchemaHash`; optional file projections are `Migration__ReceiptPath` and
+`Migration__SchemaHash`, and `Migration__TrustedKeyId`; optional file projections are `Migration__ReceiptPath` and
 `Migration__TrustedPublicKeyPath`. `Migration__LockTimeoutSeconds` is bounded to 1-30 seconds.
 Neither the receipt nor logs contain credentials or a raw connection string.
 

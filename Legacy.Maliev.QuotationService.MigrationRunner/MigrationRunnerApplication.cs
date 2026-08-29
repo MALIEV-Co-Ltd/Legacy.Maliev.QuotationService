@@ -19,6 +19,7 @@ public static class MigrationRunnerApplication
                 Require(configuration, "Migration__SourceSnapshotId"),
                 Require(configuration, "Migration__CopyPlanId"),
                 Require(configuration, "Migration__SchemaHash"),
+                Require(configuration, "Migration__TrustedKeyId"),
                 options.TargetDatabase.Host,
                 options.TargetDatabase.Port,
                 options.TargetDatabase.Database);
@@ -29,7 +30,7 @@ public static class MigrationRunnerApplication
                 options,
                 expectation,
                 receipt,
-                new RsaSchemaBaselineReceiptVerifier(publicKey, TimeProvider.System),
+                new EcdsaSchemaBaselineReceiptVerifier(expectation.AttestationKeyId, publicKey, TimeProvider.System),
                 lockTimeout);
 
             await runner.RunAsync(cancellationToken);
