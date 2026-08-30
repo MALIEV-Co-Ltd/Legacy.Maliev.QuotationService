@@ -93,16 +93,21 @@ context-specific PostgreSQL advisory lock before inspecting or changing schema a
 success or failure. It applies existing EF Core migrations only; it does not seed, copy, truncate,
 or downgrade data.
 
-An empty database may be initialized directly. A non-empty database fails closed unless it is
-accompanied by a signed, unexpired production schema-baseline receipt. The ECDSA P-256 trust model
+Before opening any database connection, every run requires a signed, unexpired recoverable PostgreSQL snapshot receipt.
+Its domain-separated payload binds the workload, canonical run UUID, source snapshot, copy plan, schema hash,
+snapshot identifier, UTC recovery point, snapshot SHA-256, target host/port/database, trust key, and expiry.
+Snapshot and schema-baseline trust roles must use distinct P-256 public keys. A non-empty database additionally fails
+closed unless it is accompanied by a signed, unexpired production schema-baseline receipt. The ECDSA P-256 trust model
 and externally projected trusted key identifier match the DataMigration attestation boundary. The versioned receipt schema
 is parsed strictly, then re-derived into a domain-separated canonical binary payload before signature verification; JSON
 property order and insignificant whitespace cannot change the signed meaning. The signed payload is bound
 to the exact workload, source snapshot, copy plan, schema hash, PostgreSQL host/port/database, and
 expiry. Production composition must project exactly one trusted ECDSA P-256 SPKI `PUBLIC KEY` as a read-only file; an
 absent, invalid, expired, tampered, duplicate/unmapped, or mismatched receipt is rejected before `MigrateAsync`.
-Required configuration is `Migration__SourceSnapshotId`, `Migration__CopyPlanId`,
-`Migration__SchemaHash`, and `Migration__TrustedKeyId`; optional file projections are `Migration__ReceiptPath` and
+Required configuration is `Migration__SourceSnapshotId`, `Migration__CopyPlanId`, `Migration__SchemaHash`,
+`Migration__TrustedKeyId`, `Migration__RunId`, and `Migration__SnapshotTrustedKeyId`. Snapshot receipt and snapshot
+public-key file projections are required for execution through `Migration__SnapshotReceiptPath` and
+`Migration__SnapshotTrustedPublicKeyPath`; schema-baseline projections remain `Migration__ReceiptPath` and
 `Migration__TrustedPublicKeyPath`. `Migration__LockTimeoutSeconds` is bounded to 1-30 seconds.
 Neither the receipt nor logs contain credentials or a raw connection string.
 

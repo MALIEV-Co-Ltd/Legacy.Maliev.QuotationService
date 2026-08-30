@@ -13,12 +13,14 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
     private readonly PostgreSqlContainer quotation = new PostgreSqlBuilder("postgres:18-alpine").Build();
     private readonly PostgreSqlContainer request = new PostgreSqlBuilder("postgres:18-alpine").Build();
     private readonly ECDsa signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+    private readonly ECDsa snapshotSigner = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
     public Task InitializeAsync() => Task.WhenAll(quotation.StartAsync(), request.StartAsync());
 
     public async Task DisposeAsync()
     {
         signer.Dispose();
+        snapshotSigner.Dispose();
         await quotation.DisposeAsync();
         await request.DisposeAsync();
     }
@@ -159,9 +161,21 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
         var target = Identity(connectionString);
         var expectation = new SchemaBaselineExpectation(
             workload, "source-20260829", "copy-plan-v1", "schema-sha256", "production-key", target.Host, target.Port, target.Database);
+        var snapshotExpectation = new PostgreSqlSnapshotExpectation(
+            workload, Guid.Parse("34829fe9-1b24-42b5-8bdf-e38c9ed1e4bb"), expectation.SourceSnapshotId,
+            expectation.CopyPlanId, expectation.SchemaHash, "snapshot-key", target.Host, target.Port, target.Database);
+        var snapshotPayload = new PostgreSqlSnapshotReceiptPayload(
+            "1.0", snapshotExpectation.WorkloadName, snapshotExpectation.RunId.ToString("D"), expectation.SourceSnapshotId,
+            expectation.CopyPlanId, expectation.SchemaHash, "test-snapshot", DateTimeOffset.UtcNow.AddMinutes(-1),
+            new string('b', 64), snapshotExpectation.AttestationKeyId, target.Host, target.Port, target.Database,
+            DateTimeOffset.UtcNow.AddMinutes(5));
+        var snapshotReceipt = new SignedPostgreSqlSnapshotReceipt(JsonSerializer.Serialize(snapshotPayload), Convert.ToBase64String(
+            snapshotSigner.SignData(PostgreSqlSnapshotReceiptCanonicalizer.CreatePayload(snapshotPayload), HashAlgorithmName.SHA256)));
         return new(
             new MigrationRunnerOptions(workload, connectionString, target), expectation, receipt,
             new EcdsaSchemaBaselineReceiptVerifier("production-key", signer.ExportSubjectPublicKeyInfoPem(), TimeProvider.System),
+            snapshotExpectation, snapshotReceipt,
+            new EcdsaPostgreSqlSnapshotReceiptVerifier("snapshot-key", snapshotSigner.ExportSubjectPublicKeyInfoPem(), TimeProvider.System),
             lockTimeout ?? TimeSpan.FromSeconds(2));
     }
 
