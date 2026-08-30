@@ -80,7 +80,13 @@ public sealed class QuotationRepository(
                 && quotation.CreatedDate >= fromInclusive
                 && quotation.CreatedDate < toExclusive)
             .GroupBy(quotation => quotation.CreatedDate!.Value.Date)
-            .Select(group => new { Day = group.Key, Count = group.Count() })
+            .Select(group => new
+            {
+                Day = group.Key,
+                Count = group.Count(),
+                SourceAttributedCount = group.Count(quotation =>
+                    quotation.SourceRequestId != null && quotation.SourceJourneyId != null),
+            })
             .OrderBy(group => group.Day)
             .ToListAsync(cancellationToken);
         var accepted = await (
@@ -88,19 +94,25 @@ public sealed class QuotationRepository(
             join quotation in quotations.Quotations.AsNoTracking()
                 on outcome.QuotationId equals quotation.Id
             where outcome.AcceptedUtc >= fromInclusive && outcome.AcceptedUtc < toExclusive
-            group quotation by new { Day = outcome.AcceptedUtc.Date, quotation.CurrencyId }
+            group quotation by new
+            {
+                Day = outcome.AcceptedUtc.Date,
+                quotation.CurrencyId,
+                IsSourceAttributed = outcome.SourceRequestId != null && outcome.SourceJourneyId != null,
+            }
             into outcomesByDayCurrency
             orderby outcomesByDayCurrency.Key.Day, outcomesByDayCurrency.Key.CurrencyId
             select new
             {
                 outcomesByDayCurrency.Key.Day,
                 outcomesByDayCurrency.Key.CurrencyId,
+                outcomesByDayCurrency.Key.IsSourceAttributed,
                 AcceptedCount = outcomesByDayCurrency.Count(),
                 QuotedAmount = outcomesByDayCurrency.Sum(quotation => quotation.QuotedAmount),
                 QuotedAmountCount = outcomesByDayCurrency.Count(quotation => quotation.QuotedAmount != null),
             }).ToListAsync(cancellationToken);
 
-        var persistedByDay = persisted.ToDictionary(value => value.Day, value => value.Count);
+        var persistedByDay = persisted.ToDictionary(value => value.Day);
         var acceptedByDay = accepted.GroupBy(value => value.Day).ToDictionary(value => value.Key);
         var days = persistedByDay.Keys
             .Concat(acceptedByDay.Keys)
@@ -111,15 +123,21 @@ public sealed class QuotationRepository(
                 var currencyGroups = acceptedByDay.GetValueOrDefault(day)?.ToList() ?? [];
                 return new QuotationOutcomeReadbackDay(
                     DateTime.SpecifyKind(day, DateTimeKind.Utc),
-                    persistedByDay.GetValueOrDefault(day),
+                    persistedByDay.GetValueOrDefault(day)?.Count ?? 0,
                     currencyGroups.Sum(value => value.AcceptedCount),
+                    persistedByDay.GetValueOrDefault(day)?.SourceAttributedCount ?? 0,
+                    currencyGroups.Where(value => value.IsSourceAttributed).Sum(value => value.AcceptedCount),
+                    (persistedByDay.GetValueOrDefault(day)?.Count ?? 0)
+                        - (persistedByDay.GetValueOrDefault(day)?.SourceAttributedCount ?? 0),
+                    currencyGroups.Where(value => !value.IsSourceAttributed).Sum(value => value.AcceptedCount),
                     currencyGroups
                         .Where(value => value.QuotedAmountCount > 0 && value.QuotedAmount is not null)
-                        .OrderBy(value => value.CurrencyId)
-                        .Select(value => new AcceptedQuotedAmountByCurrency(
-                            value.CurrencyId,
-                            value.QuotedAmount!.Value,
-                            value.QuotedAmountCount))
+                        .GroupBy(value => value.CurrencyId)
+                        .OrderBy(group => group.Key)
+                        .Select(group => new AcceptedQuotedAmountByCurrency(
+                            group.Key,
+                            group.Sum(value => value.QuotedAmount!.Value),
+                            group.Sum(value => value.QuotedAmountCount)))
                         .ToList());
             })
             .ToList();

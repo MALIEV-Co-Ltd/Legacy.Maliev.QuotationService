@@ -44,6 +44,22 @@ the QuotationService identity needs only `legacy.order-status.write`. `PUT
 /quotations/{quotationId}/decision` uses quotation optimistic concurrency and deterministic
 OrderService idempotency keys so an interrupted multi-order decision can be retried safely.
 
+## Privacy-safe marketing reconciliation
+
+`GET /Quotations/outcomes/readback` preserves the source system's employee-only,
+31-day aggregate reconciliation boundary. Each UTC day reports persisted and first-accepted
+quotation totals split into fully source-attributed and unattributed counts. A quotation is
+source-attributed only when both its opaque request identifier and privacy-safe journey UUID are
+present; partial keys remain unattributed. The response never exposes either identifier, customer
+or employee identifiers, contact data, event keys, or acceptance-origin detail.
+
+The migrated service deliberately does not own Google Analytics Measurement Protocol credentials
+or direct delivery. Its immutable accepted-outcome record already carries the source reconciliation
+keys and is the target-native durable business fact; analytics delivery remains an external,
+consent-governed integration consuming the aggregate/readback boundary. This preserves the source
+measurement outcome without copying GA secrets, browser identifiers, or the SQL Server-specific
+`GoogleAnalyticsOutbox` deployment into the PostgreSQL service.
+
 ## Data ownership and deployment gate
 
 - Planned existing-cluster target: `legacy-postgres-quotation` in `maliev-legacy`.

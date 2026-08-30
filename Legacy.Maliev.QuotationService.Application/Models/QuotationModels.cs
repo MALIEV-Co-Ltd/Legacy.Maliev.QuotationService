@@ -16,6 +16,10 @@ public sealed record QuotationOutcomeReadbackDay(
     DateTime DayUtc,
     int PersistedQuotationCount,
     int AcceptedQuotationCount,
+    int SourceAttributedPersistedQuotationCount,
+    int SourceAttributedAcceptedQuotationCount,
+    int UnattributedPersistedQuotationCount,
+    int UnattributedAcceptedQuotationCount,
     IReadOnlyList<AcceptedQuotedAmountByCurrency> AcceptedQuotedAmountsByCurrency);
 public sealed record AcceptedQuotedAmountByCurrency(
     int CurrencyId,
