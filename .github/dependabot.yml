@@ -1,12 +1,12 @@
 version: 2
 updates:
   - package-ecosystem: nuget
-    directory: /
-    # The API and solution require the unpublished shared ServiceDefaults package.
-    # CI validates them from pinned source; Dependabot scans the remaining manifests.
-    exclude-paths:
-      - Legacy.Maliev.QuotationService.slnx
-      - Legacy.Maliev.QuotationService.Api/**
+    # Scan only project graphs that resolve without the unpublished shared package.
+    directories:
+      - /Legacy.Maliev.QuotationService.Application
+      - /Legacy.Maliev.QuotationService.Data
+      - /Legacy.Maliev.QuotationService.Domain
+      - /Legacy.Maliev.QuotationService.MigrationRunner
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
