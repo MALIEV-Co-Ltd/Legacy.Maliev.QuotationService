@@ -40,6 +40,7 @@ public sealed class QuotationAcceptedOutcome
     public int? SourceRequestId { get; set; }
     public Guid? SourceJourneyId { get; set; }
     public DateTime AcceptedUtc { get; set; }
+    public short AcceptedUtcSubMicrosecondTicks { get; set; }
     public string AcceptanceOrigin { get; set; } = string.Empty;
 }
 

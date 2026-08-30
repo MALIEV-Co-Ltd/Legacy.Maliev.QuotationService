@@ -33,4 +33,8 @@
     <ProjectReference Include="..\Legacy.Maliev.QuotationService.MigrationRunner\Legacy.Maliev.QuotationService.MigrationRunner.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Fixtures\quotation-outcome-outbox.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

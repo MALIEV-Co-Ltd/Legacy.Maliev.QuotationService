@@ -201,7 +201,8 @@ public sealed class QuotationRepository(
                     QuotationId = id,
                     SourceRequestId = entity.SourceRequestId,
                     SourceJourneyId = entity.SourceJourneyId,
-                    AcceptedUtc = entity.AcceptedUtc.Value,
+                    AcceptedUtc = LegacyQuotationOutcomeAdopter.TruncateToMicroseconds(entity.AcceptedUtc.Value),
+                    AcceptedUtcSubMicrosecondTicks = LegacyQuotationOutcomeAdopter.SubMicrosecondTicks(entity.AcceptedUtc.Value),
                     AcceptanceOrigin = entity.AcceptanceOrigin,
                 });
             }
