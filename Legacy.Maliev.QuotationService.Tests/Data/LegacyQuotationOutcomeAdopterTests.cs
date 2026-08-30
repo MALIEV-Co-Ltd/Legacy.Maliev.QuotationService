@@ -93,6 +93,43 @@ public sealed class LegacyQuotationOutcomeAdopterTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AdoptAsync_ExtraCanonicalOutcomeOutsideCompleteSourceInventory_FailsBeforeMutationOrSequenceChange()
+    {
+        await using var context = Context();
+        await context.Database.MigrateAsync();
+        var extra = new QuotationAcceptedOutcome
+        {
+            Id = 5,
+            EventKey = "canonical-only-event",
+            QuotationId = 77,
+            SourceRequestId = null,
+            SourceJourneyId = null,
+            AcceptedUtc = new DateTime(2026, 8, 1, 2, 3, 4, DateTimeKind.Unspecified),
+            AcceptedUtcSubMicrosecondTicks = 0,
+            AcceptanceOrigin = "employee",
+        };
+        context.AcceptedOutcomes.Add(extra);
+        await context.SaveChangesAsync();
+        IdentitySequenceState beforeSequence = await ReadIdentitySequenceAsync(context);
+
+        LegacyQuotationOutcomeAdoptionException exception = await Assert.ThrowsAsync<LegacyQuotationOutcomeAdoptionException>(
+            () => new LegacyQuotationOutcomeAdopter(context).AdoptAsync(LoadFixture(), CancellationToken.None));
+
+        Assert.Equal("legacy_outcome_conflict", exception.Code);
+        context.ChangeTracker.Clear();
+        QuotationAcceptedOutcome persisted = Assert.Single(await context.AcceptedOutcomes.AsNoTracking().ToListAsync());
+        Assert.Equal(extra.Id, persisted.Id);
+        Assert.Equal(extra.EventKey, persisted.EventKey);
+        Assert.Equal(extra.QuotationId, persisted.QuotationId);
+        Assert.Equal(extra.SourceRequestId, persisted.SourceRequestId);
+        Assert.Equal(extra.SourceJourneyId, persisted.SourceJourneyId);
+        Assert.Equal(extra.AcceptedUtc, persisted.AcceptedUtc);
+        Assert.Equal(extra.AcceptedUtcSubMicrosecondTicks, persisted.AcceptedUtcSubMicrosecondTicks);
+        Assert.Equal(extra.AcceptanceOrigin, persisted.AcceptanceOrigin);
+        Assert.Equal(beforeSequence, await ReadIdentitySequenceAsync(context));
+    }
+
+    [Fact]
     public async Task AdoptAsync_DatabaseFailure_RollsBackFactsAndIdentitySequence()
     {
         await using var context = Context();
@@ -207,4 +244,21 @@ public sealed class LegacyQuotationOutcomeAdopterTests : IAsyncLifetime
 
         return (T)(await command.ExecuteScalarAsync())!;
     }
+
+    private static async Task<IdentitySequenceState> ReadIdentitySequenceAsync(QuotationDbContext context)
+    {
+        await using NpgsqlCommand command = ((NpgsqlConnection)context.Database.GetDbConnection()).CreateCommand();
+        command.CommandText =
+            "SELECT last_value, is_called FROM \"QuotationAcceptedOutcome_ID_seq\";";
+        if (command.Connection!.State != System.Data.ConnectionState.Open)
+        {
+            await command.Connection.OpenAsync();
+        }
+
+        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        return new(reader.GetInt64(0), reader.GetBoolean(1));
+    }
+
+    private sealed record IdentitySequenceState(long LastValue, bool IsCalled);
 }
