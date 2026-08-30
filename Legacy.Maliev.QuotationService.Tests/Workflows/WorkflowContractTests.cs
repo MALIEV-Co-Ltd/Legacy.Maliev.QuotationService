@@ -44,6 +44,28 @@ public sealed class WorkflowContractTests
     }
 
     [Fact]
+    public void DependabotConfiguration_DefersSharedRuntimeAndRedisUpdates()
+    {
+        var source = File.ReadAllText(FindRepositoryFile(".github", "dependabot.yml"));
+
+        Assert.Contains("MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults#30", source, StringComparison.Ordinal);
+        foreach (var dependency in new[]
+                 {
+                     "Microsoft.EntityFrameworkCore",
+                     "Microsoft.EntityFrameworkCore.Abstractions",
+                     "Microsoft.EntityFrameworkCore.Design",
+                     "Microsoft.EntityFrameworkCore.Relational",
+                     "Npgsql.EntityFrameworkCore.PostgreSQL",
+                     "StackExchange.Redis",
+                 })
+        {
+            Assert.Contains($"dependency-name: {dependency}", source, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("versions: [\"3.1.31\"]", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void BuildAndTest_RejectsSharedActionMainWithPinnedShaComment()
     {
         AssertMutationRejected(
