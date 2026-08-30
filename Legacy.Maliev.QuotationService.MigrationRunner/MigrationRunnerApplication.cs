@@ -25,11 +25,28 @@ public static class MigrationRunnerApplication
             var lockTimeout = ParseLockTimeout(configuration);
             var receipt = await ReadReceiptAsync(configuration, cancellationToken);
             var publicKey = await ReadOptionalFileAsync(configuration, "Migration__TrustedPublicKeyPath", cancellationToken);
+            var snapshotKeyId = Require(configuration, "Migration__SnapshotTrustedKeyId");
+            if (string.Equals(snapshotKeyId, expectation.AttestationKeyId, StringComparison.Ordinal))
+            {
+                throw new MigrationConfigurationException("Schema-baseline and PostgreSQL snapshot trust roles must use different keys.");
+            }
+            var snapshotPublicKey = await ReadOptionalFileAsync(configuration, "Migration__SnapshotTrustedPublicKeyPath", cancellationToken);
+            if (!string.IsNullOrWhiteSpace(publicKey) && string.Equals(publicKey.Trim(), snapshotPublicKey?.Trim(), StringComparison.Ordinal))
+            {
+                throw new MigrationConfigurationException("Schema-baseline and PostgreSQL snapshot trust material must be distinct.");
+            }
+            var snapshotExpectation = new PostgreSqlSnapshotExpectation(
+                options.Workload, ParseRunId(configuration), expectation.SourceSnapshotId, expectation.CopyPlanId,
+                expectation.SchemaHash, snapshotKeyId, expectation.Host, expectation.Port, expectation.Database);
+            var snapshotReceipt = await ReadSnapshotReceiptAsync(configuration, cancellationToken);
             var runner = new QuotationMigrationRunner(
                 options,
                 expectation,
                 receipt,
                 new EcdsaSchemaBaselineReceiptVerifier(expectation.AttestationKeyId, publicKey, TimeProvider.System),
+                snapshotExpectation,
+                snapshotReceipt,
+                new EcdsaPostgreSqlSnapshotReceiptVerifier(snapshotKeyId, snapshotPublicKey, TimeProvider.System),
                 lockTimeout);
 
             await runner.RunAsync(cancellationToken);
@@ -55,6 +72,16 @@ public static class MigrationRunnerApplication
         }
 
         return value;
+    }
+
+    private static Guid ParseRunId(IReadOnlyDictionary<string, string?> configuration)
+    {
+        string value = Require(configuration, "Migration__RunId");
+        if (!Guid.TryParseExact(value, "D", out Guid runId) || runId == Guid.Empty)
+        {
+            throw new MigrationConfigurationException("Migration run identity must be a non-empty canonical UUID.");
+        }
+        return runId;
     }
 
     private static TimeSpan ParseLockTimeout(IReadOnlyDictionary<string, string?> configuration)
@@ -88,6 +115,19 @@ public static class MigrationRunnerApplication
         }
 
         return receipt;
+    }
+
+    private static async Task<SignedPostgreSqlSnapshotReceipt?> ReadSnapshotReceiptAsync(
+        IReadOnlyDictionary<string, string?> configuration,
+        CancellationToken cancellationToken)
+    {
+        string? json = await ReadOptionalFileAsync(configuration, "Migration__SnapshotReceiptPath", cancellationToken);
+        if (json is null) return null;
+        if (!SignedSchemaBaselineReceiptParser.TryParse(json, out SignedSchemaBaselineReceipt envelope))
+        {
+            throw new MigrationConfigurationException("The PostgreSQL snapshot receipt envelope is invalid.");
+        }
+        return new(envelope.Payload, envelope.Signature);
     }
 
     private static async Task<string?> ReadOptionalFileAsync(

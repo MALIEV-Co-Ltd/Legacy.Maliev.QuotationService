@@ -13,6 +13,9 @@ public sealed class QuotationMigrationRunner
     private readonly SchemaBaselineExpectation expectation;
     private readonly SignedSchemaBaselineReceipt? receipt;
     private readonly SchemaBaselineGate baselineGate;
+    private readonly PostgreSqlSnapshotExpectation snapshotExpectation;
+    private readonly SignedPostgreSqlSnapshotReceipt? snapshotReceipt;
+    private readonly PostgreSqlSnapshotGate snapshotGate;
     private readonly TimeSpan lockTimeout;
 
     public QuotationMigrationRunner(
@@ -20,18 +23,25 @@ public sealed class QuotationMigrationRunner
         SchemaBaselineExpectation expectation,
         SignedSchemaBaselineReceipt? receipt,
         ISchemaBaselineReceiptVerifier receiptVerifier,
+        PostgreSqlSnapshotExpectation snapshotExpectation,
+        SignedPostgreSqlSnapshotReceipt? snapshotReceipt,
+        EcdsaPostgreSqlSnapshotReceiptVerifier snapshotVerifier,
         TimeSpan lockTimeout)
     {
         this.options = options;
         this.expectation = expectation;
         this.receipt = receipt;
         baselineGate = new(receiptVerifier);
+        this.snapshotExpectation = snapshotExpectation;
+        this.snapshotReceipt = snapshotReceipt;
+        snapshotGate = new(snapshotVerifier);
         this.lockTimeout = lockTimeout;
         ValidateConfiguration();
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
+        snapshotGate.EnsureSafe(snapshotExpectation, snapshotReceipt);
         await using var connection = new NpgsqlConnection(options.ConnectionString);
         await connection.OpenAsync(cancellationToken);
         var lockName = $"legacy-maliev-quotation:migration:{expectation.WorkloadName}";
@@ -105,6 +115,13 @@ public sealed class QuotationMigrationRunner
             string.IsNullOrWhiteSpace(expectation.CopyPlanId) ||
             string.IsNullOrWhiteSpace(expectation.SchemaHash) ||
             string.IsNullOrWhiteSpace(expectation.AttestationKeyId) ||
+            snapshotExpectation.Workload != expectation.Workload ||
+            snapshotExpectation.SourceSnapshotId != expectation.SourceSnapshotId ||
+            snapshotExpectation.CopyPlanId != expectation.CopyPlanId ||
+            snapshotExpectation.SchemaHash != expectation.SchemaHash ||
+            !string.Equals(snapshotExpectation.Host, expectation.Host, StringComparison.OrdinalIgnoreCase) ||
+            snapshotExpectation.Port != expectation.Port || snapshotExpectation.Database != expectation.Database ||
+            snapshotExpectation.RunId == Guid.Empty || string.IsNullOrWhiteSpace(snapshotExpectation.AttestationKeyId) ||
             lockTimeout <= TimeSpan.Zero || lockTimeout > TimeSpan.FromSeconds(30))
         {
             throw new MigrationConfigurationException("Migration target, attestation identifiers, or lock timeout are invalid or ambiguous.");
