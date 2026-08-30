@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Cryptography;
 
 namespace Legacy.Maliev.QuotationService.MigrationRunner;
 
@@ -26,19 +27,36 @@ public static class MigrationRunnerApplication
             var receipt = await ReadReceiptAsync(configuration, cancellationToken);
             var publicKey = await ReadOptionalFileAsync(configuration, "Migration__TrustedPublicKeyPath", cancellationToken);
             var snapshotKeyId = Require(configuration, "Migration__SnapshotTrustedKeyId");
+            var snapshotReceipt = await ReadSnapshotReceiptAsync(configuration, cancellationToken);
+            if (snapshotReceipt is null)
+            {
+                throw new PostgreSqlSnapshotRejectedException("A signed recoverable PostgreSQL snapshot receipt is required before target observation or connection.");
+            }
             if (string.Equals(snapshotKeyId, expectation.AttestationKeyId, StringComparison.Ordinal))
             {
                 throw new MigrationConfigurationException("Schema-baseline and PostgreSQL snapshot trust roles must use different keys.");
             }
             var snapshotPublicKey = await ReadOptionalFileAsync(configuration, "Migration__SnapshotTrustedPublicKeyPath", cancellationToken);
-            if (!string.IsNullOrWhiteSpace(publicKey) && string.Equals(publicKey.Trim(), snapshotPublicKey?.Trim(), StringComparison.Ordinal))
+            if (!P256PublicKeyFingerprint.TryCompute(publicKey, out byte[] schemaFingerprint) ||
+                !P256PublicKeyFingerprint.TryCompute(snapshotPublicKey, out byte[] snapshotFingerprint))
+            {
+                throw new MigrationConfigurationException("Schema-baseline and PostgreSQL snapshot trust keys must be exact P-256 SPKI public keys.");
+            }
+            if (CryptographicOperations.FixedTimeEquals(schemaFingerprint, snapshotFingerprint))
             {
                 throw new MigrationConfigurationException("Schema-baseline and PostgreSQL snapshot trust material must be distinct.");
             }
             var snapshotExpectation = new PostgreSqlSnapshotExpectation(
                 options.Workload, ParseRunId(configuration), expectation.SourceSnapshotId, expectation.CopyPlanId,
-                expectation.SchemaHash, snapshotKeyId, expectation.Host, expectation.Port, expectation.Database);
-            var snapshotReceipt = await ReadSnapshotReceiptAsync(configuration, cancellationToken);
+                expectation.SchemaHash, snapshotKeyId, expectation.Host, expectation.Port, expectation.Database,
+                Require(configuration, "Migration__ClusterNamespace"), Require(configuration, "Migration__ClusterName"));
+            var snapshotVerifier = new EcdsaPostgreSqlSnapshotReceiptVerifier(snapshotKeyId, snapshotPublicKey, TimeProvider.System);
+            ReceiptVerificationResult snapshotVerification = snapshotVerifier.Verify(snapshotReceipt, snapshotExpectation);
+            if (!snapshotVerification.IsValid)
+            {
+                throw new PostgreSqlSnapshotRejectedException($"The PostgreSQL snapshot receipt was rejected before target observation: {snapshotVerification.Reason}.");
+            }
+            using var targetObserver = new InClusterCloudNativePgRuntimeObserver();
             var runner = new QuotationMigrationRunner(
                 options,
                 expectation,
@@ -46,7 +64,8 @@ public static class MigrationRunnerApplication
                 new EcdsaSchemaBaselineReceiptVerifier(expectation.AttestationKeyId, publicKey, TimeProvider.System),
                 snapshotExpectation,
                 snapshotReceipt,
-                new EcdsaPostgreSqlSnapshotReceiptVerifier(snapshotKeyId, snapshotPublicKey, TimeProvider.System),
+                snapshotVerifier,
+                targetObserver,
                 lockTimeout);
 
             await runner.RunAsync(cancellationToken);

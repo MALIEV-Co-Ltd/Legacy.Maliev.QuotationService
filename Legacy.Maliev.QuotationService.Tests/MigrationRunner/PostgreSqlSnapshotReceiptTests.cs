@@ -25,6 +25,37 @@ public sealed class PostgreSqlSnapshotReceiptTests
     }
 
     [Fact]
+    public void Fingerprint_EquivalentPemWrappingHasSameCanonicalIdentity()
+    {
+        using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        string pem = key.ExportSubjectPublicKeyInfoPem();
+        string compactBase64 = string.Concat(pem.Split('\n').Where(line => !line.StartsWith("---", StringComparison.Ordinal)).Select(line => line.Trim()));
+        string rewrapped = $"-----BEGIN PUBLIC KEY-----\n{compactBase64[..20]}\n{compactBase64[20..]}\n-----END PUBLIC KEY-----";
+
+        Assert.True(P256PublicKeyFingerprint.TryCompute(pem, out byte[] first));
+        Assert.True(P256PublicKeyFingerprint.TryCompute(rewrapped, out byte[] second));
+        Assert.True(CryptographicOperations.FixedTimeEquals(first, second));
+    }
+
+    [Fact]
+    public async Task Gate_RechecksObservedClusterAndRejectsDriftBeforeConnection()
+    {
+        using ECDsa signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        PostgreSqlSnapshotExpectation expected = Expected();
+        SignedPostgreSqlSnapshotReceipt receipt = Sign(expected, now, signer);
+        var observer = new SequenceObserver(
+            new(expected.ClusterNamespace, expected.ClusterName, "11111111-2222-3333-4444-555555555555", 7, 7, true),
+            new(expected.ClusterNamespace, expected.ClusterName, "different-uid", 8, 8, true));
+        var gate = new PostgreSqlSnapshotGate(
+            new("quotation-snapshot-v1", signer.ExportSubjectPublicKeyInfoPem(), TimeProvider.System), observer);
+
+        _ = await Assert.ThrowsAsync<PostgreSqlSnapshotRejectedException>(() =>
+            gate.EnsureSafeAsync(expected, receipt, CancellationToken.None));
+        Assert.Equal(2, observer.Calls);
+    }
+
+    [Fact]
     public void Verifier_RejectsPrivateOrMultiplePemTrustMaterial()
     {
         using ECDsa signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -70,7 +101,9 @@ public sealed class PostgreSqlSnapshotReceiptTests
         "quotation-snapshot-v1",
         "legacy-postgres-pooler-rw.maliev-legacy.svc.cluster.local",
         5432,
-        "Quotation");
+        "Quotation",
+        "maliev-legacy",
+        "legacy-postgres-main");
 
     private static SignedPostgreSqlSnapshotReceipt Sign(
         PostgreSqlSnapshotExpectation expected,
@@ -80,9 +113,20 @@ public sealed class PostgreSqlSnapshotReceiptTests
         var payload = new PostgreSqlSnapshotReceiptPayload(
             "1.0", expected.WorkloadName, expected.RunId.ToString("D"), expected.SourceSnapshotId,
             expected.CopyPlanId, expected.SchemaHash, "cnpg-20260830-001", now.AddMinutes(-2),
-            new string('b', 64), expected.AttestationKeyId, expected.Host, expected.Port, expected.Database,
+            new string('b', 64), "gs://maliev-backups/quotation/cnpg-20260830-001.dump", 42, 8192,
+            expected.AttestationKeyId, expected.Host, expected.Port, expected.Database,
+            expected.ClusterNamespace, expected.ClusterName, "11111111-2222-3333-4444-555555555555", 7, 7,
             now.AddMinutes(10));
         byte[] signature = signer.SignData(PostgreSqlSnapshotReceiptCanonicalizer.CreatePayload(payload), HashAlgorithmName.SHA256);
         return new(JsonSerializer.Serialize(payload), Convert.ToBase64String(signature));
+    }
+
+    private sealed class SequenceObserver(params CloudNativePgRuntimeObservation[] observations) : ICloudNativePgRuntimeObserver
+    {
+        public int Calls { get; private set; }
+        public Task<CloudNativePgRuntimeObservation> ObserveAsync(string clusterNamespace, string clusterName, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(observations[Calls++]);
+        }
     }
 }
