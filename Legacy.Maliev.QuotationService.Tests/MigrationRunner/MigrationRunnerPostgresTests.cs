@@ -163,11 +163,14 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
             workload, "source-20260829", "copy-plan-v1", "schema-sha256", "production-key", target.Host, target.Port, target.Database);
         var snapshotExpectation = new PostgreSqlSnapshotExpectation(
             workload, Guid.Parse("34829fe9-1b24-42b5-8bdf-e38c9ed1e4bb"), expectation.SourceSnapshotId,
-            expectation.CopyPlanId, expectation.SchemaHash, "snapshot-key", target.Host, target.Port, target.Database);
+            expectation.CopyPlanId, expectation.SchemaHash, "snapshot-key", target.Host, target.Port, target.Database,
+            "maliev-legacy", "legacy-postgres-main");
         var snapshotPayload = new PostgreSqlSnapshotReceiptPayload(
             "1.0", snapshotExpectation.WorkloadName, snapshotExpectation.RunId.ToString("D"), expectation.SourceSnapshotId,
             expectation.CopyPlanId, expectation.SchemaHash, "test-snapshot", DateTimeOffset.UtcNow.AddMinutes(-1),
-            new string('b', 64), snapshotExpectation.AttestationKeyId, target.Host, target.Port, target.Database,
+            new string('b', 64), "gs://maliev-backups/quotation/test-snapshot.dump", 42, 8192,
+            snapshotExpectation.AttestationKeyId, target.Host, target.Port, target.Database,
+            snapshotExpectation.ClusterNamespace, snapshotExpectation.ClusterName, "11111111-2222-3333-4444-555555555555", 7, 7,
             DateTimeOffset.UtcNow.AddMinutes(5));
         var snapshotReceipt = new SignedPostgreSqlSnapshotReceipt(JsonSerializer.Serialize(snapshotPayload), Convert.ToBase64String(
             snapshotSigner.SignData(PostgreSqlSnapshotReceiptCanonicalizer.CreatePayload(snapshotPayload), HashAlgorithmName.SHA256)));
@@ -176,7 +179,17 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
             new EcdsaSchemaBaselineReceiptVerifier("production-key", signer.ExportSubjectPublicKeyInfoPem(), TimeProvider.System),
             snapshotExpectation, snapshotReceipt,
             new EcdsaPostgreSqlSnapshotReceiptVerifier("snapshot-key", snapshotSigner.ExportSubjectPublicKeyInfoPem(), TimeProvider.System),
+            new FixedTargetObserver(),
             lockTimeout ?? TimeSpan.FromSeconds(2));
+    }
+
+    private sealed class FixedTargetObserver : ICloudNativePgRuntimeObserver
+    {
+        public Task<CloudNativePgRuntimeObservation> ObserveAsync(string clusterNamespace, string clusterName, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new CloudNativePgRuntimeObservation(
+                clusterNamespace, clusterName, "11111111-2222-3333-4444-555555555555", 7, 7, true));
+        }
     }
 
     private SignedSchemaBaselineReceipt ValidReceipt(string connectionString, MigrationWorkload workload, DateTimeOffset? expiry = null)

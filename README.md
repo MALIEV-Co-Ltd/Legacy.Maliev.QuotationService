@@ -95,7 +95,10 @@ or downgrade data.
 
 Before opening any database connection, every run requires a signed, unexpired recoverable PostgreSQL snapshot receipt.
 Its domain-separated payload binds the workload, canonical run UUID, source snapshot, copy plan, schema hash,
-snapshot identifier, UTC recovery point, snapshot SHA-256, target host/port/database, trust key, and expiry.
+snapshot identifier, UTC recovery point, immutable backup object URI/generation/byte length/SHA-256,
+CloudNativePG cluster namespace/name/UID/generation, target host/port/database, trust key, and expiry.
+The runner independently observes the fixed CloudNativePG target twice and requires identical, healthy observations
+matching the signed UID and generation immediately before opening the PostgreSQL connection.
 Snapshot and schema-baseline trust roles must use distinct P-256 public keys. A non-empty database additionally fails
 closed unless it is accompanied by a signed, unexpired production schema-baseline receipt. The ECDSA P-256 trust model
 and externally projected trusted key identifier match the DataMigration attestation boundary. The versioned receipt schema
@@ -108,7 +111,8 @@ Required configuration is `Migration__SourceSnapshotId`, `Migration__CopyPlanId`
 `Migration__TrustedKeyId`, `Migration__RunId`, and `Migration__SnapshotTrustedKeyId`. Snapshot receipt and snapshot
 public-key file projections are required for execution through `Migration__SnapshotReceiptPath` and
 `Migration__SnapshotTrustedPublicKeyPath`; schema-baseline projections remain `Migration__ReceiptPath` and
-`Migration__TrustedPublicKeyPath`. `Migration__LockTimeoutSeconds` is bounded to 1-30 seconds.
+`Migration__TrustedPublicKeyPath`. `Migration__ClusterNamespace` and `Migration__ClusterName` identify the exact
+CloudNativePG resource. `Migration__LockTimeoutSeconds` is bounded to 1-30 seconds.
 Neither the receipt nor logs contain credentials or a raw connection string.
 
 ## Validate

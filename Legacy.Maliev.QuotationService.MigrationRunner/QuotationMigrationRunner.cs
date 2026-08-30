@@ -26,6 +26,7 @@ public sealed class QuotationMigrationRunner
         PostgreSqlSnapshotExpectation snapshotExpectation,
         SignedPostgreSqlSnapshotReceipt? snapshotReceipt,
         EcdsaPostgreSqlSnapshotReceiptVerifier snapshotVerifier,
+        ICloudNativePgRuntimeObserver targetObserver,
         TimeSpan lockTimeout)
     {
         this.options = options;
@@ -34,14 +35,14 @@ public sealed class QuotationMigrationRunner
         baselineGate = new(receiptVerifier);
         this.snapshotExpectation = snapshotExpectation;
         this.snapshotReceipt = snapshotReceipt;
-        snapshotGate = new(snapshotVerifier);
+        snapshotGate = new(snapshotVerifier, targetObserver);
         this.lockTimeout = lockTimeout;
         ValidateConfiguration();
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        snapshotGate.EnsureSafe(snapshotExpectation, snapshotReceipt);
+        await snapshotGate.EnsureSafeAsync(snapshotExpectation, snapshotReceipt, cancellationToken);
         await using var connection = new NpgsqlConnection(options.ConnectionString);
         await connection.OpenAsync(cancellationToken);
         var lockName = $"legacy-maliev-quotation:migration:{expectation.WorkloadName}";
