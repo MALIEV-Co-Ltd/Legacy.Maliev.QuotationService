@@ -218,6 +218,18 @@ public sealed class DeliveryContractTests
     }
 
     [Fact]
+    public void Readme_FreezesTargetNativeMarketingReconciliationBoundary()
+    {
+        var readme = File.ReadAllText(Path.Combine(RepositoryRoot(), "README.md"));
+
+        Assert.Contains("GET /Quotations/outcomes/readback", readme, StringComparison.Ordinal);
+        Assert.Contains("fully source-attributed and unattributed counts", readme, StringComparison.Ordinal);
+        Assert.Contains("does not own Google Analytics Measurement Protocol credentials", readme, StringComparison.Ordinal);
+        Assert.Contains("immutable accepted-outcome record", readme, StringComparison.Ordinal);
+        Assert.Contains("never exposes either identifier", readme, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ServiceWorkflows_NeverDeployDirectly()
     {
         var workflows = Directory.EnumerateFiles(Path.Combine(RepositoryRoot(), ".github", "workflows"), "*.yml");

@@ -459,6 +459,10 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
                 Assert.Equal(fromUtc, day.DayUtc);
                 Assert.Equal(2, day.PersistedQuotationCount);
                 Assert.Equal(1, day.AcceptedQuotationCount);
+                Assert.Equal(1, day.SourceAttributedPersistedQuotationCount);
+                Assert.Equal(1, day.SourceAttributedAcceptedQuotationCount);
+                Assert.Equal(1, day.UnattributedPersistedQuotationCount);
+                Assert.Equal(0, day.UnattributedAcceptedQuotationCount);
                 Assert.Equal(
                     new AcceptedQuotedAmountByCurrency(764, 104m, 1),
                     Assert.Single(day.AcceptedQuotedAmountsByCurrency));
@@ -468,6 +472,10 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
                 Assert.Equal(fromUtc.AddDays(1), day.DayUtc);
                 Assert.Equal(2, day.PersistedQuotationCount);
                 Assert.Equal(2, day.AcceptedQuotationCount);
+                Assert.Equal(0, day.SourceAttributedPersistedQuotationCount);
+                Assert.Equal(0, day.SourceAttributedAcceptedQuotationCount);
+                Assert.Equal(2, day.UnattributedPersistedQuotationCount);
+                Assert.Equal(2, day.UnattributedAcceptedQuotationCount);
                 Assert.Equal(
                 [
                     new AcceptedQuotedAmountByCurrency(764, 50m, 1),
@@ -489,6 +497,33 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         {
             Assert.DoesNotContain(forbiddenProperty, json, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public async Task OutcomeReadback_PartialSourceKeysRemainAggregateOnlyAndCountAsUnattributed()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await Task.WhenAll(
+            quotationContext.Database.MigrateAsync(),
+            requestContext.Database.MigrateAsync());
+        var fromUtc = new DateTime(2026, 8, 30, 0, 0, 0, DateTimeKind.Utc);
+        var quotation = OutcomeQuotation(fromUtc.AddHours(1), 764, 100m, 0m, sourceRequestId: 123);
+        quotationContext.Quotations.Add(quotation);
+        await quotationContext.SaveChangesAsync();
+        quotationContext.AcceptedOutcomes.Add(Outcome(quotation, fromUtc.AddHours(2), "customer"));
+        await quotationContext.SaveChangesAsync();
+
+        var day = Assert.Single((await Repository(quotationContext, requestContext)
+            .GetOutcomeReadbackAsync(fromUtc, fromUtc.AddDays(1), CancellationToken.None)).Days);
+
+        Assert.Equal(0, day.SourceAttributedPersistedQuotationCount);
+        Assert.Equal(0, day.SourceAttributedAcceptedQuotationCount);
+        Assert.Equal(1, day.UnattributedPersistedQuotationCount);
+        Assert.Equal(1, day.UnattributedAcceptedQuotationCount);
+        var json = JsonSerializer.Serialize(day);
+        Assert.DoesNotContain("SourceRequestId", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("SourceJourneyId", json, StringComparison.Ordinal);
     }
 
     [Fact]
