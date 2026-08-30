@@ -60,6 +60,9 @@ consent-governed integration consuming the aggregate/readback boundary. This pre
 measurement outcome without copying GA secrets, browser identifiers, or the SQL Server-specific
 `GoogleAnalyticsOutbox` deployment into the PostgreSQL service.
 
+The lossless source-fact import boundary is documented in
+[`docs/legacy-outcome-adoption-contract.md`](docs/legacy-outcome-adoption-contract.md).
+
 ## Data ownership and deployment gate
 
 - Planned existing-cluster target: `legacy-postgres-quotation` in `maliev-legacy`.

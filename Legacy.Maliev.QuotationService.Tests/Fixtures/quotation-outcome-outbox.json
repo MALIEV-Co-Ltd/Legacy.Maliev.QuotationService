@@ -1,0 +1,24 @@
+{
+  "sourceTable": "dbo.QuotationOutcomeOutbox",
+  "nextIdentityValue": 19,
+  "rows": [
+    {
+      "id": 7,
+      "eventKey": "quotation-42001:accepted:v1",
+      "quotationId": 42001,
+      "sourceRequestId": null,
+      "sourceJourneyId": null,
+      "acceptedUtc": "2026-08-23T04:05:06.1234567",
+      "acceptanceOrigin": "employee"
+    },
+    {
+      "id": 18,
+      "eventKey": "quotation-42002:accepted:v1",
+      "quotationId": 42002,
+      "sourceRequestId": 9001,
+      "sourceJourneyId": "4d7ca7a7-5bf4-4862-b60d-cd5812c70527",
+      "acceptedUtc": "2026-08-30T11:12:13.7654321",
+      "acceptanceOrigin": "customer"
+    }
+  ]
+}
