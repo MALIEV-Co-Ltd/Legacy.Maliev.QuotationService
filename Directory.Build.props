@@ -5,8 +5,8 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Update="Microsoft.EntityFrameworkCore" Version="10.0.4" />
-    <PackageReference Update="Microsoft.EntityFrameworkCore.Relational" Version="10.0.4" />
-    <PackageReference Update="Microsoft.EntityFrameworkCore.Abstractions" Version="10.0.4" />
+    <PackageReference Update="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <PackageReference Update="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
+    <PackageReference Update="Microsoft.EntityFrameworkCore.Abstractions" Version="10.0.11" />
   </ItemGroup>
 </Project>
