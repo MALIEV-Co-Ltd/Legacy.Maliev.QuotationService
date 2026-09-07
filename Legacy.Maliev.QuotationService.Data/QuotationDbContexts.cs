@@ -57,6 +57,8 @@ public sealed class QuotationRequestDbContext(DbContextOptions<QuotationRequestD
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var request = modelBuilder.Entity<QuotationRequest>();
+        request.Property(x => x.JourneyId).HasColumnType("uuid");
+        request.HasIndex(x => x.JourneyId).HasDatabaseName("IX_Request_JourneyId").HasFilter("\"JourneyId\" IS NOT NULL");
         request.ToTable("Request"); request.HasKey(x => x.Id); request.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd(); request.Property(x => x.Country).HasMaxLength(256); request.Property(x => x.TaxIdentification).HasMaxLength(256); request.Property(x => x.TelephoneNumber).HasMaxLength(256); Dates(request); request.Property(x => x.ModifiedDate).IsConcurrencyToken();
         var file = modelBuilder.Entity<QuotationRequestFile>();
         file.ToTable("RequestFile"); file.HasKey(x => x.Id); file.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd(); file.Property(x => x.RequestId).HasColumnName("RequestID"); file.Property(x => x.Bucket).HasMaxLength(50); Dates(file);

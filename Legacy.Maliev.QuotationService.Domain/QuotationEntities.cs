@@ -86,6 +86,7 @@ public sealed class QuotationOrderLink
 public sealed class QuotationRequest
 {
     public int Id { get; set; }
+    public Guid? JourneyId { get; set; }
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public string? Email { get; set; }

@@ -31,6 +31,80 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
     public async Task DisposeAsync() { await quotationPostgres.DisposeAsync(); await requestPostgres.DisposeAsync(); }
 
     [Fact]
+    public async Task RequestJourney_PersistsReadsReplaysAndCannotBeOverwrittenByUpdate()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await requestContext.Database.MigrateAsync();
+        var repository = Repository(quotationContext, requestContext);
+        var journey = Guid.NewGuid();
+        var payload = Request("journey@example.test", "CNC engineering review") with { JourneyId = journey };
+        var created = await repository.CreateRequestAsync(payload, CancellationToken.None);
+        Assert.Equal(journey, created.JourneyId);
+        Assert.Null(created.Done);
+        requestContext.ChangeTracker.Clear();
+        Assert.Equal(journey, (await repository.GetRequestAsync(created.Id, CancellationToken.None))!.JourneyId);
+        var page = await repository.GetRequestsAsync(null, created.Id.ToString(), 1, 10, CancellationToken.None);
+        Assert.Contains(journey.ToString(), System.Text.Json.JsonSerializer.Serialize(page));
+        Assert.Equal(UpdateResult.Updated, await repository.UpdateRequestAsync(created.Id,
+            payload with { JourneyId = Guid.NewGuid(), Message = "Reviewed" }, null, CancellationToken.None));
+        requestContext.ChangeTracker.Clear();
+        Assert.Equal(journey, (await requestContext.Requests.SingleAsync(row => row.Id == created.Id)).JourneyId);
+        var key = Hash("journey-idempotency");
+        var fingerprint = Hash("journey-payload");
+        var first = await repository.CreateRequestIdempotentlyAsync(payload, key, fingerprint, CancellationToken.None);
+        var replay = await repository.CreateRequestIdempotentlyAsync(payload, key, fingerprint, CancellationToken.None);
+        Assert.Equal(journey, first.Response!.JourneyId);
+        Assert.Equal(first.Response, replay.Response);
+        var legacy = await repository.CreateRequestAsync(payload with { JourneyId = null }, CancellationToken.None);
+        Assert.Null(legacy.JourneyId);
+        Assert.Null(legacy.Done);
+    }
+
+    [Fact]
+    public async Task RequestJourneyMigration_UpgradesPopulatedPreviousSchemaWithoutLosingRows()
+    {
+        await using var requestContext = RequestContext();
+        var migrator = requestContext.GetService<IMigrator>();
+        await migrator.MigrateAsync("20260721032134_FixTimestampColumnType");
+        await requestContext.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO "Request" ("FirstName", "LastName", "Email", "Message", "Done", "CreatedDate", "ModifiedDate")
+            VALUES ('ทดสอบ', 'Migration', 'schema-fixture@example.test', 'งาน CNC before migration', NULL,
+                TIMESTAMP '2026-08-01 03:04:05', TIMESTAMP '2026-08-02 06:07:08');
+            """);
+        var existingId = await requestContext.Database.SqlQueryRaw<int>(
+            "SELECT \"ID\" AS \"Value\" FROM \"Request\" WHERE \"Email\" = 'schema-fixture@example.test'").SingleAsync();
+
+        await migrator.MigrateAsync();
+        requestContext.ChangeTracker.Clear();
+        var preserved = Assert.Single(await requestContext.Requests.ToListAsync());
+        Assert.Equal(existingId, preserved.Id);
+        Assert.Equal("ทดสอบ", preserved.FirstName);
+        Assert.Equal("Migration", preserved.LastName);
+        Assert.Equal("schema-fixture@example.test", preserved.Email);
+        Assert.Equal("งาน CNC before migration", preserved.Message);
+        Assert.Null(preserved.Done);
+        Assert.Null(preserved.JourneyId);
+        Assert.Equal(new DateTime(2026, 8, 1, 3, 4, 5), preserved.CreatedDate);
+        Assert.Equal(new DateTime(2026, 8, 2, 6, 7, 8), preserved.ModifiedDate);
+        var indexDefinition = await requestContext.Database.SqlQueryRaw<string>(
+            "SELECT indexdef AS \"Value\" FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'Request' AND indexname = 'IX_Request_JourneyId'").SingleAsync();
+        Assert.Contains("\"JourneyId\" IS NOT NULL", indexDefinition);
+        Assert.DoesNotContain("UNIQUE", indexDefinition);
+        Assert.Equal("uuid", await requestContext.Database.SqlQueryRaw<string>(
+            "SELECT udt_name AS \"Value\" FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Request' AND column_name = 'JourneyId'").SingleAsync());
+        var journey = Guid.NewGuid();
+        requestContext.Requests.Add(new QuotationRequest { JourneyId = journey, Message = "new attributed request" });
+        await requestContext.SaveChangesAsync();
+        requestContext.ChangeTracker.Clear();
+        Assert.Equal(2, await requestContext.Requests.CountAsync());
+        var added = await requestContext.Requests.SingleAsync(row => row.JourneyId == journey);
+        Assert.True(added.Id > existingId);
+        Assert.Null(added.Done);
+    }
+
+    [Fact]
     public async Task InitialMigrations_PreserveFinancialRequestFileAndDocumentBehavior()
     {
         await using var quotationContext = QuotationContext(); await using var requestContext = RequestContext();
