@@ -148,5 +148,3 @@ namespace Legacy.Maliev.QuotationService.Data.Migrations.QuotationRequest
         }
     }
 }
-
-
