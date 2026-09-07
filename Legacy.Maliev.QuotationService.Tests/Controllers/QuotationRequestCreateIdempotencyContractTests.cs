@@ -12,6 +12,29 @@ namespace Legacy.Maliev.QuotationService.Tests.Controllers;
 public sealed class QuotationRequestCreateIdempotencyContractTests
 {
     [Fact]
+    public async Task CreateRequest_JourneyChangesFingerprintButNullPreservesLegacyHash()
+    {
+        var fingerprints = new List<string>();
+        var service = new Mock<IQuotationService>();
+        service.Setup(value => value.CreateRequestIdempotentlyAsync(It.IsAny<UpsertQuotationRequestRequest>(),
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<UpsertQuotationRequestRequest, string, string, CancellationToken>((_, _, fingerprint, _) => fingerprints.Add(fingerprint))
+            .ReturnsAsync(new IdempotentRequestCreateResult(Response(17, "Ada"), IdempotencyBindingResult.Acquired));
+        var controller = new QuotationRequestsController(service.Object);
+        var request = Request("Ada");
+        var journey = Guid.Parse("66666666-1111-2222-3333-444444444444");
+        foreach (var payload in new[] { request, request with { JourneyId = journey }, request with { JourneyId = journey }, request with { JourneyId = Guid.NewGuid() } })
+            await controller.CreateQuotationRequestAsync(payload, "same-key", CancellationToken.None);
+
+        var canonical = "V3:Ada;V8:Lovelace;V18:quote@example.test;N;V2:TH;N;N;V24:Please quote this model.;N;N";
+        var expected = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(canonical)));
+        Assert.Equal(expected, fingerprints[0]);
+        Assert.NotEqual(fingerprints[0], fingerprints[1]);
+        Assert.Equal(fingerprints[1], fingerprints[2]);
+        Assert.NotEqual(fingerprints[1], fingerprints[3]);
+    }
+
+    [Fact]
     public void CreateRequest_PreservesRoutePermissionAndOptionalIdempotencyHeader()
     {
         var action = typeof(QuotationRequestsController).GetMethod(

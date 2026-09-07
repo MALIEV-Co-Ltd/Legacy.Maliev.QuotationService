@@ -86,6 +86,8 @@ public sealed class QuotationRequestsController(IQuotationService service) : Con
         Append(canonical, request.Message);
         Append(canonical, request.InternalComment);
         canonical.Append(request.Done switch { true => "T", false => "F", null => "N" });
+        // Preserve existing null-journey fingerprints across the additive rollout.
+        if (request.JourneyId.HasValue) Append(canonical, request.JourneyId.Value.ToString("D"));
         return Hash(canonical.ToString());
     }
 

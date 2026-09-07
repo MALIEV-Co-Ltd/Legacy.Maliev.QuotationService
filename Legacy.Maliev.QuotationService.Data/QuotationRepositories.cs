@@ -289,7 +289,7 @@ public sealed class QuotationRepository(
 
     public async Task<QuotationRequestResponse> CreateRequestAsync(UpsertQuotationRequestRequest request, CancellationToken cancellationToken)
     {
-        var now = Now(); var entity = Map(new QuotationRequest(), request); entity.CreatedDate = now; entity.ModifiedDate = now; requests.Add(entity); await requests.SaveChangesAsync(cancellationToken); return ToResponse(entity);
+        var now = Now(); var entity = Map(new QuotationRequest { JourneyId = request.JourneyId }, request); entity.CreatedDate = now; entity.ModifiedDate = now; requests.Add(entity); await requests.SaveChangesAsync(cancellationToken); return ToResponse(entity);
     }
     public async Task<IdempotentRequestCreateResult> CreateRequestIdempotentlyAsync(
         UpsertQuotationRequestRequest request,
@@ -326,7 +326,7 @@ public sealed class QuotationRepository(
         }
 
         var now = Now();
-        var entity = Map(new QuotationRequest(), request);
+        var entity = Map(new QuotationRequest { JourneyId = request.JourneyId }, request);
         entity.CreatedDate = now;
         entity.ModifiedDate = now;
         requests.Add(entity);
@@ -437,7 +437,7 @@ public sealed class QuotationRepository(
     private static Quotation Map(Quotation x, UpsertQuotationRequest r) { x.CustomerId = r.CustomerId; x.EmployeeId = r.EmployeeId; x.InvoiceId = r.InvoiceId; x.Period = r.Period; x.ExpirationDate = r.ExpirationDate; x.Subtotal = r.Subtotal; x.Vat = r.Vat; x.Total = r.Total; x.WithholdingTax = r.WithholdingTax; x.CurrencyId = r.CurrencyId; x.Comment = r.Comment; x.Fob = r.Fob; x.ShippedVia = r.ShippedVia; x.Terms = r.Terms; x.Accepted = r.Accepted; return x; }
     private static QuotationRequest Map(QuotationRequest x, UpsertQuotationRequestRequest r) { x.FirstName = r.FirstName; x.LastName = r.LastName; x.Email = r.Email; x.TelephoneNumber = r.TelephoneNumber; x.Country = r.Country; x.CompanyName = r.CompanyName; x.TaxIdentification = r.TaxIdentification; x.Message = r.Message; x.InternalComment = r.InternalComment; x.Done = r.Done; return x; }
     private static QuotationResponse ToResponse(Quotation x) => new(x.Id, x.CustomerId, x.EmployeeId, x.InvoiceId, x.Period, x.ExpirationDate, x.Subtotal, x.Vat, x.Total, x.WithholdingTax, x.QuotedAmount, x.CurrencyId, x.Comment, x.Fob, x.ShippedVia, x.Terms, x.Accepted, x.CreatedDate, x.ModifiedDate);
-    private static QuotationRequestResponse ToResponse(QuotationRequest x) => new(x.Id, x.FirstName, x.LastName, x.Email, x.TelephoneNumber, x.Country, x.CompanyName, x.TaxIdentification, x.Message, x.InternalComment, x.Done, x.CreatedDate, x.ModifiedDate);
+    private static QuotationRequestResponse ToResponse(QuotationRequest x) => new(x.Id, x.FirstName, x.LastName, x.Email, x.TelephoneNumber, x.Country, x.CompanyName, x.TaxIdentification, x.Message, x.InternalComment, x.Done, x.CreatedDate, x.ModifiedDate, x.JourneyId);
     private static QuotationOrderLinkResponse ToResponse(QuotationOrderLink x) => new(x.Id, x.QuotationId, x.OrderId, x.CreatedDate, x.ModifiedDate);
     private static QuotationFileResponse ToResponse(QuotationFile x) => new(x.Id, x.QuotationId, x.Bucket, x.ObjectName, x.CreatedDate, x.ModifiedDate);
     private static QuotationRequestFileResponse ToResponse(QuotationRequestFile x) => new(x.Id, x.RequestId, x.Bucket, x.ObjectName, x.CreatedDate, x.ModifiedDate);
@@ -445,6 +445,6 @@ public sealed class QuotationRepository(
     private static IQueryable<QuotationOrderItemResponse> ProjectItems(IQueryable<QuotationOrderItem> q) => q.Select(x => new QuotationOrderItemResponse(x.Id, x.QuotationId, x.OrderId, x.Description, x.Quantity, x.UnitPrice, x.Subtotal, x.CreatedDate, x.ModifiedDate));
     private static IQueryable<QuotationOrderLinkResponse> ProjectLinks(IQueryable<QuotationOrderLink> q) => q.Select(x => new QuotationOrderLinkResponse(x.Id, x.QuotationId, x.OrderId, x.CreatedDate, x.ModifiedDate));
     private static IQueryable<QuotationFileResponse> ProjectFiles(IQueryable<QuotationFile> q) => q.Select(x => new QuotationFileResponse(x.Id, x.QuotationId, x.Bucket, x.ObjectName, x.CreatedDate, x.ModifiedDate));
-    private static IQueryable<QuotationRequestResponse> ProjectRequests(IQueryable<QuotationRequest> q) => q.Select(x => new QuotationRequestResponse(x.Id, x.FirstName, x.LastName, x.Email, x.TelephoneNumber, x.Country, x.CompanyName, x.TaxIdentification, x.Message, x.InternalComment, x.Done, x.CreatedDate, x.ModifiedDate));
+    private static IQueryable<QuotationRequestResponse> ProjectRequests(IQueryable<QuotationRequest> q) => q.Select(x => new QuotationRequestResponse(x.Id, x.FirstName, x.LastName, x.Email, x.TelephoneNumber, x.Country, x.CompanyName, x.TaxIdentification, x.Message, x.InternalComment, x.Done, x.CreatedDate, x.ModifiedDate, x.JourneyId));
     private static IQueryable<QuotationRequestFileResponse> ProjectRequestFiles(IQueryable<QuotationRequestFile> q) => q.Select(x => new QuotationRequestFileResponse(x.Id, x.RequestId, x.Bucket, x.ObjectName, x.CreatedDate, x.ModifiedDate));
 }
