@@ -80,8 +80,8 @@ public sealed class WorkflowContractTests
     public void BuildAndTest_RejectsCommentedDependencySha()
     {
         AssertMutationRejected(
-            "ref: 1a7e4ba3c3dfd8c8793e9ad7da2083dc4df6cf4f",
-            "ref: main # 1a7e4ba3c3dfd8c8793e9ad7da2083dc4df6cf4f");
+            "ref: 9c4ac9d44a08bcd0aa2088348790ab863814669c",
+            "ref: main # 9c4ac9d44a08bcd0aa2088348790ab863814669c");
     }
 
     [Fact]
@@ -102,8 +102,8 @@ public sealed class WorkflowContractTests
     [Fact]
     public void MigrationRunner_UsesCoordinatedEfAndNpgsqlRuntimeGraph()
     {
-        Assert.Contains("Microsoft.EntityFrameworkCore\" Version=\"10.0.11", MigrationRunnerProject, StringComparison.Ordinal);
-        Assert.Contains("Microsoft.EntityFrameworkCore.Relational\" Version=\"10.0.11", MigrationRunnerProject, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.EntityFrameworkCore\" Version=\"10.0.12", MigrationRunnerProject, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.EntityFrameworkCore.Relational\" Version=\"10.0.12", MigrationRunnerProject, StringComparison.Ordinal);
         Assert.Contains("Npgsql.EntityFrameworkCore.PostgreSQL\" Version=\"10.0.3", MigrationRunnerProject, StringComparison.Ordinal);
     }
 
@@ -261,7 +261,7 @@ internal static partial class WorkflowContractValidator
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["repository"] = "MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults",
-                ["ref"] = "1a7e4ba3c3dfd8c8793e9ad7da2083dc4df6cf4f",
+                ["ref"] = "9c4ac9d44a08bcd0aa2088348790ab863814669c",
                 ["path"] = ".dependencies/Legacy.Maliev.ServiceDefaults",
                 ["persist-credentials"] = "false",
             });
