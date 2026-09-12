@@ -19,7 +19,8 @@ public sealed class RequestJourneyMigrationContractTests
         var property = entity.FindProperty(nameof(QuotationRequest.JourneyId))!;
         Assert.True(property.IsNullable);
         Assert.Equal("uuid", property.GetColumnType());
-        var index = Assert.Single(entity.GetIndexes());
+        var index = Assert.Single(entity.GetIndexes(), value =>
+            value.Properties.Select(property => property.Name).SequenceEqual([nameof(QuotationRequest.JourneyId)]));
         Assert.Equal("IX_Request_JourneyId", index.GetDatabaseName());
         Assert.Equal("\"JourneyId\" IS NOT NULL", index.GetFilter());
         var migrations = context.GetService<IMigrationsAssembly>();
