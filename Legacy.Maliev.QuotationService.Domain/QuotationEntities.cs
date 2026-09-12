@@ -87,6 +87,10 @@ public sealed class QuotationRequest
 {
     public int Id { get; set; }
     public Guid? JourneyId { get; set; }
+    public string? TransactionId { get; set; }
+    public string QualificationState { get; set; } = "unreviewed";
+    public DateTime? QualificationStateChangedUtc { get; set; }
+    public int QualificationVersion { get; set; }
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public string? Email { get; set; }
@@ -99,6 +103,25 @@ public sealed class QuotationRequest
     public bool? Done { get; set; }
     public DateTime? CreatedDate { get; set; }
     public DateTime? ModifiedDate { get; set; }
+}
+
+/// <summary>Immutable PII-free quotation-request qualification transition.</summary>
+public sealed class RequestQualificationAudit
+{
+    public long Id { get; set; }
+    public int RequestId { get; set; }
+    public Guid? JourneyId { get; set; }
+    public string TransactionId { get; set; } = string.Empty;
+    public string IdempotencyKey { get; set; } = string.Empty;
+    public string PreviousState { get; set; } = string.Empty;
+    public string NewState { get; set; } = string.Empty;
+    public string? Completeness { get; set; }
+    public int DuplicateCount { get; set; }
+    public string? UnmatchedClassification { get; set; }
+    public string ChangedBy { get; set; } = string.Empty;
+    public DateTime ChangedUtc { get; set; }
+    public string? Reason { get; set; }
+    public int Version { get; set; }
 }
 
 /// <summary>GCS object metadata attached to a quotation request.</summary>

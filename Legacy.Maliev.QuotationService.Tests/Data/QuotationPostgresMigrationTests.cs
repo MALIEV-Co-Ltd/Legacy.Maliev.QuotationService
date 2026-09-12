@@ -105,6 +105,93 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task QualificationMigration_BackfillsExistingRequestsAndEnforcesPostgresContract()
+    {
+        await using var requestContext = RequestContext();
+        var migrator = requestContext.GetService<IMigrator>();
+        await migrator.MigrateAsync("20260906120000_AddRequestJourneyId");
+        await requestContext.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO "Request" ("FirstName", "Email", "Message", "CreatedDate", "ModifiedDate")
+            VALUES ('ทดสอบ', 'qualification-migration@example.test', 'งาน CNC',
+                TIMESTAMP '2026-09-12 01:02:03', TIMESTAMP '2026-09-12 04:05:06');
+            """);
+        var existingId = await requestContext.Database.SqlQueryRaw<int>(
+            "SELECT \"ID\" AS \"Value\" FROM \"Request\" WHERE \"Email\" = 'qualification-migration@example.test'")
+            .SingleAsync();
+
+        await migrator.MigrateAsync();
+        requestContext.ChangeTracker.Clear();
+        var request = await requestContext.Requests.SingleAsync(value => value.Id == existingId);
+
+        Assert.Equal($"request-{existingId}", request.TransactionId);
+        Assert.Equal("unreviewed", request.QualificationState);
+        Assert.Equal(0, request.QualificationVersion);
+        Assert.Null(request.QualificationStateChangedUtc);
+        Assert.True(await requestContext.Database.SqlQueryRaw<bool>(
+            "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'UX_Request_TransactionId') AS \"Value\"")
+            .SingleAsync());
+        Assert.True(await requestContext.Database.SqlQueryRaw<bool>(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'RequestQualificationAudit') AS \"Value\"")
+            .SingleAsync());
+        var constraints = await requestContext.Database.SqlQueryRaw<string>(
+            """
+            SELECT conname AS "Value"
+            FROM pg_constraint
+            WHERE conname LIKE 'CK_Request%Qualification%'
+               OR conname = 'FK_RequestQualificationAudit_Request'
+            ORDER BY conname
+            """).ToListAsync();
+        Assert.Contains("CK_RequestQualificationAudit_DuplicateCount", constraints);
+        Assert.Contains("CK_RequestQualificationAudit_NewState", constraints);
+        Assert.Contains("CK_RequestQualificationAudit_Reason", constraints);
+        Assert.Contains("CK_Request_QualificationState", constraints);
+        Assert.Contains("FK_RequestQualificationAudit_Request", constraints);
+    }
+
+    [Fact]
+    public async Task QualificationTransition_IsVersionedAuditedAndIdempotent()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await requestContext.Database.MigrateAsync();
+        var repository = Repository(quotationContext, requestContext);
+        var created = await repository.CreateRequestAsync(Request("qualification@example.test", "CNC review"), CancellationToken.None);
+        var transition = new QualificationStateUpdateRequest(
+            "qualified", null, "complete", 0, null, "employee-review-1", 0);
+
+        var first = await repository.UpdateRequestQualificationAsync(created.Id, transition, "employee-42", CancellationToken.None);
+        var replay = await repository.UpdateRequestQualificationAsync(created.Id, transition, "employee-42", CancellationToken.None);
+        var conflictingReplay = await repository.UpdateRequestQualificationAsync(
+            created.Id,
+            transition with { State = "duplicate", Reason = "same lead", DuplicateCount = 1 },
+            "employee-42",
+            CancellationToken.None);
+        var stale = await repository.UpdateRequestQualificationAsync(
+            created.Id,
+            transition with { IdempotencyKey = "employee-review-2" },
+            "employee-42",
+            CancellationToken.None);
+
+        Assert.Equal(QualificationUpdateStatus.Completed, first.Status);
+        Assert.Equal(first.Receipt!.RequestId, replay.Receipt!.RequestId);
+        Assert.Equal(first.Receipt.State, replay.Receipt.State);
+        Assert.Equal(first.Receipt.Version, replay.Receipt.Version);
+        Assert.Equal(first.Receipt.Events, replay.Receipt.Events);
+        Assert.Equal(QualificationUpdateStatus.IdempotencyConflict, conflictingReplay.Status);
+        Assert.Equal(QualificationUpdateStatus.VersionConflict, stale.Status);
+        var receipt = Assert.IsType<QualificationReceipt>(await repository.GetRequestQualificationAsync(created.Id, CancellationToken.None));
+        Assert.Equal("qualified", receipt.State);
+        Assert.Equal(1, receipt.Version);
+        Assert.Equal($"request-{created.Id}", receipt.TransactionId);
+        var audit = Assert.Single(receipt.Events);
+        Assert.Equal("unreviewed", audit.PreviousState);
+        Assert.Equal("qualified", audit.State);
+        Assert.Equal("employee-42", audit.ChangedBy);
+        Assert.Equal(1, await requestContext.RequestQualificationAudit.CountAsync());
+    }
+
+    [Fact]
     public async Task InitialMigrations_PreserveFinancialRequestFileAndDocumentBehavior()
     {
         await using var quotationContext = QuotationContext(); await using var requestContext = RequestContext();

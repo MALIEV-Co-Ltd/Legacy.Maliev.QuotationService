@@ -53,13 +53,21 @@ public sealed class QuotationRequestDbContext(DbContextOptions<QuotationRequestD
     public DbSet<QuotationRequest> Requests => Set<QuotationRequest>();
     public DbSet<QuotationRequestFile> Files => Set<QuotationRequestFile>();
     public DbSet<RequestCreateIdempotency> RequestCreateIdempotency => Set<RequestCreateIdempotency>();
+    public DbSet<RequestQualificationAudit> RequestQualificationAudit => Set<RequestQualificationAudit>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var request = modelBuilder.Entity<QuotationRequest>();
         request.Property(x => x.JourneyId).HasColumnType("uuid");
+        request.Property(x => x.TransactionId).HasMaxLength(128);
+        request.Property(x => x.QualificationState).HasMaxLength(32).HasDefaultValue("unreviewed");
+        request.Property(x => x.QualificationStateChangedUtc).HasColumnType("timestamp without time zone");
+        request.Property(x => x.QualificationVersion).IsConcurrencyToken();
+        request.HasIndex(x => x.TransactionId).IsUnique().HasDatabaseName("UX_Request_TransactionId").HasFilter("\"TransactionId\" IS NOT NULL");
         request.HasIndex(x => x.JourneyId).HasDatabaseName("IX_Request_JourneyId").HasFilter("\"JourneyId\" IS NOT NULL");
-        request.ToTable("Request"); request.HasKey(x => x.Id); request.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd(); request.Property(x => x.Country).HasMaxLength(256); request.Property(x => x.TaxIdentification).HasMaxLength(256); request.Property(x => x.TelephoneNumber).HasMaxLength(256); Dates(request); request.Property(x => x.ModifiedDate).IsConcurrencyToken();
+        request.ToTable("Request", table => table.HasCheckConstraint(
+            "CK_Request_QualificationState",
+            "\"QualificationState\" IN ('unreviewed', 'qualified', 'not_qualified', 'duplicate', 'stale', 'incomplete')")); request.HasKey(x => x.Id); request.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd(); request.Property(x => x.Country).HasMaxLength(256); request.Property(x => x.TaxIdentification).HasMaxLength(256); request.Property(x => x.TelephoneNumber).HasMaxLength(256); Dates(request); request.Property(x => x.ModifiedDate).IsConcurrencyToken();
         var file = modelBuilder.Entity<QuotationRequestFile>();
         file.ToTable("RequestFile"); file.HasKey(x => x.Id); file.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd(); file.Property(x => x.RequestId).HasColumnName("RequestID"); file.Property(x => x.Bucket).HasMaxLength(50); Dates(file);
         var idempotency = modelBuilder.Entity<RequestCreateIdempotency>();
@@ -68,6 +76,38 @@ public sealed class QuotationRequestDbContext(DbContextOptions<QuotationRequestD
         idempotency.Property(x => x.KeyHash).HasMaxLength(64).IsFixedLength();
         idempotency.Property(x => x.Fingerprint).HasMaxLength(64).IsFixedLength();
         idempotency.Property(x => x.RequestId).HasColumnName("RequestID");
+        var qualification = modelBuilder.Entity<RequestQualificationAudit>();
+        qualification.ToTable("RequestQualificationAudit", table =>
+        {
+            table.HasCheckConstraint(
+                "CK_RequestQualificationAudit_NewState",
+                "\"NewState\" IN ('unreviewed', 'qualified', 'not_qualified', 'duplicate', 'stale', 'incomplete')");
+            table.HasCheckConstraint("CK_RequestQualificationAudit_DuplicateCount", "\"DuplicateCount\" >= 0");
+            table.HasCheckConstraint(
+                "CK_RequestQualificationAudit_Reason",
+                "\"NewState\" = 'qualified' OR NULLIF(BTRIM(\"Reason\"), '') IS NOT NULL");
+        });
+        qualification.HasKey(x => x.Id);
+        qualification.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd();
+        qualification.Property(x => x.RequestId).HasColumnName("RequestID");
+        qualification.Property(x => x.TransactionId).HasMaxLength(128).IsRequired();
+        qualification.Property(x => x.IdempotencyKey).HasMaxLength(128).IsRequired();
+        qualification.Property(x => x.PreviousState).HasMaxLength(32).IsRequired();
+        qualification.Property(x => x.NewState).HasMaxLength(32).IsRequired();
+        qualification.Property(x => x.Completeness).HasMaxLength(32);
+        qualification.Property(x => x.UnmatchedClassification).HasMaxLength(64);
+        qualification.Property(x => x.ChangedBy).HasMaxLength(256).IsRequired();
+        qualification.Property(x => x.ChangedUtc).HasColumnType("timestamp without time zone");
+        qualification.Property(x => x.Reason).HasMaxLength(512);
+        qualification.HasIndex(x => new { x.RequestId, x.IdempotencyKey })
+            .IsUnique()
+            .HasDatabaseName("UX_RequestQualificationAudit_RequestID_IdempotencyKey");
+        qualification.HasIndex(x => x.JourneyId).HasDatabaseName("IX_RequestQualificationAudit_JourneyId");
+        qualification.HasOne<QuotationRequest>()
+            .WithMany()
+            .HasForeignKey(x => x.RequestId)
+            .OnDelete(DeleteBehavior.NoAction)
+            .HasConstraintName("FK_RequestQualificationAudit_Request");
     }
 
     private static void Dates<TEntity>(EntityTypeBuilder<TEntity> entity) where TEntity : class

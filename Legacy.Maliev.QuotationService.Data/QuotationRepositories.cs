@@ -289,7 +289,8 @@ public sealed class QuotationRepository(
 
     public async Task<QuotationRequestResponse> CreateRequestAsync(UpsertQuotationRequestRequest request, CancellationToken cancellationToken)
     {
-        var now = Now(); var entity = Map(new QuotationRequest { JourneyId = request.JourneyId }, request); entity.CreatedDate = now; entity.ModifiedDate = now; requests.Add(entity); await requests.SaveChangesAsync(cancellationToken); return ToResponse(entity);
+        await using var transaction = await requests.Database.BeginTransactionAsync(cancellationToken);
+        var now = Now(); var entity = Map(new QuotationRequest { JourneyId = request.JourneyId }, request); entity.CreatedDate = now; entity.ModifiedDate = now; requests.Add(entity); await requests.SaveChangesAsync(cancellationToken); entity.TransactionId = TransactionId(entity.Id); await requests.SaveChangesAsync(cancellationToken); await transaction.CommitAsync(cancellationToken); return ToResponse(entity);
     }
     public async Task<IdempotentRequestCreateResult> CreateRequestIdempotentlyAsync(
         UpsertQuotationRequestRequest request,
@@ -331,6 +332,7 @@ public sealed class QuotationRepository(
         entity.ModifiedDate = now;
         requests.Add(entity);
         await requests.SaveChangesAsync(cancellationToken);
+        entity.TransactionId = TransactionId(entity.Id);
         requests.RequestCreateIdempotency.Add(new RequestCreateIdempotency
         {
             KeyHash = keyHash,
@@ -352,6 +354,86 @@ public sealed class QuotationRepository(
     public async Task<UpdateResult> UpdateRequestAsync(int id, UpsertQuotationRequestRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken)
     {
         var entity = await requests.Requests.FindAsync([id], cancellationToken); if (entity is null) return UpdateResult.NotFound; if (expectedModifiedDate is not null) requests.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified); Map(entity, request).ModifiedDate = Now(); try { await requests.SaveChangesAsync(cancellationToken); await cache.RemoveAsync(RequestKey(id), cancellationToken); return UpdateResult.Updated; } catch (DbUpdateConcurrencyException) { return UpdateResult.Conflict; }
+    }
+
+    public async Task<QualificationReceipt?> GetRequestQualificationAsync(int id, CancellationToken cancellationToken) =>
+        await BuildQualificationReceiptAsync(id, cancellationToken);
+
+    public async Task<QualificationUpdateResult> UpdateRequestQualificationAsync(
+        int id,
+        QualificationStateUpdateRequest request,
+        string actor,
+        CancellationToken cancellationToken)
+    {
+        var lockIdentity = $"quotation-request-qualification\n{id}\n{request.IdempotencyKey}";
+        await using var transaction = await requests.Database.BeginTransactionAsync(cancellationToken);
+        await requests.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock(hashtextextended({lockIdentity}, 0))",
+            cancellationToken);
+
+        var replay = await requests.RequestQualificationAudit.AsNoTracking()
+            .SingleOrDefaultAsync(
+                value => value.RequestId == id && value.IdempotencyKey == request.IdempotencyKey,
+                cancellationToken);
+        if (replay is not null)
+        {
+            if (!QualificationReplayMatches(replay, request))
+            {
+                return new(QualificationUpdateStatus.IdempotencyConflict, null);
+            }
+
+            var replayReceipt = await BuildQualificationReceiptAsync(id, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return new(QualificationUpdateStatus.Completed, replayReceipt);
+        }
+
+        var entity = await requests.Requests.SingleOrDefaultAsync(value => value.Id == id, cancellationToken);
+        if (entity is null)
+        {
+            return new(QualificationUpdateStatus.NotFound, null);
+        }
+
+        if (entity.QualificationVersion != request.ExpectedVersion)
+        {
+            return new(QualificationUpdateStatus.VersionConflict, null);
+        }
+
+        var changedUtc = Now();
+        var nextVersion = entity.QualificationVersion + 1;
+        entity.TransactionId ??= TransactionId(entity.Id);
+        requests.RequestQualificationAudit.Add(new RequestQualificationAudit
+        {
+            RequestId = entity.Id,
+            JourneyId = entity.JourneyId,
+            TransactionId = entity.TransactionId,
+            IdempotencyKey = request.IdempotencyKey,
+            PreviousState = entity.QualificationState,
+            NewState = request.State,
+            Completeness = request.Completeness,
+            DuplicateCount = request.DuplicateCount,
+            UnmatchedClassification = request.UnmatchedClassification,
+            ChangedBy = actor,
+            ChangedUtc = changedUtc,
+            Reason = request.Reason,
+            Version = nextVersion,
+        });
+        entity.QualificationState = request.State;
+        entity.QualificationStateChangedUtc = changedUtc;
+        entity.QualificationVersion = nextVersion;
+        entity.ModifiedDate = changedUtc;
+
+        try
+        {
+            await requests.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return new(QualificationUpdateStatus.VersionConflict, null);
+        }
+
+        await cache.RemoveAsync(RequestKey(id), cancellationToken);
+        return new(QualificationUpdateStatus.Completed, await BuildQualificationReceiptAsync(id, cancellationToken));
     }
 
     public async Task<QuotationRequestFileResponse?> CreateRequestFileAsync(
@@ -431,6 +513,46 @@ public sealed class QuotationRepository(
 
     private static string QuotationKey(int id) => $"quotation:{id}";
     private static string RequestKey(int id) => $"request:{id}";
+    private static string TransactionId(int id) => $"request-{id}";
+    private static bool QualificationReplayMatches(RequestQualificationAudit replay, QualificationStateUpdateRequest request) =>
+        replay.NewState == request.State
+        && replay.Reason == request.Reason
+        && replay.Completeness == request.Completeness
+        && replay.DuplicateCount == request.DuplicateCount
+        && replay.UnmatchedClassification == request.UnmatchedClassification;
+    private async Task<QualificationReceipt?> BuildQualificationReceiptAsync(int id, CancellationToken cancellationToken)
+    {
+        var request = await requests.Requests.AsNoTracking().SingleOrDefaultAsync(value => value.Id == id, cancellationToken);
+        if (request is null)
+        {
+            return null;
+        }
+
+        var events = await requests.RequestQualificationAudit.AsNoTracking()
+            .Where(value => value.RequestId == id)
+            .OrderBy(value => value.Id)
+            .Select(value => new QualificationReceiptEvent(
+                value.Id,
+                value.IdempotencyKey,
+                value.PreviousState,
+                value.NewState,
+                value.Version,
+                value.ChangedUtc,
+                value.ChangedBy,
+                value.Completeness,
+                value.DuplicateCount,
+                value.UnmatchedClassification,
+                value.Reason))
+            .ToListAsync(cancellationToken);
+        return new(
+            request.Id,
+            request.JourneyId,
+            request.TransactionId ?? TransactionId(request.Id),
+            request.QualificationState,
+            request.QualificationStateChangedUtc,
+            request.QualificationVersion,
+            events);
+    }
     private static bool IsSha256(string value) =>
         value.Length == 64 && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
     private static async Task<PaginatedResponse<T>?> PageAsync<T>(IQueryable<T> query, int pageIndex, int pageSize, CancellationToken cancellationToken) { pageIndex = Math.Max(pageIndex, 1); pageSize = Math.Clamp(pageSize, 1, 250); var total = await query.CountAsync(cancellationToken); if (total == 0) return null; var items = await query.Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken); return new(items, pageIndex, (int)Math.Ceiling(total / (double)pageSize), total); }

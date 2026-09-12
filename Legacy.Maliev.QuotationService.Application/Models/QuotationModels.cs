@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Legacy.Maliev.QuotationService.Application.Models;
 
 public sealed record QuotationResponse(int Id, int? CustomerId, int? EmployeeId, int? InvoiceId, int Period, DateTime ExpirationDate, decimal Subtotal, decimal Vat, decimal Total, decimal? WithholdingTax, decimal? QuotedAmount, int CurrencyId, string? Comment, string? Fob, string? ShippedVia, string? Terms, bool? Accepted, DateTime? CreatedDate, DateTime? ModifiedDate);
@@ -39,6 +41,36 @@ public sealed record QuotationFileResponse(int Id, int QuotationId, string Bucke
 public sealed record UpsertQuotationFileRequest(int? QuotationId, string Bucket, string ObjectName);
 public sealed record QuotationRequestResponse(int Id, string? FirstName, string? LastName, string? Email, string? TelephoneNumber, string? Country, string? CompanyName, string? TaxIdentification, string? Message, string? InternalComment, bool? Done, DateTime? CreatedDate, DateTime? ModifiedDate, Guid? JourneyId = null);
 public sealed record UpsertQuotationRequestRequest(string? FirstName, string? LastName, string? Email, string? TelephoneNumber, string? Country, string? CompanyName, string? TaxIdentification, string? Message, string? InternalComment, bool? Done, Guid? JourneyId = null);
+public sealed record QualificationStateUpdateRequest(
+    [property: Required, MaxLength(32)] string State,
+    [property: MaxLength(512)] string? Reason,
+    [property: MaxLength(32)] string? Completeness,
+    [property: Range(0, int.MaxValue)] int DuplicateCount,
+    [property: MaxLength(64)] string? UnmatchedClassification,
+    [property: Required, MaxLength(128)] string IdempotencyKey,
+    [property: Range(0, int.MaxValue)] int ExpectedVersion);
+public sealed record QualificationReceipt(
+    int RequestId,
+    Guid? JourneyId,
+    string TransactionId,
+    string State,
+    DateTime? StateChangedUtc,
+    int Version,
+    IReadOnlyList<QualificationReceiptEvent> Events);
+public sealed record QualificationReceiptEvent(
+    long Id,
+    string IdempotencyKey,
+    string PreviousState,
+    string State,
+    int Version,
+    DateTime ChangedUtc,
+    string ChangedBy,
+    string? Completeness,
+    int DuplicateCount,
+    string? UnmatchedClassification,
+    string? Reason);
+public sealed record QualificationUpdateResult(QualificationUpdateStatus Status, QualificationReceipt? Receipt);
+public enum QualificationUpdateStatus { Completed, NotFound, VersionConflict, IdempotencyConflict }
 public sealed record QuotationRequestFileResponse(int Id, int? RequestId, string? Bucket, string? ObjectName, DateTime? CreatedDate, DateTime? ModifiedDate);
 public sealed record UpsertQuotationRequestFileRequest(int? RequestId, string? Bucket, string? ObjectName);
 

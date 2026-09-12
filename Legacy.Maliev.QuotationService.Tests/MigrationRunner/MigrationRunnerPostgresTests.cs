@@ -27,7 +27,7 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
 
     [Theory]
     [InlineData(MigrationWorkload.Quotation, 5)]
-    [InlineData(MigrationWorkload.QuotationRequest, 3)]
+    [InlineData(MigrationWorkload.QuotationRequest, 4)]
     public async Task EmptyDatabase_MigratesOnlySelectedSchemaWithoutSeed(MigrationWorkload workload, int expectedTables)
     {
         await ResetBothAsync();

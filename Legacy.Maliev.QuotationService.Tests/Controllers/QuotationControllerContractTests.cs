@@ -41,12 +41,28 @@ public sealed class QuotationControllerContractTests
     { Assert.Equal(route, controller.GetCustomAttribute<RouteAttribute>()?.Template); Assert.NotNull(controller.GetCustomAttribute<AuthorizeAttribute>()); }
 
     [Fact]
-    public void Controllers_PreserveLegacyRoutesAndAddOneOutcomeReadbackRoute()
+    public void Controllers_PreserveLegacyRoutesAndAddOutcomeAndQualificationRoutes()
     {
         var methods = Controllers.SelectMany(row => ((Type)row[0]).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)).ToArray();
-        Assert.Equal(35, methods.Length);
-        Assert.Equal(36, methods.SelectMany(method => method.GetCustomAttributes<HttpMethodAttribute>()).Count());
+        Assert.Equal(37, methods.Length);
+        Assert.Equal(38, methods.SelectMany(method => method.GetCustomAttributes<HttpMethodAttribute>()).Count());
         Assert.All(methods, method => Assert.Single(method.GetCustomAttributes<RequirePermissionAttribute>()));
+    }
+
+    [Fact]
+    public void QualificationBoundaries_UseLiveLeastPrivilegeRequestPermissions()
+    {
+        var update = typeof(QuotationRequestsController).GetMethod(nameof(QuotationRequestsController.UpdateQualificationStateAsync))!;
+        Assert.Equal("{requestId:int}/qualification", Assert.Single(update.GetCustomAttributes<HttpPutAttribute>()).Template);
+        var updatePermission = Assert.Single(update.GetCustomAttributes<RequirePermissionAttribute>());
+        Assert.Equal(QuotationPermissions.RequestsUpdate, updatePermission.Permission);
+        Assert.True(updatePermission.RequireLiveCheck);
+
+        var receipt = typeof(QuotationRequestsController).GetMethod(nameof(QuotationRequestsController.GetQualificationReceiptAsync))!;
+        Assert.Equal("{requestId:int}/qualification-receipt", Assert.Single(receipt.GetCustomAttributes<HttpGetAttribute>()).Template);
+        var readPermission = Assert.Single(receipt.GetCustomAttributes<RequirePermissionAttribute>());
+        Assert.Equal(QuotationPermissions.RequestsRead, readPermission.Permission);
+        Assert.True(readPermission.RequireLiveCheck);
     }
 
     [Fact]
