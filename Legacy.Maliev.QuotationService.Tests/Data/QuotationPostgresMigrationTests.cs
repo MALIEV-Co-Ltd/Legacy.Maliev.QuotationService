@@ -41,11 +41,15 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         var payload = Request("journey@example.test", "CNC engineering review") with { JourneyId = journey };
         var created = await repository.CreateRequestAsync(payload, CancellationToken.None);
         Assert.Equal(journey, created.JourneyId);
+        Assert.Equal($"request-{created.Id}", created.TransactionId);
         Assert.Null(created.Done);
         requestContext.ChangeTracker.Clear();
-        Assert.Equal(journey, (await repository.GetRequestAsync(created.Id, CancellationToken.None))!.JourneyId);
+        var read = (await repository.GetRequestAsync(created.Id, CancellationToken.None))!;
+        Assert.Equal(journey, read.JourneyId);
+        Assert.Equal($"request-{created.Id}", read.TransactionId);
         var page = await repository.GetRequestsAsync(null, created.Id.ToString(), 1, 10, CancellationToken.None);
         Assert.Contains(journey.ToString(), System.Text.Json.JsonSerializer.Serialize(page));
+        Assert.Contains($"request-{created.Id}", System.Text.Json.JsonSerializer.Serialize(page));
         Assert.Equal(UpdateResult.Updated, await repository.UpdateRequestAsync(created.Id,
             payload with { JourneyId = Guid.NewGuid(), Message = "Reviewed" }, null, CancellationToken.None));
         requestContext.ChangeTracker.Clear();

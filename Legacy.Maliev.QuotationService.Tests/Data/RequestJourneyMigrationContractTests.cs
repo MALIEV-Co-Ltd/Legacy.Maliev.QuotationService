@@ -39,10 +39,11 @@ public sealed class RequestJourneyMigrationContractTests
     public void JourneyWire_IsOptionalPascalCaseAndPreservesNullableDone()
     {
         var journey = Guid.NewGuid();
-        var value = new QuotationRequestResponse(1, null, null, null, null, null, null, null, null, null, null, null, null, journey);
+        var value = new QuotationRequestResponse(1, null, null, null, null, null, null, null, null, null, null, null, null, journey, "request-1");
         var options = new System.Text.Json.JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
         using var json = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(value, options));
         Assert.Equal(journey, json.RootElement.GetProperty("JourneyId").GetGuid());
+        Assert.Equal("request-1", json.RootElement.GetProperty("TransactionId").GetString());
         Assert.False(json.RootElement.TryGetProperty("Done", out _));
         var omitted = System.Text.Json.JsonSerializer.Deserialize<UpsertQuotationRequestRequest>("{}")!;
         Assert.Null(omitted.JourneyId);
