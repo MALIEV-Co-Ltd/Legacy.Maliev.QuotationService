@@ -533,7 +533,6 @@ public sealed class QuotationRepository(
             .OrderBy(value => value.Id)
             .Select(value => new QualificationReceiptEvent(
                 value.Id,
-                value.IdempotencyKey,
                 value.PreviousState,
                 value.NewState,
                 value.Version,

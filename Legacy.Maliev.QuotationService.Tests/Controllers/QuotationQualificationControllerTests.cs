@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Legacy.Maliev.QuotationService.Api.Controllers;
 using Legacy.Maliev.QuotationService.Application.Interfaces;
 using Legacy.Maliev.QuotationService.Application.Models;
@@ -63,6 +64,49 @@ public sealed class QuotationQualificationControllerTests
 
         Assert.IsType<ForbidResult>(result.Result);
         service.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Update_DoesNotAcceptDisplayNameAsStableActorIdentity()
+    {
+        var service = new Mock<IQuotationService>(MockBehavior.Strict);
+        var controller = new QuotationRequestsController(service.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.Name, "employee@example.test")],
+                        "test")),
+                },
+            },
+        };
+
+        var result = await controller.UpdateQualificationStateAsync(
+            7,
+            new QualificationStateUpdateRequest("qualified", null, null, 0, null, "retry-1", 0),
+            CancellationToken.None);
+
+        Assert.IsType<ForbidResult>(result.Result);
+        service.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void QualificationReceipt_DoesNotExposeInternalIdempotencyKey()
+    {
+        var receipt = new QualificationReceipt(
+            7,
+            Guid.NewGuid(),
+            "request-7",
+            "qualified",
+            DateTime.UtcNow,
+            1,
+            [new QualificationReceiptEvent(1, "unreviewed", "qualified", 1, DateTime.UtcNow, "employee-42", null, 0, null, null)]);
+
+        var json = JsonSerializer.Serialize(receipt);
+
+        Assert.DoesNotContain("IdempotencyKey", json, StringComparison.OrdinalIgnoreCase);
     }
 
     private static QuotationRequestsController Controller(IQuotationService service, string? actor)

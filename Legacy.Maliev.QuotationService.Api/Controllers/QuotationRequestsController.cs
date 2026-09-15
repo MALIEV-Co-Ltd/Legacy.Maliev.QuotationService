@@ -109,7 +109,7 @@ public sealed class QuotationRequestsController(IQuotationService service) : Con
             return BadRequest("Duplicate count and expected version cannot be negative.");
         }
 
-        var actor = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.Identity?.Name;
+        var actor = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrWhiteSpace(actor))
         {
             return Forbid();
