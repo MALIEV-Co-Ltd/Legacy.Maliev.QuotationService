@@ -59,7 +59,6 @@ public sealed record QualificationReceipt(
     IReadOnlyList<QualificationReceiptEvent> Events);
 public sealed record QualificationReceiptEvent(
     long Id,
-    string IdempotencyKey,
     string PreviousState,
     string State,
     int Version,
