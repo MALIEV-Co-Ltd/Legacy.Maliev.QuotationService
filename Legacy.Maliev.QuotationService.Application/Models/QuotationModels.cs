@@ -39,7 +39,22 @@ public sealed record QuotationOrderLinkResponse(int Id, int QuotationId, int Ord
 public sealed record UpsertQuotationOrderLinkRequest(int QuotationId, int OrderId);
 public sealed record QuotationFileResponse(int Id, int QuotationId, string Bucket, string ObjectName, DateTime? CreatedDate, DateTime? ModifiedDate);
 public sealed record UpsertQuotationFileRequest(int? QuotationId, string Bucket, string ObjectName);
-public sealed record QuotationRequestResponse(int Id, string? FirstName, string? LastName, string? Email, string? TelephoneNumber, string? Country, string? CompanyName, string? TaxIdentification, string? Message, string? InternalComment, bool? Done, DateTime? CreatedDate, DateTime? ModifiedDate, Guid? JourneyId = null);
+public sealed record QuotationRequestResponse(
+    int Id,
+    string? FirstName,
+    string? LastName,
+    string? Email,
+    string? TelephoneNumber,
+    string? Country,
+    string? CompanyName,
+    string? TaxIdentification,
+    string? Message,
+    string? InternalComment,
+    bool? Done,
+    DateTime? CreatedDate,
+    DateTime? ModifiedDate,
+    Guid? JourneyId = null,
+    string? TransactionId = null);
 public sealed record UpsertQuotationRequestRequest(string? FirstName, string? LastName, string? Email, string? TelephoneNumber, string? Country, string? CompanyName, string? TaxIdentification, string? Message, string? InternalComment, bool? Done, Guid? JourneyId = null);
 public sealed record QualificationStateUpdateRequest(
     [property: Required, MaxLength(32)] string State,
