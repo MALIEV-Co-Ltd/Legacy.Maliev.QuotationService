@@ -124,6 +124,17 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
             "SELECT \"ID\" AS \"Value\" FROM \"Request\" WHERE \"Email\" = 'qualification-migration@example.test'")
             .SingleAsync();
 
+        await migrator.MigrateAsync("20260912163831_AddRequestQualificationContract");
+        await requestContext.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Request"
+            SET "QualificationStateChangedUtc" = TIMESTAMP '2026-09-24 08:44:50.123456'
+            WHERE "ID" = {existingId};
+            INSERT INTO "RequestQualificationAudit"
+                ("RequestID", "TransactionId", "IdempotencyKey", "PreviousState", "NewState",
+                 "DuplicateCount", "ChangedBy", "ChangedUtc", "Version")
+            VALUES ({existingId}, 'migration-fixture-transaction', 'migration-fixture', 'unreviewed',
+                    'qualified', 0, 'employee-fixture', TIMESTAMP '2026-09-24 08:44:50.123456', 1);
+            """);
         await migrator.MigrateAsync();
         requestContext.ChangeTracker.Clear();
         var request = await requestContext.Requests.SingleAsync(value => value.Id == existingId);
@@ -131,9 +142,13 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         Assert.Equal($"request-{existingId}", request.TransactionId);
         Assert.Equal("unreviewed", request.QualificationState);
         Assert.Equal(0, request.QualificationVersion);
-        Assert.Null(request.QualificationStateChangedUtc);
+        Assert.Equal(new DateTime(2026, 9, 24, 8, 44, 50, DateTimeKind.Unspecified).AddTicks(1234560),
+            request.QualificationStateChangedUtc);
         Assert.True(await requestContext.Database.SqlQueryRaw<bool>(
             "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'UX_Request_TransactionId') AS \"Value\"")
+            .SingleAsync());
+        Assert.True(await requestContext.Database.SqlQueryRaw<bool>(
+            "SELECT indnullsnotdistinct AS \"Value\" FROM pg_index WHERE indexrelid='\"UX_Request_TransactionId\"'::regclass")
             .SingleAsync());
         Assert.True(await requestContext.Database.SqlQueryRaw<bool>(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'RequestQualificationAudit') AS \"Value\"")
@@ -151,6 +166,39 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         Assert.Contains("CK_RequestQualificationAudit_Reason", constraints);
         Assert.Contains("CK_Request_QualificationState", constraints);
         Assert.Contains("FK_RequestQualificationAudit_Request", constraints);
+        string stateCheck = await requestContext.Database.SqlQueryRaw<string>(
+            "SELECT pg_get_expr(conbin, conrelid) AS \"Value\" FROM pg_constraint WHERE conname='CK_Request_QualificationState'")
+            .SingleAsync();
+        Assert.Contains(" OR ", stateCheck, StringComparison.Ordinal);
+        Assert.DoesNotContain("ANY", stateCheck, StringComparison.Ordinal);
+        string reasonCheck = await requestContext.Database.SqlQueryRaw<string>(
+            "SELECT pg_get_expr(conbin, conrelid) AS \"Value\" FROM pg_constraint WHERE conname='CK_RequestQualificationAudit_Reason'")
+            .SingleAsync();
+        Assert.Contains("ltrim(rtrim", reasonCheck, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("text", await requestContext.Database.SqlQueryRaw<string>(
+            "SELECT data_type AS \"Value\" FROM information_schema.columns WHERE table_schema='public' AND table_name='Request' AND column_name='QualificationStateChangedUtc'")
+            .SingleAsync());
+        Assert.Equal("text", await requestContext.Database.SqlQueryRaw<string>(
+            "SELECT data_type AS \"Value\" FROM information_schema.columns WHERE table_schema='public' AND table_name='RequestQualificationAudit' AND column_name='ChangedUtc'")
+            .SingleAsync());
+        Assert.Equal("2026-09-24T08:44:50.1234560", await requestContext.Database.SqlQuery<string>(
+            $"SELECT \"QualificationStateChangedUtc\" AS \"Value\" FROM \"Request\" WHERE \"ID\" = {existingId}")
+            .SingleAsync());
+        Assert.Equal("2026-09-24T08:44:50.1234560", await requestContext.Database.SqlQueryRaw<string>(
+            "SELECT \"ChangedUtc\" AS \"Value\" FROM \"RequestQualificationAudit\" WHERE \"IdempotencyKey\"='migration-fixture'")
+            .SingleAsync());
+        string auditIndex = await requestContext.Database.SqlQueryRaw<string>(
+            "SELECT indexdef AS \"Value\" FROM pg_indexes WHERE schemaname='public' AND tablename='RequestQualificationAudit' AND indexname='IX_RequestQualificationAudit_JourneyId'")
+            .SingleAsync();
+        Assert.Contains("\"JourneyId\" IS NOT NULL", auditIndex, StringComparison.Ordinal);
+        var exactTimestamp = new DateTime(2026, 9, 24, 8, 44, 50, DateTimeKind.Unspecified).AddTicks(1234567);
+        request.QualificationStateChangedUtc = exactTimestamp;
+        await requestContext.SaveChangesAsync();
+        requestContext.ChangeTracker.Clear();
+        Assert.Equal(exactTimestamp, (await requestContext.Requests.SingleAsync(value => value.Id == existingId)).QualificationStateChangedUtc);
+        Assert.Equal("2026-09-24T08:44:50.1234567", await requestContext.Database.SqlQuery<string>(
+            $"SELECT \"QualificationStateChangedUtc\" AS \"Value\" FROM \"Request\" WHERE \"ID\" = {existingId}")
+            .SingleAsync());
     }
 
     [Fact]

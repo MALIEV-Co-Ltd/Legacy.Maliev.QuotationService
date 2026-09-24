@@ -1,6 +1,8 @@
+using System.Globalization;
 using Legacy.Maliev.QuotationService.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Legacy.Maliev.QuotationService.Data;
 
@@ -61,7 +63,9 @@ public sealed class QuotationRequestDbContext(DbContextOptions<QuotationRequestD
         request.Property(x => x.JourneyId).HasColumnType("uuid");
         request.Property(x => x.TransactionId).HasMaxLength(128);
         request.Property(x => x.QualificationState).HasMaxLength(32).HasDefaultValue("unreviewed");
-        request.Property(x => x.QualificationStateChangedUtc).HasColumnType("timestamp without time zone");
+        request.Property(x => x.QualificationStateChangedUtc)
+            .HasConversion(ExactDateTime2Text.NullableConverter)
+            .HasColumnType("text");
         request.Property(x => x.QualificationVersion).IsConcurrencyToken();
         request.HasIndex(x => x.TransactionId).IsUnique().HasDatabaseName("UX_Request_TransactionId").HasFilter("\"TransactionId\" IS NOT NULL");
         request.HasIndex(x => x.JourneyId).HasDatabaseName("IX_Request_JourneyId").HasFilter("\"JourneyId\" IS NOT NULL");
@@ -97,12 +101,16 @@ public sealed class QuotationRequestDbContext(DbContextOptions<QuotationRequestD
         qualification.Property(x => x.Completeness).HasMaxLength(32);
         qualification.Property(x => x.UnmatchedClassification).HasMaxLength(64);
         qualification.Property(x => x.ChangedBy).HasMaxLength(256).IsRequired();
-        qualification.Property(x => x.ChangedUtc).HasColumnType("timestamp without time zone");
+        qualification.Property(x => x.ChangedUtc)
+            .HasConversion(ExactDateTime2Text.Converter)
+            .HasColumnType("text");
         qualification.Property(x => x.Reason).HasMaxLength(512);
         qualification.HasIndex(x => new { x.RequestId, x.IdempotencyKey })
             .IsUnique()
             .HasDatabaseName("UX_RequestQualificationAudit_RequestID_IdempotencyKey");
-        qualification.HasIndex(x => x.JourneyId).HasDatabaseName("IX_RequestQualificationAudit_JourneyId");
+        qualification.HasIndex(x => x.JourneyId)
+            .HasDatabaseName("IX_RequestQualificationAudit_JourneyId")
+            .HasFilter("\"JourneyId\" IS NOT NULL");
         qualification.HasOne<QuotationRequest>()
             .WithMany()
             .HasForeignKey(x => x.RequestId)
@@ -115,4 +123,21 @@ public sealed class QuotationRequestDbContext(DbContextOptions<QuotationRequestD
         entity.Property<DateTime?>("CreatedDate").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP AT TIME ZONE 'UTC'");
         entity.Property<DateTime?>("ModifiedDate").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP AT TIME ZONE 'UTC'");
     }
+}
+
+internal static class ExactDateTime2Text
+{
+    private const string Format = "yyyy-MM-dd'T'HH:mm:ss.fffffff";
+
+    internal static readonly ValueConverter<DateTime, string> Converter = new(
+        value => DateTime.SpecifyKind(value, DateTimeKind.Unspecified).ToString(Format, CultureInfo.InvariantCulture),
+        value => DateTime.ParseExact(value, Format, CultureInfo.InvariantCulture, DateTimeStyles.None));
+
+    internal static readonly ValueConverter<DateTime?, string?> NullableConverter = new(
+        value => value.HasValue
+            ? DateTime.SpecifyKind(value.Value, DateTimeKind.Unspecified).ToString(Format, CultureInfo.InvariantCulture)
+            : null,
+        value => value == null
+            ? null
+            : DateTime.ParseExact(value, Format, CultureInfo.InvariantCulture, DateTimeStyles.None));
 }
