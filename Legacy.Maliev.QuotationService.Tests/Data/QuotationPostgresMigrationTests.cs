@@ -51,10 +51,22 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
             CreatedDate = created,
             QualificationState = "unreviewed",
         };
+        var transactionOnly = new QuotationRequest
+        {
+            CreatedDate = created,
+            QualificationState = "qualified",
+        };
+        var journeyOnly = new QuotationRequest
+        {
+            CreatedDate = created,
+            JourneyId = Guid.NewGuid(),
+            QualificationState = "qualified",
+        };
         var outside = new QuotationRequest { CreatedDate = created.AddDays(2) };
-        requestContext.Requests.AddRange(first, second, outside);
+        requestContext.Requests.AddRange(first, second, transactionOnly, journeyOnly, outside);
         await requestContext.SaveChangesAsync();
         first.TransactionId = $"request-{first.Id}";
+        transactionOnly.TransactionId = $"request-{transactionOnly.Id}";
         await requestContext.SaveChangesAsync();
         requestContext.ChangeTracker.Clear();
 
@@ -65,14 +77,49 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
 
         Assert.Equal(from, receipt.FromUtc);
         Assert.Equal(to, receipt.ToUtc);
-        Assert.Equal(new[] { first.Id, second.Id }, receipt.Requests.Select(row => row.RequestId));
+        Assert.Equal(new[] { first.Id, second.Id, transactionOnly.Id, journeyOnly.Id },
+            receipt.Requests.Select(row => row.RequestId));
         Assert.All(receipt.Requests, row => Assert.Equal(DateTimeKind.Utc, row.CreatedUtc.Kind));
         Assert.Equal("qualified", receipt.Requests[0].State);
         Assert.Equal($"request-{first.Id}", receipt.Requests[0].TransactionId);
         Assert.Equal(journey, receipt.Requests[0].JourneyId);
-        Assert.Null(receipt.Requests[1].TransactionId);
-        Assert.Null(receipt.Requests[1].JourneyId);
+        Assert.All(receipt.Requests.Skip(1), row =>
+        {
+            Assert.Null(row.TransactionId);
+            Assert.Null(row.JourneyId);
+        });
         Assert.DoesNotContain("private-first", JsonSerializer.Serialize(receipt), StringComparison.Ordinal);
+
+        // Serialize the PostgreSQL projection through the employee endpoint's actual wire options.
+        var service = new Mock<IQuotationService>(MockBehavior.Strict);
+        service.Setup(value => value.GetQualificationOutcomeReadbackAsync(from, to, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(receipt);
+        var controller = new QuotationRequestsController(service.Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Role, "Employee")], "test")),
+                },
+            },
+        };
+        var endpoint = Assert.IsType<JsonResult>(await controller.GetQualificationOutcomeReadbackAsync(
+            from, to, CancellationToken.None));
+        var options = Assert.IsType<JsonSerializerOptions>(endpoint.SerializerSettings);
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(endpoint.Value, options));
+        var rows = json.RootElement.GetProperty("requests");
+        Assert.Equal(4, rows.GetArrayLength());
+        Assert.Equal($"request-{first.Id}", rows[0].GetProperty("transactionId").GetString());
+        Assert.Equal(journey, rows[0].GetProperty("journeyId").GetGuid());
+        foreach (var row in rows.EnumerateArray().Skip(1))
+        {
+            Assert.False(row.TryGetProperty("transactionId", out _));
+            Assert.False(row.TryGetProperty("journeyId", out _));
+            Assert.Equal(new[] { "createdUtc", "requestId", "state" },
+                row.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+        }
+        service.VerifyAll();
     }
 
     [Fact]
