@@ -39,7 +39,7 @@ namespace Legacy.Maliev.QuotationService.Data.Migrations.Quotation
                         .HasColumnType("boolean");
 
                     b.Property<DateTime?>("AcceptedUtc")
-                        .HasColumnType("timestamp without time zone");
+                        .HasColumnType("text");
 
                     b.Property<string>("Comment")
                         .HasColumnType("text");

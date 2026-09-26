@@ -19,10 +19,10 @@ namespace Legacy.Maliev.QuotationService.Data.Migrations.Quotation
                 maxLength: 16,
                 nullable: true);
 
-            migrationBuilder.AddColumn<DateTime>(
+            migrationBuilder.AddColumn<string>(
                 name: "AcceptedUtc",
                 table: "Quotation",
-                type: "timestamp without time zone",
+                type: "text",
                 nullable: true);
 
             migrationBuilder.AddColumn<Guid>(
