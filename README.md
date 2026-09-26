@@ -17,11 +17,13 @@ source and private package credentials without changing quotation contracts.
 - `/quotations/orders[/{id}]` and `/quotations/{quotationId}/orders[/{orderId}]`
 - `/quotations/files[/{quotationFileId}]` and `/quotations/{quotationId}/files`
 - `/QuotationRequests[/{requestId}]`
+- `/QuotationRequests/qualification-outcomes/readback` for bounded, employee-only qualification receipts
 - `/quotationrequests/files[/{requestFileId}]` and `/quotationrequests/{requestId}/files`
 
-The service preserves 33 actions, 34 route templates, PascalCase/null-omission JSON, named
-routes, six-value sort enums, pagination fields, and the legacy 250-row safety ceiling. Every
-action requires JWT authentication and an explicit permission.
+The service preserves the original route templates, named routes, six-value sort enums,
+pagination fields, and the legacy 250-row safety ceiling. Most JSON remains PascalCase with
+null omission; the qualification-outcome readback intentionally retains the source's camelCase,
+null-omission receipt wire. Every action requires JWT authentication and an explicit permission.
 
 ## Financial and document behavior
 

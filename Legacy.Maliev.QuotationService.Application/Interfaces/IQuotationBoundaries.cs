@@ -55,6 +55,10 @@ public interface IQuotationService
     Task<PaginatedResponse<QuotationRequestResponse>?> GetRequestsAsync(RequestSortType? sort, string? search, int pageIndex, int pageSize, CancellationToken cancellationToken);
     Task<UpdateResult> UpdateRequestAsync(int id, UpsertQuotationRequestRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken);
     Task<QualificationReceipt?> GetRequestQualificationAsync(int id, CancellationToken cancellationToken);
+    Task<QualificationOutcomeReadback> GetQualificationOutcomeReadbackAsync(
+        DateTime fromUtc,
+        DateTime toUtc,
+        CancellationToken cancellationToken);
     Task<QualificationUpdateResult> UpdateRequestQualificationAsync(
         int id,
         QualificationStateUpdateRequest request,
