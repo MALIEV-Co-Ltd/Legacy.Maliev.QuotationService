@@ -359,6 +359,40 @@ public sealed class QuotationRepository(
     public async Task<QualificationReceipt?> GetRequestQualificationAsync(int id, CancellationToken cancellationToken) =>
         await BuildQualificationReceiptAsync(id, cancellationToken);
 
+    public async Task<QualificationOutcomeReadback> GetQualificationOutcomeReadbackAsync(
+        DateTime fromUtc,
+        DateTime toUtc,
+        CancellationToken cancellationToken)
+    {
+        var fromInclusive = DateTime.SpecifyKind(fromUtc, DateTimeKind.Unspecified);
+        var toExclusive = DateTime.SpecifyKind(toUtc, DateTimeKind.Unspecified);
+        var rows = await requests.Requests.AsNoTracking()
+            .Where(request => request.CreatedDate.HasValue &&
+                request.CreatedDate.Value >= fromInclusive && request.CreatedDate.Value < toExclusive)
+            .OrderBy(request => request.CreatedDate)
+            .ThenBy(request => request.Id)
+            .Select(request => new
+            {
+                request.Id,
+                CreatedUtc = request.CreatedDate!.Value,
+                request.TransactionId,
+                request.JourneyId,
+                request.QualificationState,
+            })
+            .ToListAsync(cancellationToken);
+
+        return new(fromUtc, toUtc, rows.Select(request =>
+        {
+            bool hasAttribution = !string.IsNullOrWhiteSpace(request.TransactionId) && request.JourneyId.HasValue;
+            return new QualificationOutcomeReadbackRequest(
+                request.Id,
+                DateTime.SpecifyKind(request.CreatedUtc, DateTimeKind.Utc),
+                hasAttribution ? request.TransactionId : null,
+                hasAttribution ? request.JourneyId : null,
+                request.QualificationState ?? "unreviewed");
+        }).ToArray());
+    }
+
     public async Task<QualificationUpdateResult> UpdateRequestQualificationAsync(
         int id,
         QualificationStateUpdateRequest request,

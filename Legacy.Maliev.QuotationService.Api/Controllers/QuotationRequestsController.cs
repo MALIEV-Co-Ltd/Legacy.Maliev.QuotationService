@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Legacy.Maliev.QuotationService.Api.Authorization;
 using Legacy.Maliev.QuotationService.Application.Interfaces;
 using Legacy.Maliev.QuotationService.Application.Models;
@@ -17,6 +19,10 @@ public sealed class QuotationRequestsController(IQuotationService service) : Con
     private static readonly IReadOnlySet<string> QualificationStates = new HashSet<string>(StringComparer.Ordinal)
     {
         "unreviewed", "qualified", "not_qualified", "duplicate", "stale", "incomplete",
+    };
+    private static readonly JsonSerializerOptions QualificationReadbackJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
     [HttpPost, RequirePermission(QuotationPermissions.RequestsCreate, RequireLiveCheck = true)]
@@ -77,6 +83,29 @@ public sealed class QuotationRequestsController(IQuotationService service) : Con
     {
         var receipt = await service.GetRequestQualificationAsync(requestId, ct);
         return receipt is null ? NotFound() : receipt;
+    }
+
+    [HttpGet("qualification-outcomes/readback"), Authorize(Roles = "Employee"),
+        RequirePermission(QuotationPermissions.RequestsRead, RequireLiveCheck = true),
+        ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> GetQualificationOutcomeReadbackAsync(
+        DateTime fromUtc,
+        DateTime toUtc,
+        CancellationToken ct)
+    {
+        if (!User.IsInRole("Employee"))
+        {
+            return Forbid();
+        }
+
+        if (fromUtc.Kind != DateTimeKind.Utc || toUtc.Kind != DateTimeKind.Utc ||
+            fromUtc >= toUtc || toUtc > DateTime.UtcNow || toUtc - fromUtc > TimeSpan.FromDays(31))
+        {
+            return BadRequest();
+        }
+
+        var receipt = await service.GetQualificationOutcomeReadbackAsync(fromUtc, toUtc, ct);
+        return new JsonResult(receipt, QualificationReadbackJsonOptions);
     }
 
     [HttpPut("{requestId:int}/qualification"), RequirePermission(QuotationPermissions.RequestsUpdate, RequireLiveCheck = true)]

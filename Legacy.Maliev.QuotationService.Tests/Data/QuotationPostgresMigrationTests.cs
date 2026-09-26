@@ -31,6 +31,51 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
     public async Task DisposeAsync() { await quotationPostgres.DisposeAsync(); await requestPostgres.DisposeAsync(); }
 
     [Fact]
+    public async Task QualificationOutcomeReadback_ProjectsOrderedPiiFreeCurrentStateFromPostgreSql()
+    {
+        await using var quotationContext = QuotationContext();
+        await using var requestContext = RequestContext();
+        await requestContext.Database.MigrateAsync();
+        var created = new DateTime(2026, 9, 1, 3, 4, 5, DateTimeKind.Unspecified);
+        var journey = Guid.Parse("5cda380d-fd95-4fe4-bd5c-b378f7515160");
+        var first = new QuotationRequest
+        {
+            Email = "private-first@example.test",
+            CreatedDate = created,
+            JourneyId = journey,
+            QualificationState = "qualified",
+        };
+        var second = new QuotationRequest
+        {
+            Email = "private-second@example.test",
+            CreatedDate = created,
+            QualificationState = "unreviewed",
+        };
+        var outside = new QuotationRequest { CreatedDate = created.AddDays(2) };
+        requestContext.Requests.AddRange(first, second, outside);
+        await requestContext.SaveChangesAsync();
+        first.TransactionId = $"request-{first.Id}";
+        await requestContext.SaveChangesAsync();
+        requestContext.ChangeTracker.Clear();
+
+        var repository = Repository(quotationContext, requestContext);
+        var from = DateTime.SpecifyKind(created.Date, DateTimeKind.Utc);
+        var to = from.AddDays(1);
+        var receipt = await repository.GetQualificationOutcomeReadbackAsync(from, to, CancellationToken.None);
+
+        Assert.Equal(from, receipt.FromUtc);
+        Assert.Equal(to, receipt.ToUtc);
+        Assert.Equal(new[] { first.Id, second.Id }, receipt.Requests.Select(row => row.RequestId));
+        Assert.All(receipt.Requests, row => Assert.Equal(DateTimeKind.Utc, row.CreatedUtc.Kind));
+        Assert.Equal("qualified", receipt.Requests[0].State);
+        Assert.Equal($"request-{first.Id}", receipt.Requests[0].TransactionId);
+        Assert.Equal(journey, receipt.Requests[0].JourneyId);
+        Assert.Null(receipt.Requests[1].TransactionId);
+        Assert.Null(receipt.Requests[1].JourneyId);
+        Assert.DoesNotContain("private-first", JsonSerializer.Serialize(receipt), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RequestJourney_PersistsReadsReplaysAndCannotBeOverwrittenByUpdate()
     {
         await using var quotationContext = QuotationContext();

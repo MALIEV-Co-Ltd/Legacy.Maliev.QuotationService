@@ -85,6 +85,16 @@ public sealed record QualificationReceiptEvent(
     string? Reason);
 public sealed record QualificationUpdateResult(QualificationUpdateStatus Status, QualificationReceipt? Receipt);
 public enum QualificationUpdateStatus { Completed, NotFound, VersionConflict, IdempotencyConflict }
+public sealed record QualificationOutcomeReadback(
+    DateTime FromUtc,
+    DateTime ToUtc,
+    IReadOnlyList<QualificationOutcomeReadbackRequest> Requests);
+public sealed record QualificationOutcomeReadbackRequest(
+    int RequestId,
+    DateTime CreatedUtc,
+    string? TransactionId,
+    Guid? JourneyId,
+    string State);
 public sealed record QuotationRequestFileResponse(int Id, int? RequestId, string? Bucket, string? ObjectName, DateTime? CreatedDate, DateTime? ModifiedDate);
 public sealed record UpsertQuotationRequestFileRequest(int? RequestId, string? Bucket, string? ObjectName);
 

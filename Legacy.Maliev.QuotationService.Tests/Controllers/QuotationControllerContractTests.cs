@@ -44,8 +44,8 @@ public sealed class QuotationControllerContractTests
     public void Controllers_PreserveLegacyRoutesAndAddOutcomeAndQualificationRoutes()
     {
         var methods = Controllers.SelectMany(row => ((Type)row[0]).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)).ToArray();
-        Assert.Equal(37, methods.Length);
-        Assert.Equal(38, methods.SelectMany(method => method.GetCustomAttributes<HttpMethodAttribute>()).Count());
+        Assert.Equal(38, methods.Length);
+        Assert.Equal(39, methods.SelectMany(method => method.GetCustomAttributes<HttpMethodAttribute>()).Count());
         Assert.All(methods, method => Assert.Single(method.GetCustomAttributes<RequirePermissionAttribute>()));
     }
 
@@ -63,6 +63,14 @@ public sealed class QuotationControllerContractTests
         var readPermission = Assert.Single(receipt.GetCustomAttributes<RequirePermissionAttribute>());
         Assert.Equal(QuotationPermissions.RequestsRead, readPermission.Permission);
         Assert.True(readPermission.RequireLiveCheck);
+
+        var readback = typeof(QuotationRequestsController).GetMethod(nameof(QuotationRequestsController.GetQualificationOutcomeReadbackAsync))!;
+        Assert.Equal("qualification-outcomes/readback", Assert.Single(readback.GetCustomAttributes<HttpGetAttribute>()).Template);
+        Assert.Equal("Employee", Assert.Single(readback.GetCustomAttributes<AuthorizeAttribute>(),
+            attribute => attribute.GetType() == typeof(AuthorizeAttribute)).Roles);
+        var readbackPermission = Assert.Single(readback.GetCustomAttributes<RequirePermissionAttribute>());
+        Assert.Equal(QuotationPermissions.RequestsRead, readbackPermission.Permission);
+        Assert.True(readbackPermission.RequireLiveCheck);
     }
 
     [Fact]
