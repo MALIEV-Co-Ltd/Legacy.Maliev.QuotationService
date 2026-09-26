@@ -22,7 +22,7 @@ public sealed class QuotationDbContext(DbContextOptions<QuotationDbContext> opti
         quotation.Property(x => x.Fob).HasColumnName("FOB").HasMaxLength(256); quotation.Property(x => x.ShippedVia).HasMaxLength(256); quotation.Property(x => x.Terms).HasMaxLength(256);
         quotation.Property(x => x.ExpirationDate).HasColumnType("timestamp without time zone"); quotation.Property(x => x.Subtotal).HasPrecision(18, 2); quotation.Property(x => x.Vat).HasPrecision(18, 2); quotation.Property(x => x.Total).HasPrecision(18, 2); quotation.Property(x => x.WithholdingTax).HasPrecision(18, 2);
         quotation.Property(x => x.QuotedAmount).HasPrecision(18, 2).HasComputedColumnSql("(\"Total\" - \"WithholdingTax\")::numeric(18,2)", stored: true);
-        quotation.Property(x => x.SourceRequestId).HasColumnName("SourceRequestID"); quotation.Property(x => x.SourceJourneyId).HasColumnName("SourceJourneyID"); quotation.Property(x => x.AcceptedUtc).HasColumnType("timestamp without time zone"); quotation.Property(x => x.AcceptanceOrigin).HasMaxLength(16);
+        quotation.Property(x => x.SourceRequestId).HasColumnName("SourceRequestID"); quotation.Property(x => x.SourceJourneyId).HasColumnName("SourceJourneyID"); quotation.Property(x => x.AcceptedUtc).HasConversion(ExactDateTime2Text.NullableConverter).HasColumnType("text"); quotation.Property(x => x.AcceptanceOrigin).HasMaxLength(16);
         quotation.HasIndex(x => x.SourceRequestId); quotation.HasIndex(x => x.SourceJourneyId);
         Dates(quotation); quotation.Property(x => x.ModifiedDate).IsConcurrencyToken();
 

@@ -407,6 +407,37 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task FreshQuotationSchema_AcceptedUtcIsNullableTextAndRoundTripsSeventhDigit()
+    {
+        await using var quotationContext = QuotationContext();
+        await quotationContext.Database.MigrateAsync();
+
+        var column = await quotationContext.Database.SqlQueryRaw<string>(
+            "SELECT data_type AS \"Value\" FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Quotation' AND column_name = 'AcceptedUtc'")
+            .SingleAsync();
+        var nullable = await quotationContext.Database.SqlQueryRaw<string>(
+            "SELECT is_nullable AS \"Value\" FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Quotation' AND column_name = 'AcceptedUtc'")
+            .SingleAsync();
+        Assert.Equal("text", column);
+        Assert.Equal("YES", nullable);
+
+        var acceptedUtc = new DateTime(2026, 9, 27, 3, 4, 5, DateTimeKind.Unspecified).AddTicks(1234567);
+        var quotation = OutcomeQuotation(acceptedUtc, 764, 107m, 3m);
+        quotation.AcceptedUtc = acceptedUtc;
+        quotationContext.Quotations.Add(quotation);
+        await quotationContext.SaveChangesAsync();
+        quotationContext.ChangeTracker.Clear();
+
+        var storedText = await quotationContext.Database.SqlQueryRaw<string>(
+            "SELECT \"AcceptedUtc\" AS \"Value\" FROM \"Quotation\" WHERE \"ID\" = {0}", quotation.Id)
+            .SingleAsync();
+        var storedQuotation = await quotationContext.Quotations.SingleAsync(value => value.Id == quotation.Id);
+        Assert.Equal("2026-09-27T03:04:05.1234567", storedText);
+        Assert.Equal(acceptedUtc, storedQuotation.AcceptedUtc);
+        Assert.Equal(DateTimeKind.Unspecified, storedQuotation.AcceptedUtc!.Value.Kind);
+    }
+
+    [Fact]
     public async Task CreateAndGenericUpdate_CannotBypassAtomicAcceptedDecision()
     {
         await using var quotationContext = QuotationContext();
@@ -499,6 +530,8 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
 
         Assert.Contains("CREATE TABLE \"QuotationAcceptedOutcome\"", script, StringComparison.Ordinal);
         Assert.Contains("CREATE UNIQUE INDEX \"IX_QuotationAcceptedOutcome_EventKey\"", script, StringComparison.Ordinal);
+        Assert.Contains("\"AcceptedUtc\" text", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("ALTER COLUMN \"AcceptedUtc\"", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DROP COLUMN", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DELETE FROM", script, StringComparison.OrdinalIgnoreCase);
