@@ -213,9 +213,9 @@ internal static partial class WorkflowContractValidator
     private const string SharedValidationAction = "MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@6017816fa67f369d785ed30794f002cfd6299af7";
     private const string CoverageProof = "python3 -m unittest discover -s scripts/tests -p 'test_*.py'";
     private const string CoverageCollection = """
-        GITHUB_ACTIONS=false dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore \
-          --collect 'XPlat Code Coverage' --results-directory TestResults/CoverageGate
+          -p:GITHUB_ACTIONS=false --collect 'XPlat Code Coverage' --results-directory TestResults/CoverageGate
         """;
     private const string CoverageEnforcement = """
         mapfile -t reports < <(find TestResults/CoverageGate -type f -name coverage.cobertura.xml)

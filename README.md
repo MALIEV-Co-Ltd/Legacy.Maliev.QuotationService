@@ -138,6 +138,9 @@ outside the owned denominator; no handwritten QuotationService file is excluded.
 source path is under an `obj` directory are reported as generated lines but excluded from the
 handwritten denominator. The API assembly's handwritten coverage remains visible separately
 from the service-wide gate, so passing 80% overall does not imply its endpoint coverage is 80%.
+The coverage command selects the same local sibling-project graph as the shared validation
+action with the MSBuild property `-p:GITHUB_ACTIONS=false`; it does not override the test
+process's `GITHUB_ACTIONS` environment variable.
 
 To reproduce the gate locally, run the full test assembly with
 `--collect "XPlat Code Coverage" --results-directory TestResults/CoverageGate`, then pass the
