@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
+using Npgsql;
 using Testcontainers.PostgreSql;
 
 namespace Legacy.Maliev.QuotationService.Tests.Data;
@@ -482,6 +483,80 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         Assert.Equal("2026-09-27T03:04:05.1234567", storedText);
         Assert.Equal(acceptedUtc, storedQuotation.AcceptedUtc);
         Assert.Equal(DateTimeKind.Unspecified, storedQuotation.AcceptedUtc!.Value.Kind);
+    }
+
+    [Fact]
+    public async Task HistoricalTimestampAcceptedUtc_MigratesWithoutDiscardingStoredValues()
+    {
+        await using var context = QuotationContext();
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync("20260830071526_PreserveOutcomeTimestampPrecision");
+        await context.Database.ExecuteSqlRawAsync(
+            """
+            ALTER TABLE "Quotation" ALTER COLUMN "AcceptedUtc"
+                TYPE timestamp without time zone USING "AcceptedUtc"::timestamp without time zone;
+            INSERT INTO "Quotation"
+                ("CustomerID", "Period", "ExpirationDate", "Subtotal", "Vat", "Total", "CurrencyID", "AcceptedUtc")
+            VALUES
+                (42, 30, TIMESTAMP '2026-12-31', 100, 7, 107, 764, TIMESTAMP '2026-09-27 03:04:05.123456'),
+                (43, 30, TIMESTAMP '2026-12-31', 100, 7, 107, 764, NULL);
+            """);
+
+        await migrator.MigrateAsync();
+
+        Assert.Equal("text", await context.Database.SqlQueryRaw<string>(
+            "SELECT data_type AS \"Value\" FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Quotation' AND column_name = 'AcceptedUtc'").SingleAsync());
+        var values = await context.Database.SqlQueryRaw<string?>(
+            "SELECT \"AcceptedUtc\" AS \"Value\" FROM \"Quotation\" ORDER BY \"CustomerID\"").ToListAsync();
+        Assert.Equal(["2026-09-27T03:04:05.1234560", null], values);
+        var legacyValues = await context.Database.SqlQueryRaw<string?>(
+            "SELECT \"AcceptedUtcLegacyTimestamp\"::text AS \"Value\" FROM \"Quotation\" ORDER BY \"CustomerID\"").ToListAsync();
+        Assert.Equal(["2026-09-27 03:04:05.123456", null], legacyValues);
+        context.ChangeTracker.Clear();
+        Assert.Equal(new DateTime(2026, 9, 27, 3, 4, 5, DateTimeKind.Unspecified).AddTicks(1234560),
+            (await context.Quotations.SingleAsync(value => value.CustomerId == 42)).AcceptedUtc);
+    }
+
+    [Fact]
+    public async Task HistoricalTimestampAcceptedUtc_UnknownTypeFailsBeforeMigrationIsRecorded()
+    {
+        await using var context = QuotationContext();
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync("20260830071526_PreserveOutcomeTimestampPrecision");
+        await context.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE \"Quotation\" ALTER COLUMN \"AcceptedUtc\" TYPE character varying(64)");
+
+        var failure = await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync());
+
+        Assert.Contains("does not support column type", failure.MessageText, StringComparison.Ordinal);
+        Assert.DoesNotContain("20260927050000_PreserveHistoricalAcceptedUtc", await context.Database.GetAppliedMigrationsAsync());
+        Assert.Equal("character varying", await context.Database.SqlQueryRaw<string>(
+            "SELECT data_type AS \"Value\" FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Quotation' AND column_name = 'AcceptedUtc'").SingleAsync());
+    }
+
+    [Fact]
+    public async Task HistoricalTimestampAcceptedUtc_NonFiniteValueFailsWithoutRenamingSource()
+    {
+        await using var context = QuotationContext();
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync("20260830071526_PreserveOutcomeTimestampPrecision");
+        await context.Database.ExecuteSqlRawAsync(
+            """
+            ALTER TABLE "Quotation" ALTER COLUMN "AcceptedUtc"
+                TYPE timestamp without time zone USING "AcceptedUtc"::timestamp without time zone;
+            INSERT INTO "Quotation"
+                ("CustomerID", "Period", "ExpirationDate", "Subtotal", "Vat", "Total", "CurrencyID", "AcceptedUtc")
+            VALUES (42, 30, TIMESTAMP '2026-12-31', 100, 7, 107, 764, TIMESTAMP 'infinity');
+            """);
+
+        var failure = await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync());
+
+        Assert.Contains("outside the supported date range", failure.MessageText, StringComparison.Ordinal);
+        Assert.DoesNotContain("20260927050000_PreserveHistoricalAcceptedUtc", await context.Database.GetAppliedMigrationsAsync());
+        Assert.Equal("timestamp without time zone", await context.Database.SqlQueryRaw<string>(
+            "SELECT data_type AS \"Value\" FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Quotation' AND column_name = 'AcceptedUtc'").SingleAsync());
+        Assert.Equal(0, await context.Database.SqlQueryRaw<int>(
+            "SELECT COUNT(*)::int AS \"Value\" FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Quotation' AND column_name = 'AcceptedUtcLegacyTimestamp'").SingleAsync());
     }
 
     [Fact]
