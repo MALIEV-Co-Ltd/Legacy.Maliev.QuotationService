@@ -126,3 +126,26 @@ dotnet format Legacy.Maliev.QuotationService.slnx --verify-no-changes --no-resto
 dotnet list Legacy.Maliev.QuotationService.slnx package --vulnerable --include-transitive
 gitleaks git . --redact=100 --exit-code 1 --no-banner --no-color
 ```
+
+CI also runs the complete test assembly with the `XPlat Code Coverage` Cobertura collector,
+then enforces at least 80% line coverage across this repository's handwritten `Api`,
+`Application`, `Data`, `Domain`, and `MigrationRunner` assemblies. The gate is implemented in
+[`scripts/check_owned_coverage.py`](scripts/check_owned_coverage.py) and fails if any owned
+assembly is missing from the report. It prints covered/total lines for every assembly, including
+the separately owned `Legacy.Maliev.ServiceDefaults` and
+`Legacy.Maliev.CompatibilityContracts` dependencies. Only those two sibling assemblies are
+outside the owned denominator; no handwritten QuotationService file is excluded. Lines whose
+source path is under an `obj` directory are reported as generated lines but excluded from the
+handwritten denominator. The API assembly's handwritten coverage remains visible separately
+from the service-wide gate, so passing 80% overall does not imply its endpoint coverage is 80%.
+The coverage command selects the same local sibling-project graph as the shared validation
+action with the MSBuild property `-p:GITHUB_ACTIONS=false`; it does not override the test
+process's `GITHUB_ACTIONS` environment variable.
+
+To reproduce the gate locally, run the full test assembly with
+`--collect "XPlat Code Coverage" --results-directory TestResults/CoverageGate`, then pass the
+single generated `coverage.cobertura.xml` to
+`python scripts/check_owned_coverage.py <report> --minimum 80`. Run
+`python -m unittest discover -s scripts/tests -p 'test_*.py'` to demonstrate that the gate
+rejects a below-threshold report and accepts a qualifying report. The earlier
+`/p:Threshold=80` collector property is not a working gate in this setup.
