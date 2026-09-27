@@ -157,6 +157,18 @@ public sealed class WorkflowContractTests
             "          use-local-maliev-dependencies: 'true'\n        env:\n          GITHUB_ACTIONS: 'false'\n");
     }
 
+    [Fact]
+    public void BuildAndTest_RejectsCoverageThresholdReduction()
+    {
+        AssertMutationRejected("--minimum 80", "--minimum 79");
+    }
+
+    [Fact]
+    public void BuildAndTest_RejectsCoverageCollectorRemoval()
+    {
+        AssertMutationRejected("--collect 'XPlat Code Coverage'", "--collect 'Code Coverage'");
+    }
+
     private static void AssertMutationRejected(string original, string replacement)
     {
         Assert.Contains(original, Workflow, StringComparison.Ordinal);
@@ -199,6 +211,20 @@ internal static partial class WorkflowContractValidator
 {
     private const string CheckoutAction = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
     private const string SharedValidationAction = "MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@6017816fa67f369d785ed30794f002cfd6299af7";
+    private const string CoverageProof = "python3 -m unittest discover -s scripts/tests -p 'test_*.py'";
+    private const string CoverageCollection = """
+        GITHUB_ACTIONS=false dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore \
+          --collect 'XPlat Code Coverage' --results-directory TestResults/CoverageGate
+        """;
+    private const string CoverageEnforcement = """
+        mapfile -t reports < <(find TestResults/CoverageGate -type f -name coverage.cobertura.xml)
+        if [[ "${#reports[@]}" -ne 1 ]]; then
+          echo "Expected exactly one Cobertura report, found ${#reports[@]}." >&2
+          exit 1
+        fi
+        python3 scripts/check_owned_coverage.py "${reports[0]}" --minimum 80
+        """;
 
     public static void Validate(string workflow)
     {
@@ -243,9 +269,9 @@ internal static partial class WorkflowContractValidator
         RejectDuplicatedValidationActionsAndCommands(jobs);
 
         var steps = RequireSequence(validateJob, "steps");
-        if (steps.Children.Count != 4)
+        if (steps.Children.Count != 7)
         {
-            throw new InvalidOperationException("Validate job must contain exactly four caller-owned steps.");
+            throw new InvalidOperationException("Validate job must contain exactly seven caller-owned steps.");
         }
 
         ValidateStep(
@@ -283,6 +309,26 @@ internal static partial class WorkflowContractValidator
                 ["solution"] = "Legacy.Maliev.QuotationService.slnx",
                 ["use-local-maliev-dependencies"] = "true",
             });
+        ValidateScriptStep(steps.Children[4], "Prove coverage gate failure and success behavior", CoverageProof);
+        ValidateScriptStep(steps.Children[5], "Collect QuotationService coverage", CoverageCollection);
+        ValidateScriptStep(steps.Children[6], "Enforce 80 percent owned handwritten line coverage", CoverageEnforcement);
+    }
+
+    private static void ValidateScriptStep(YamlNode node, string expectedName, string expectedRun)
+    {
+        var step = RequireMapping(node, "workflow script step");
+        var actualKeys = step.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal);
+        if (!actualKeys.SetEquals(["name", "shell", "run"]))
+        {
+            throw new InvalidOperationException("Coverage steps must contain exactly name, shell, and run.");
+        }
+
+        RequireScalarValue(step, "name", expectedName);
+        RequireScalarValue(step, "shell", "bash");
+        if (!string.Equals(RequireScalar(GetRequired(step, "run")).Trim(), expectedRun.Trim(), StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Coverage step '{expectedName}' changed its reviewed command.");
+        }
     }
 
     private static IReadOnlyList<string> RequireExactReadOnlyPermissions(YamlMappingNode permissions, string scope)
@@ -366,7 +412,8 @@ internal static partial class WorkflowContractValidator
                     }
                 }
 
-                if (GetOptional(stepNode, "run") is YamlScalarNode runNode)
+                if (GetOptional(stepNode, "run") is YamlScalarNode runNode
+                    && (GetOptional(stepNode, "name") as YamlScalarNode)?.Value != "Collect QuotationService coverage")
                 {
                     RejectDuplicatedDotNetCommand(runNode.Value ?? string.Empty);
                 }
