@@ -5,6 +5,19 @@ namespace Legacy.Maliev.QuotationService.Tests;
 public sealed class PublishWorkflowPermissionContractTests
 {
     [Fact]
+    public void PublishWorkflow_DoesNotPruneImagesOutsideTheQuotationBuild()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRoot(), ".github", "workflows", "publish-image.yml"));
+
+        Assert.Contains("if: vars.LEGACY_DEPLOY_ENABLED == 'true'", source, StringComparison.Ordinal);
+        Assert.Contains(
+            "MALIEV-Co-Ltd/Legacy.Maliev.Workflows/.github/workflows/publish-image.yml@6017816fa67f369d785ed30794f002cfd6299af7",
+            source, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"(?i)\bdocker\s+(?:image\s+|system\s+)?prune\b", source);
+    }
+
+    [Fact]
     public void PublishWorkflow_ScopesOidcToPublishJobs()
     {
         var source = File.ReadAllText(Path.Combine(
