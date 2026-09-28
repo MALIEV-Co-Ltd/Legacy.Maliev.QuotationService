@@ -22,6 +22,17 @@ public sealed class WorkflowContractTests
     }
 
     [Fact]
+    public void ApiUsesPinnedSharedRequestFailureTracing()
+    {
+        var program = File.ReadAllText(FindRepositoryFile("Legacy.Maliev.QuotationService.Api", "Program.cs"));
+
+        Assert.Contains("builder.AddStandardMiddleware(", program, StringComparison.Ordinal);
+        Assert.Contains("app.UseStandardMiddleware()", program, StringComparison.Ordinal);
+        Assert.DoesNotContain("app.UseExceptionHandler(", program, StringComparison.Ordinal);
+        Assert.Contains("ref: 5c5f9479313710fa576f83d3b396442997a2fcf4", Workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void DependabotConfiguration_ScansOnlyIndependentlyResolvableProjectDirectories()
     {
         var source = File.ReadAllText(FindRepositoryFile(".github", "dependabot.yml"));
@@ -80,8 +91,8 @@ public sealed class WorkflowContractTests
     public void BuildAndTest_RejectsCommentedDependencySha()
     {
         AssertMutationRejected(
-            "ref: 9c4ac9d44a08bcd0aa2088348790ab863814669c",
-            "ref: main # 9c4ac9d44a08bcd0aa2088348790ab863814669c");
+            "ref: 5c5f9479313710fa576f83d3b396442997a2fcf4",
+            "ref: main # 5c5f9479313710fa576f83d3b396442997a2fcf4");
     }
 
     [Fact]
@@ -287,7 +298,7 @@ internal static partial class WorkflowContractValidator
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["repository"] = "MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults",
-                ["ref"] = "9c4ac9d44a08bcd0aa2088348790ab863814669c",
+                ["ref"] = "5c5f9479313710fa576f83d3b396442997a2fcf4",
                 ["path"] = ".dependencies/Legacy.Maliev.ServiceDefaults",
                 ["persist-credentials"] = "false",
             });
