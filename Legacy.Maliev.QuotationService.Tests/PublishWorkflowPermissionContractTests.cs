@@ -12,7 +12,7 @@ public sealed class PublishWorkflowPermissionContractTests
 
         Assert.Contains("if: vars.LEGACY_DEPLOY_ENABLED == 'true'", source, StringComparison.Ordinal);
         Assert.Contains(
-            "MALIEV-Co-Ltd/Legacy.Maliev.Workflows/.github/workflows/publish-image.yml@6017816fa67f369d785ed30794f002cfd6299af7",
+            "MALIEV-Co-Ltd/Legacy.Maliev.Workflows/.github/workflows/publish-image.yml@73dd7304ffe85ec504389fd7664cc39070b9f148",
             source, StringComparison.Ordinal);
         Assert.DoesNotMatch(@"(?i)\bdocker\s+(?:image\s+|system\s+)?prune\b", source);
     }
