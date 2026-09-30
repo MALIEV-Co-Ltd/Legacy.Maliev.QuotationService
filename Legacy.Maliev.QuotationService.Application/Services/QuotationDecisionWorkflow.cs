@@ -24,7 +24,8 @@ public sealed class QuotationDecisionWorkflow(
                     : QuotationAcceptanceOrigin.Customer
                 : null,
             expectedModifiedDate,
-            cancellationToken);
+            cancellationToken,
+            request.InvoiceId);
         if (persistence.Status == QuotationDecisionPersistenceStatus.NotFound)
         {
             return Result(QuotationDecisionStatus.NotFound);
@@ -47,7 +48,8 @@ public sealed class QuotationDecisionWorkflow(
             var transition = await orders.TransitionAsync(
                 link.OrderId,
                 request.Accepted,
-                CreateIdempotencyKey(quotationId, link.OrderId, request.Accepted, quotation.ModifiedDate ?? quotation.CreatedDate),
+                CreateIdempotencyKey(quotationId, link.OrderId, request.Accepted,
+                    (request.Accepted ? persistence.DecisionOrderVersion : null) ?? quotation.ModifiedDate ?? quotation.CreatedDate),
                 cancellationToken);
             if (transition == OrderDecisionResult.Completed)
             {

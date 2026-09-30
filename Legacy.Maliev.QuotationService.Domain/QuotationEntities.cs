@@ -26,6 +26,8 @@ public sealed class Quotation
     public string? AcceptanceOrigin { get; set; }
     public DateTime? CreatedDate { get; set; }
     public DateTime? ModifiedDate { get; set; }
+    /// <summary>Bound pre-attachment version preserving existing linked-order retry identities.</summary>
+    public DateTime? DecisionOrderVersion { get; set; }
     public ICollection<QuotationOrderItem> OrderItems { get; } = [];
     public ICollection<QuotationFile> Files { get; } = [];
     public ICollection<QuotationOrderLink> Orders { get; } = [];

@@ -150,12 +150,26 @@ public sealed class QuotationRepository(
         bool accepted,
         QuotationAcceptanceOrigin? acceptanceOrigin,
         DateTimeOffset? expectedModifiedDate,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? invoiceId = null)
     {
+        if (invoiceId < 0 || invoiceId > 0 && !accepted
+            || invoiceId == 0 && (!accepted || acceptanceOrigin != QuotationAcceptanceOrigin.Employee))
+        {
+            throw new ArgumentException("Invalid invoice intent.", nameof(invoiceId));
+        }
+
         var entity = await quotations.Quotations.FindAsync([id], cancellationToken);
         if (entity is null)
         {
             return new(QuotationDecisionPersistenceStatus.NotFound, null);
+        }
+
+        var attachInvoice = invoiceId > 0 && entity.InvoiceId is null;
+        if (invoiceId > 0 && entity.InvoiceId is not null && entity.InvoiceId != invoiceId
+            || attachInvoice && entity.Accepted == true && acceptanceOrigin != QuotationAcceptanceOrigin.Employee)
+        {
+            return new(QuotationDecisionPersistenceStatus.Conflict, null);
         }
 
         if (expectedModifiedDate is not null)
@@ -172,20 +186,26 @@ public sealed class QuotationRepository(
         }
 
         var eventKey = $"quotation-{id}:accepted:v1";
-        if (entity.Accepted == accepted
+        if (!attachInvoice && entity.Accepted == accepted
             && (!accepted
+                || invoiceId > 0 && entity.InvoiceId == invoiceId
                 || entity.AcceptedUtc is not null
                 && await quotations.AcceptedOutcomes.AnyAsync(
                     outcome => outcome.EventKey == eventKey,
                     cancellationToken)))
         {
-            return new(QuotationDecisionPersistenceStatus.Completed, ToResponse(entity));
+            return new(QuotationDecisionPersistenceStatus.Completed, ToResponse(entity), entity.DecisionOrderVersion);
         }
 
         var now = Now();
+        var lateAttachment = attachInvoice && entity.Accepted == true;
+        entity.DecisionOrderVersion = lateAttachment
+            ? entity.DecisionOrderVersion ?? entity.ModifiedDate ?? entity.CreatedDate ?? DateTime.SpecifyKind(DateTime.UnixEpoch, DateTimeKind.Unspecified)
+            : null;
+        if (attachInvoice) entity.InvoiceId = invoiceId;
         entity.Accepted = accepted;
         entity.ModifiedDate = now;
-        if (accepted)
+        if (accepted && !lateAttachment)
         {
             var origin = acceptanceOrigin
                 ?? throw new ArgumentException("Accepted decisions require an acceptance origin.", nameof(acceptanceOrigin));
@@ -212,11 +232,11 @@ public sealed class QuotationRepository(
         {
             await quotations.SaveChangesAsync(cancellationToken);
             await cache.RemoveAsync(QuotationKey(id), cancellationToken);
-            return new(QuotationDecisionPersistenceStatus.Completed, ToResponse(entity));
+            return new(QuotationDecisionPersistenceStatus.Completed, ToResponse(entity), entity.DecisionOrderVersion);
         }
         catch (DbUpdateConcurrencyException)
         {
-            return await ReconcileDecisionAsync(id, accepted, eventKey, cancellationToken);
+            return await ReconcileDecisionAsync(id, accepted, eventKey, invoiceId, lateAttachment, cancellationToken);
         }
         catch (DbUpdateException exception) when (
             exception.InnerException is PostgresException
@@ -225,7 +245,7 @@ public sealed class QuotationRepository(
                 ConstraintName: "IX_QuotationAcceptedOutcome_EventKey",
             })
         {
-            return await ReconcileDecisionAsync(id, accepted, eventKey, cancellationToken);
+            return await ReconcileDecisionAsync(id, accepted, eventKey, invoiceId, lateAttachment, cancellationToken);
         }
     }
 
@@ -526,6 +546,8 @@ public sealed class QuotationRepository(
         int id,
         bool accepted,
         string eventKey,
+        int? invoiceId,
+        bool lateAttachment,
         CancellationToken cancellationToken)
     {
         quotations.ChangeTracker.Clear();
@@ -533,13 +555,15 @@ public sealed class QuotationRepository(
             value => value.Id == id,
             cancellationToken);
         if (current is not null
+            && (invoiceId is null or 0 || current.InvoiceId == invoiceId)
             && current.Accepted == accepted
             && (!accepted
+                || lateAttachment
                 || await quotations.AcceptedOutcomes.AsNoTracking().AnyAsync(
                     outcome => outcome.EventKey == eventKey,
                     cancellationToken)))
         {
-            return new(QuotationDecisionPersistenceStatus.Completed, ToResponse(current));
+            return new(QuotationDecisionPersistenceStatus.Completed, ToResponse(current), current.DecisionOrderVersion);
         }
 
         return new(QuotationDecisionPersistenceStatus.Conflict, null);

@@ -11,6 +11,29 @@ public sealed class QuotationDecisionWorkflowTests
     private static readonly DateTime DecisionVersion = new(2026, 7, 18, 8, 5, 0, DateTimeKind.Utc);
 
     [Fact]
+    public async Task DecideAsync_DeclinedReplay_IgnoresPriorAcceptedAttachmentBinding()
+    {
+        var quotations = new Mock<IQuotationService>(MockBehavior.Strict);
+        quotations.Setup(value => value.ApplyDecisionAsync(7, false, null, null, It.IsAny<CancellationToken>(), null))
+            .ReturnsAsync(new QuotationDecisionPersistenceResult(
+                QuotationDecisionPersistenceStatus.Completed, Quotation(false, DecisionVersion), InitialVersion));
+        quotations.Setup(value => value.GetOrderLinksAsync(7, It.IsAny<CancellationToken>())).ReturnsAsync([Link(11)]);
+        var orders = new Mock<IOrderDecisionClient>(MockBehavior.Strict);
+        var expectedKey = $"quotation-7-declined-{DecisionVersion.Ticks:x}-order-11";
+        string? observedKey = null;
+        orders.Setup(value => value.TransitionAsync(11, false, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<int, bool, string, CancellationToken>((_, _, key, _) => observedKey = key)
+            .ReturnsAsync(OrderDecisionResult.Completed);
+
+        var result = await new QuotationDecisionWorkflow(quotations.Object, orders.Object)
+            .DecideAsync(7, new(false), null, CancellationToken.None);
+
+        Assert.Equal(QuotationDecisionStatus.Completed, result.Status);
+        Assert.Equal(1, result.CompletedOrders);
+        Assert.Equal(expectedKey, observedKey);
+    }
+
+    [Fact]
     public async Task DecideAsync_Accepted_UpdatesQuotationThenTransitionsEveryLinkedOrder()
     {
         var quotations = new Mock<IQuotationService>(MockBehavior.Strict);

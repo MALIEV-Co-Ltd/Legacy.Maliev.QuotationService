@@ -107,12 +107,13 @@ public sealed record PaginatedResponse<T>(IReadOnlyList<T> Items, int PageIndex,
 public enum QuotationSortType { QuotationId_Ascending, QuotationId_Descending, QuotationCreatedDate_Ascending, QuotationCreatedDate_Descending, QuotationModifiedDate_Ascending, QuotationModifiedDate_Descending }
 public enum RequestSortType { RequestId_Ascending, RequestId_Descending, RequestCreatedDate_Ascending, RequestCreatedDate_Descending, RequestModifiedDate_Ascending, RequestModifiedDate_Descending }
 public enum UpdateResult { Updated, NotFound, Conflict }
-public sealed record QuotationDecisionRequest(bool Accepted, bool EmployeeInitiated = false);
+public sealed record QuotationDecisionRequest(bool Accepted, bool EmployeeInitiated = false, int? InvoiceId = null);
 public sealed record QuotationDecisionResponse(QuotationDecisionStatus Status, int CompletedOrders, int TotalOrders, DateTime? ModifiedDate);
 public enum QuotationDecisionStatus { Completed, NotFound, Conflict, DependencyConflict, DependencyUnavailable }
 public sealed record QuotationDecisionPersistenceResult(
     QuotationDecisionPersistenceStatus Status,
-    QuotationResponse? Quotation);
+    QuotationResponse? Quotation,
+    DateTime? DecisionOrderVersion = null);
 public enum QuotationDecisionPersistenceStatus { Completed, NotFound, Conflict }
 public enum QuotationAcceptanceOrigin { Customer, Employee }
 public enum OrderDecisionResult { Completed, Conflict, NotFound, Unavailable }

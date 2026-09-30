@@ -81,6 +81,13 @@ public sealed class QuotationsController(
         [FromHeader(Name = "X-Expected-Modified-Date")] DateTimeOffset? expected,
         CancellationToken cancellationToken)
     {
+        if (request.InvoiceId < 0
+            || request.InvoiceId > 0 && !request.Accepted
+            || request.InvoiceId == 0 && (!request.Accepted || !request.EmployeeInitiated))
+        {
+            return BadRequest();
+        }
+
         if (request.EmployeeInitiated && !IsTrustedEmployeeDecisionCaller())
         {
             return Forbid();
