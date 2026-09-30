@@ -78,7 +78,7 @@ public sealed class QuotationRequestsController(IQuotationService service) : Con
     [HttpGet("{requestId:int}", Name = "GetQuotationRequest"), RequirePermission(QuotationPermissions.RequestsRead, RequireLiveCheck = true)] public async Task<ActionResult<QuotationRequestResponse>> GetQuotationAsync(int requestId, CancellationToken ct) { var value = await service.GetRequestAsync(requestId, ct); return value is null ? NotFound() : value; }
     [HttpPut("{requestId:int}"), RequirePermission(QuotationPermissions.RequestsUpdate, RequireLiveCheck = true)] public async Task<IActionResult> UpdateQuotationRequestAsync(int requestId, UpsertQuotationRequestRequest item, [FromHeader(Name = "X-Expected-Modified-Date")] DateTimeOffset? expected, CancellationToken ct) => (await service.UpdateRequestAsync(requestId, item, expected, ct)) switch { UpdateResult.Updated => NoContent(), UpdateResult.Conflict => Conflict("Quotation request was modified by another request."), _ => NotFound() };
 
-    [HttpGet("{requestId:int}/qualification-receipt"), RequirePermission(QuotationPermissions.RequestsRead, RequireLiveCheck = true)]
+    [HttpGet("{requestId:int}/qualification-receipt"), QualificationAuthority(QuotationPermissions.RequestsRead)]
     public async Task<ActionResult<QualificationReceipt>> GetQualificationReceiptAsync(int requestId, CancellationToken ct)
     {
         var receipt = await service.GetRequestQualificationAsync(requestId, ct);
@@ -108,7 +108,7 @@ public sealed class QuotationRequestsController(IQuotationService service) : Con
         return new JsonResult(receipt, QualificationReadbackJsonOptions);
     }
 
-    [HttpPut("{requestId:int}/qualification"), RequirePermission(QuotationPermissions.RequestsUpdate, RequireLiveCheck = true)]
+    [HttpPut("{requestId:int}/qualification"), QualificationAuthority(QuotationPermissions.RequestsUpdate)]
     public async Task<ActionResult<QualificationReceipt>> UpdateQualificationStateAsync(
         int requestId,
         QualificationStateUpdateRequest item,
@@ -165,29 +165,7 @@ public sealed class QuotationRequestsController(IQuotationService service) : Con
     private IActionResult Created(QuotationRequestResponse response) =>
         CreatedAtRoute("GetQuotationRequest", new { requestId = response.Id }, response);
 
-    private string? GetQualificationEmployeeActor()
-    {
-        if (User.Identity?.IsAuthenticated != true) return null;
-
-        var subjects = User.FindAll("sub").ToArray();
-        var kinds = User.FindAll("identity_kind").ToArray();
-        if (subjects.Length != 1 || kinds.Length != 1
-            || !string.Equals(kinds[0].Value, "employee", StringComparison.Ordinal)) return null;
-
-        var subject = subjects[0].Value;
-        if (string.IsNullOrWhiteSpace(subject) || subject.Length > 256
-            || subject.StartsWith("service:", StringComparison.OrdinalIgnoreCase)) return null;
-
-        // These aliases can affect shared permission principal selection, but never supply the audit actor.
-        foreach (var type in new[] { "user_id", ClaimTypes.NameIdentifier })
-        {
-            var aliases = User.FindAll(type).ToArray();
-            if (aliases.Length > 1 || aliases.Any(alias => !string.Equals(alias.Value, subject, StringComparison.Ordinal)))
-                return null;
-        }
-
-        return subject;
-    }
+    private string? GetQualificationEmployeeActor() => QualificationEmployeeActor.Get(User);
 
     private static string Hash(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));

@@ -46,7 +46,22 @@ public sealed class QuotationControllerContractTests
         var methods = Controllers.SelectMany(row => ((Type)row[0]).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)).ToArray();
         Assert.Equal(38, methods.Length);
         Assert.Equal(39, methods.SelectMany(method => method.GetCustomAttributes<HttpMethodAttribute>()).Count());
-        Assert.All(methods, method => Assert.Single(method.GetCustomAttributes<RequirePermissionAttribute>()));
+        var qualification = methods.Where(method => method.GetCustomAttribute<QualificationAuthorityAttribute>() is not null).ToArray();
+        Assert.Equal(2, qualification.Length);
+        Assert.All(qualification, method =>
+        {
+            Assert.Equal(typeof(QuotationRequestsController), method.DeclaringType);
+            Assert.Empty(method.GetCustomAttributes<RequirePermissionAttribute>());
+            Assert.Single(method.GetCustomAttributes<QualificationAuthorityAttribute>());
+            Assert.Contains(method.Name, new[] { nameof(QuotationRequestsController.GetQualificationReceiptAsync), nameof(QuotationRequestsController.UpdateQualificationStateAsync) });
+        });
+        var ordinary = methods.Except(qualification).ToArray();
+        Assert.Equal(36, ordinary.Length);
+        Assert.All(ordinary, method =>
+        {
+            Assert.Single(method.GetCustomAttributes<RequirePermissionAttribute>());
+            Assert.Empty(method.GetCustomAttributes<QualificationAuthorityAttribute>());
+        });
     }
 
     [Fact]
@@ -54,15 +69,18 @@ public sealed class QuotationControllerContractTests
     {
         var update = typeof(QuotationRequestsController).GetMethod(nameof(QuotationRequestsController.UpdateQualificationStateAsync))!;
         Assert.Equal("{requestId:int}/qualification", Assert.Single(update.GetCustomAttributes<HttpPutAttribute>()).Template);
-        var updatePermission = Assert.Single(update.GetCustomAttributes<RequirePermissionAttribute>());
+        var updatePermission = Assert.Single(update.GetCustomAttributes<QualificationAuthorityAttribute>());
         Assert.Equal(QuotationPermissions.RequestsUpdate, updatePermission.Permission);
-        Assert.True(updatePermission.RequireLiveCheck);
+        Assert.Empty(update.GetCustomAttributes<RequirePermissionAttribute>());
+        Assert.Equal(typeof(int), update.GetParameters().Single(parameter => parameter.Name == "requestId").ParameterType);
+        Assert.Equal("quotation-request-qualification", QualificationAuthorityAttribute.Purpose);
 
         var receipt = typeof(QuotationRequestsController).GetMethod(nameof(QuotationRequestsController.GetQualificationReceiptAsync))!;
         Assert.Equal("{requestId:int}/qualification-receipt", Assert.Single(receipt.GetCustomAttributes<HttpGetAttribute>()).Template);
-        var readPermission = Assert.Single(receipt.GetCustomAttributes<RequirePermissionAttribute>());
+        var readPermission = Assert.Single(receipt.GetCustomAttributes<QualificationAuthorityAttribute>());
         Assert.Equal(QuotationPermissions.RequestsRead, readPermission.Permission);
-        Assert.True(readPermission.RequireLiveCheck);
+        Assert.Empty(receipt.GetCustomAttributes<RequirePermissionAttribute>());
+        Assert.Equal(typeof(int), receipt.GetParameters().Single(parameter => parameter.Name == "requestId").ParameterType);
 
         var readback = typeof(QuotationRequestsController).GetMethod(nameof(QuotationRequestsController.GetQualificationOutcomeReadbackAsync))!;
         Assert.Equal("qualification-outcomes/readback", Assert.Single(readback.GetCustomAttributes<HttpGetAttribute>()).Template);
