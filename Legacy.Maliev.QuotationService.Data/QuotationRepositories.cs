@@ -3,6 +3,7 @@ using Legacy.Maliev.QuotationService.Application.Models;
 using Legacy.Maliev.QuotationService.Application.Services;
 using Legacy.Maliev.QuotationService.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Npgsql;
 
 namespace Legacy.Maliev.QuotationService.Data;
@@ -419,6 +420,22 @@ public sealed class QuotationRepository(
         string actor,
         CancellationToken cancellationToken)
     {
+        var options = (DbContextOptions<QuotationRequestDbContext>)requests.GetService<IDbContextOptions>();
+        return await requests.Database.CreateExecutionStrategy().ExecuteAsync(async token =>
+        {
+            // A retried or ambiguously committed attempt must never reuse tracked audit/projection state.
+            await using var attempt = new QuotationRequestDbContext(options);
+            return await UpdateRequestQualificationAttemptAsync(attempt, id, request, actor, token);
+        }, cancellationToken);
+    }
+
+    private async Task<QualificationUpdateResult> UpdateRequestQualificationAttemptAsync(
+        QuotationRequestDbContext requests,
+        int id,
+        QualificationStateUpdateRequest request,
+        string actor,
+        CancellationToken cancellationToken)
+    {
         var lockIdentity = $"quotation-request-qualification\n{id}\n{request.IdempotencyKey}";
         await using var transaction = await requests.Database.BeginTransactionAsync(cancellationToken);
         await requests.Database.ExecuteSqlInterpolatedAsync(
@@ -431,14 +448,16 @@ public sealed class QuotationRepository(
                 cancellationToken);
         if (replay is not null)
         {
-            if (!QualificationReplayMatches(replay, request))
+            if (!string.Equals(replay.ChangedBy, actor, StringComparison.Ordinal)
+                || !QualificationReplayMatches(replay, request))
             {
                 return new(QualificationUpdateStatus.IdempotencyConflict, null);
             }
 
-            var replayReceipt = await BuildQualificationReceiptAsync(id, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new(QualificationUpdateStatus.Completed, replayReceipt);
+            // A prior attempt may have committed but failed before cache invalidation/readback.
+            await cache.RemoveAsync(RequestKey(id), cancellationToken);
+            return new(QualificationUpdateStatus.Completed, await BuildQualificationReceiptAsync(id, cancellationToken, requests));
         }
 
         var entity = await requests.Requests.SingleOrDefaultAsync(value => value.Id == id, cancellationToken);
@@ -487,7 +506,7 @@ public sealed class QuotationRepository(
         }
 
         await cache.RemoveAsync(RequestKey(id), cancellationToken);
-        return new(QualificationUpdateStatus.Completed, await BuildQualificationReceiptAsync(id, cancellationToken));
+        return new(QualificationUpdateStatus.Completed, await BuildQualificationReceiptAsync(id, cancellationToken, requests));
     }
 
     public async Task<QuotationRequestFileResponse?> CreateRequestFileAsync(
@@ -578,15 +597,17 @@ public sealed class QuotationRepository(
         && replay.Completeness == request.Completeness
         && replay.DuplicateCount == request.DuplicateCount
         && replay.UnmatchedClassification == request.UnmatchedClassification;
-    private async Task<QualificationReceipt?> BuildQualificationReceiptAsync(int id, CancellationToken cancellationToken)
+    private async Task<QualificationReceipt?> BuildQualificationReceiptAsync(
+        int id, CancellationToken cancellationToken, QuotationRequestDbContext? attempt = null)
     {
-        var request = await requests.Requests.AsNoTracking().SingleOrDefaultAsync(value => value.Id == id, cancellationToken);
+        var context = attempt ?? requests;
+        var request = await context.Requests.AsNoTracking().SingleOrDefaultAsync(value => value.Id == id, cancellationToken);
         if (request is null)
         {
             return null;
         }
 
-        var events = await requests.RequestQualificationAudit.AsNoTracking()
+        var events = await context.RequestQualificationAudit.AsNoTracking()
             .Where(value => value.RequestId == id)
             .OrderBy(value => value.Id)
             .Select(value => new QualificationReceiptEvent(

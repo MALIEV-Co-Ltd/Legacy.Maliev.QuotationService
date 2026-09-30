@@ -138,8 +138,8 @@ public sealed class QuotationRequestsController(IQuotationService service) : Con
             return BadRequest("Duplicate count and expected version cannot be negative.");
         }
 
-        var actor = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrWhiteSpace(actor))
+        var actor = GetQualificationEmployeeActor();
+        if (actor is null)
         {
             return Forbid();
         }
@@ -164,6 +164,30 @@ public sealed class QuotationRequestsController(IQuotationService service) : Con
 
     private IActionResult Created(QuotationRequestResponse response) =>
         CreatedAtRoute("GetQuotationRequest", new { requestId = response.Id }, response);
+
+    private string? GetQualificationEmployeeActor()
+    {
+        if (User.Identity?.IsAuthenticated != true) return null;
+
+        var subjects = User.FindAll("sub").ToArray();
+        var kinds = User.FindAll("identity_kind").ToArray();
+        if (subjects.Length != 1 || kinds.Length != 1
+            || !string.Equals(kinds[0].Value, "employee", StringComparison.Ordinal)) return null;
+
+        var subject = subjects[0].Value;
+        if (string.IsNullOrWhiteSpace(subject) || subject.Length > 256
+            || subject.StartsWith("service:", StringComparison.OrdinalIgnoreCase)) return null;
+
+        // These aliases can affect shared permission principal selection, but never supply the audit actor.
+        foreach (var type in new[] { "user_id", ClaimTypes.NameIdentifier })
+        {
+            var aliases = User.FindAll(type).ToArray();
+            if (aliases.Length > 1 || aliases.Any(alias => !string.Equals(alias.Value, subject, StringComparison.Ordinal)))
+                return null;
+        }
+
+        return subject;
+    }
 
     private static string Hash(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));

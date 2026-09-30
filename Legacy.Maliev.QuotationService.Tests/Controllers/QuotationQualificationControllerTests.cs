@@ -147,8 +147,8 @@ public sealed class QuotationQualificationControllerTests
     private static QuotationRequestsController Controller(IQuotationService service, string? actor, bool employeeRole = false)
     {
         Claim[] claims = actor is null ? [] : employeeRole
-            ? [new Claim(ClaimTypes.NameIdentifier, actor), new Claim(ClaimTypes.Role, "Employee")]
-            : [new Claim(ClaimTypes.NameIdentifier, actor)];
+            ? [new Claim("sub", actor), new Claim("identity_kind", "employee"), new Claim(ClaimTypes.Role, "Employee")]
+            : [new Claim("sub", actor), new Claim("identity_kind", "employee")];
         return new QuotationRequestsController(service)
         {
             ControllerContext = new ControllerContext
