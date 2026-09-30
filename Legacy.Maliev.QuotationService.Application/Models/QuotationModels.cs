@@ -57,13 +57,13 @@ public sealed record QuotationRequestResponse(
     string? TransactionId = null);
 public sealed record UpsertQuotationRequestRequest(string? FirstName, string? LastName, string? Email, string? TelephoneNumber, string? Country, string? CompanyName, string? TaxIdentification, string? Message, string? InternalComment, bool? Done, Guid? JourneyId = null);
 public sealed record QualificationStateUpdateRequest(
-    [property: Required, MaxLength(32)] string State,
-    [property: MaxLength(512)] string? Reason,
-    [property: MaxLength(32)] string? Completeness,
-    [property: Range(0, int.MaxValue)] int DuplicateCount,
-    [property: MaxLength(64)] string? UnmatchedClassification,
-    [property: Required, MaxLength(128)] string IdempotencyKey,
-    [property: Range(0, int.MaxValue)] int ExpectedVersion);
+    [Required, MaxLength(32)] string State,
+    [MaxLength(512)] string? Reason,
+    [MaxLength(32)] string? Completeness,
+    [Range(0, int.MaxValue)] int DuplicateCount,
+    [MaxLength(64)] string? UnmatchedClassification,
+    [Required, MaxLength(128)] string IdempotencyKey,
+    [Range(0, int.MaxValue)] int ExpectedVersion);
 public sealed record QualificationReceipt(
     int RequestId,
     Guid? JourneyId,
