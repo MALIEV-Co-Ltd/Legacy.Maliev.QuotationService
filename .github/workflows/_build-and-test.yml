@@ -7,6 +7,58 @@ permissions:
   contents: read
 
 jobs:
+  qualification-authority-joined:
+    name: qualification-authority-joined
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out QuotationService
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check out exact Auth producer
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.AuthService
+          ref: 8cdb634b3b0abdf18b9b826a0948dbfd98c66ea0
+          path: TestResults/.joined-auth/Legacy.Maliev.AuthService
+          persist-credentials: false
+      - name: Check out isolated Auth Defaults
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults
+          ref: 5c5f9479313710fa576f83d3b396442997a2fcf4
+          path: TestResults/.joined-auth/.dependencies/Legacy.Maliev.ServiceDefaults
+          persist-credentials: false
+      - name: Check out isolated Auth Contracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.CompatibilityContracts
+          ref: 78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7
+          path: TestResults/.joined-auth/.dependencies/Legacy.Maliev.CompatibilityContracts
+          persist-credentials: false
+      - name: Check out isolated Quotation Defaults
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults
+          ref: 8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3
+          path: TestResults/.bridge-dependencies/Legacy.Maliev.ServiceDefaults
+          persist-credentials: false
+      - name: Check out isolated Quotation Contracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.CompatibilityContracts
+          ref: 78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7
+          path: TestResults/.bridge-dependencies/Legacy.Maliev.CompatibilityContracts
+          persist-credentials: false
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.x
+      - name: Prove real joined qualification authority
+        shell: pwsh
+        run: ./scripts/run_qualification_authority_joined.ps1 -RepositoryPath $env:GITHUB_WORKSPACE
+
   validate:
     name: validate
     runs-on: ubuntu-latest

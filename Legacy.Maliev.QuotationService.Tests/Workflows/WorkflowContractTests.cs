@@ -21,6 +21,19 @@ public sealed class WorkflowContractTests
         WorkflowContractValidator.Validate(Workflow);
     }
 
+    [Theory]
+    [InlineData("  qualification-authority-joined:", "  unexpected-job:")]
+    [InlineData("    name: qualification-authority-joined", "    if: false\n    name: qualification-authority-joined")]
+    [InlineData("    timeout-minutes: 20", "    continue-on-error: true\n    timeout-minutes: 20")]
+    [InlineData("ref: 8cdb634b3b0abdf18b9b826a0948dbfd98c66ea0", "ref: main")]
+    [InlineData("ref: 5c5f9479313710fa576f83d3b396442997a2fcf4", "ref: main")]
+    [InlineData("path: TestResults/.joined-auth/.dependencies/Legacy.Maliev.ServiceDefaults", "path: TestResults/.bridge-dependencies/Legacy.Maliev.ServiceDefaults")]
+    [InlineData("dotnet-version: 10.0.x", "dotnet-version: 9.0.x")]
+    [InlineData("shell: pwsh", "shell: bash")]
+    [InlineData("run: ./scripts/run_qualification_authority_joined.ps1 -RepositoryPath $env:GITHUB_WORKSPACE", "run: echo skipped")]
+    public void BuildAndTest_RejectsJoinedAuthorityGateBypass(string original, string replacement) =>
+        AssertMutationRejected(original, replacement);
+
     [Fact]
     public void ApiUsesPinnedSharedRequestFailureTracing()
     {
@@ -261,10 +274,13 @@ internal static partial class WorkflowContractValidator
 
         var workflowPermissions = RequireExactReadOnlyPermissions(RequireMapping(root, "permissions"), "workflow");
         var jobs = RequireMapping(root, "jobs");
-        if (jobs.Children.Count != 1)
+        if (jobs.Children.Count != 2 || !jobs.Children.Keys.Select(RequireScalar)
+            .ToHashSet(StringComparer.Ordinal).SetEquals(["validate", "qualification-authority-joined"]))
         {
-            throw new InvalidOperationException("Workflow must define only the validate job.");
+            throw new InvalidOperationException("Workflow must define exactly validate and qualification-authority-joined jobs.");
         }
+
+        ValidateJoinedAuthorityJob(RequireMapping(jobs, "qualification-authority-joined"));
 
         var validateJob = RequireMapping(jobs, "validate");
         var jobPermissionsNode = GetOptional(validateJob, "permissions");
@@ -325,7 +341,47 @@ internal static partial class WorkflowContractValidator
         ValidateScriptStep(steps.Children[6], "Enforce 80 percent owned handwritten line coverage", CoverageEnforcement);
     }
 
-    private static void ValidateScriptStep(YamlNode node, string expectedName, string expectedRun)
+    private static void ValidateJoinedAuthorityJob(YamlMappingNode job)
+    {
+        if (!job.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal)
+            .SetEquals(["name", "runs-on", "timeout-minutes", "steps"]))
+            throw new InvalidOperationException("Joined authority gate must be unconditional with no permission or failure overrides.");
+        RequireScalarValue(job, "name", "qualification-authority-joined");
+        RequireScalarValue(job, "runs-on", "ubuntu-latest");
+        RequireScalarValue(job, "timeout-minutes", "20");
+        var steps = RequireSequence(job, "steps");
+        if (steps.Children.Count != 8)
+            throw new InvalidOperationException("Joined authority gate requires all eight reviewed steps.");
+        ValidateStep(steps.Children[0], CheckoutAction,
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["persist-credentials"] = "false" });
+        const string authorityProducerRevision = "8cdb634b3b0abdf18b9b826a0948dbfd98c66ea0";
+        var checkouts = new[]
+        {
+            ("Legacy.Maliev.AuthService", authorityProducerRevision, "TestResults/.joined-auth/Legacy.Maliev.AuthService"),
+            ("Legacy.Maliev.ServiceDefaults", "5c5f9479313710fa576f83d3b396442997a2fcf4", "TestResults/.joined-auth/.dependencies/Legacy.Maliev.ServiceDefaults"),
+            ("Legacy.Maliev.CompatibilityContracts", "78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7", "TestResults/.joined-auth/.dependencies/Legacy.Maliev.CompatibilityContracts"),
+            ("Legacy.Maliev.ServiceDefaults", "8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3", "TestResults/.bridge-dependencies/Legacy.Maliev.ServiceDefaults"),
+            ("Legacy.Maliev.CompatibilityContracts", "78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7", "TestResults/.bridge-dependencies/Legacy.Maliev.CompatibilityContracts"),
+        };
+        for (var index = 0; index < checkouts.Length; index++)
+        {
+            var (repository, revision, path) = checkouts[index];
+            ValidateStep(steps.Children[index + 1], CheckoutAction,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["repository"] = "MALIEV-Co-Ltd/" + repository,
+                    ["ref"] = revision,
+                    ["path"] = path,
+                    ["persist-credentials"] = "false",
+                });
+        }
+        ValidateStep(steps.Children[6], "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["dotnet-version"] = "10.0.x" });
+        ValidateScriptStep(steps.Children[7], "Prove real joined qualification authority",
+            "./scripts/run_qualification_authority_joined.ps1 -RepositoryPath $env:GITHUB_WORKSPACE", "pwsh");
+    }
+
+    private static void ValidateScriptStep(YamlNode node, string expectedName, string expectedRun, string expectedShell = "bash")
     {
         var step = RequireMapping(node, "workflow script step");
         var actualKeys = step.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal);
@@ -335,7 +391,7 @@ internal static partial class WorkflowContractValidator
         }
 
         RequireScalarValue(step, "name", expectedName);
-        RequireScalarValue(step, "shell", "bash");
+        RequireScalarValue(step, "shell", expectedShell);
         if (!string.Equals(RequireScalar(GetRequired(step, "run")).Trim(), expectedRun.Trim(), StringComparison.Ordinal))
         {
             throw new InvalidOperationException($"Coverage step '{expectedName}' changed its reviewed command.");
@@ -403,8 +459,11 @@ internal static partial class WorkflowContractValidator
 
     private static void RejectDuplicatedValidationActionsAndCommands(YamlMappingNode jobs)
     {
-        foreach (var jobNode in jobs.Children.Values.OfType<YamlMappingNode>())
+        foreach (var job in jobs.Children)
         {
+            // The separately isolated integration job has its own exact eight-step contract.
+            if (RequireScalar(job.Key) == "qualification-authority-joined") continue;
+            if (job.Value is not YamlMappingNode jobNode) continue;
             var stepsNode = GetOptional(jobNode, "steps");
             if (stepsNode is not YamlSequenceNode steps)
             {

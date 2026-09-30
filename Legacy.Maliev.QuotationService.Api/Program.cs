@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Legacy.Maliev.QuotationService.Api.Clients;
+using Legacy.Maliev.QuotationService.Api.Authorization;
 using Legacy.Maliev.QuotationService.Application.Interfaces;
 using Legacy.Maliev.QuotationService.Application.Services;
 using Legacy.Maliev.QuotationService.Api.Workers;
@@ -15,6 +16,18 @@ builder.AddStandardCache("legacy:quotation:");
 builder.AddStandardCors();
 builder.AddJwtAuthentication();
 builder.AddLegacyAuthServiceTokenExchange();
+builder.Services.AddOptions<QualificationAuthorityOptions>().Bind(builder.Configuration.GetSection("QualificationAuthority"));
+builder.Services.AddScoped<QualificationAuthorityClient>();
+builder.Services.AddHttpClient(QualificationAuthorityClient.ClientName, client =>
+{
+    client.BaseAddress = QualificationAuthorityClient.ResolveOrigin(builder.Configuration["Services:Auth:BaseUrl"] ?? builder.Configuration["Services:Auth"]);
+    client.Timeout = TimeSpan.FromSeconds(10);
+}).ConfigurePrimaryHttpMessageHandler((handler, _) =>
+{
+    if (handler is SocketsHttpHandler sockets) sockets.AllowAutoRedirect = false;
+    else if (handler is HttpClientHandler http) http.AllowAutoRedirect = false;
+    else throw new InvalidOperationException("Qualification authority requires a redirect-disabled primary handler.");
+}).AddServiceDiscovery().AddLegacyServiceAuthentication();
 builder.AddStandardMiddleware(options => options.EnableRequestLogging = true);
 builder.AddStandardOpenApi(title: "Legacy MALIEV Quotation Service API", description: "Temporary .NET 10 compatibility API for quotation and quotation-request contracts.");
 builder.Services.AddControllers().AddJsonOptions(options => { options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull; options.JsonSerializerOptions.PropertyNamingPolicy = null; options.JsonSerializerOptions.DictionaryKeyPolicy = null; });
