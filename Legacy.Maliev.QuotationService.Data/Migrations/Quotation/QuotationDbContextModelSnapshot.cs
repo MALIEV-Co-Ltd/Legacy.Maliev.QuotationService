@@ -57,6 +57,9 @@ namespace Legacy.Maliev.QuotationService.Data.Migrations.Quotation
                         .HasColumnType("integer")
                         .HasColumnName("CustomerID");
 
+                    b.Property<DateTime?>("DecisionOrderVersion")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<int?>("EmployeeId")
                         .HasColumnType("integer")
                         .HasColumnName("EmployeeID");

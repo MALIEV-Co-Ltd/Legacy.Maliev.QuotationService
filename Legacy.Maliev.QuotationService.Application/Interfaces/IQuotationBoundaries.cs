@@ -20,7 +20,8 @@ public interface IQuotationService
         bool accepted,
         QuotationAcceptanceOrigin? acceptanceOrigin,
         DateTimeOffset? expectedModifiedDate,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        int? invoiceId = null);
     Task<UpdateResult> UpdateQuotationAsync(int id, UpsertQuotationRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken);
     Task<decimal?> GetWithholdingTaxAsync(int id, CancellationToken cancellationToken);
     Task<QuotationDocumentSnapshot?> GetDocumentSnapshotAsync(int id, CancellationToken cancellationToken);
