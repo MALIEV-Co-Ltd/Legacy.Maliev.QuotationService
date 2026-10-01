@@ -26,12 +26,8 @@ public sealed class QuotationRepository(
         if (deleted) await cache.RemoveAsync(QuotationKey(id), cancellationToken); return deleted;
     }
 
-    public async Task<QuotationResponse?> GetQuotationAsync(int id, CancellationToken cancellationToken)
-    {
-        var cached = await cache.GetAsync<QuotationResponse>(QuotationKey(id), cancellationToken); if (cached is not null) return cached;
-        var value = await Project(quotations.Quotations.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(cancellationToken);
-        if (value is not null) await cache.SetAsync(QuotationKey(id), value, TimeSpan.FromMinutes(2), cancellationToken); return value;
-    }
+    public Task<QuotationResponse?> GetQuotationAsync(int id, CancellationToken cancellationToken) =>
+        Project(quotations.Quotations.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(cancellationToken);
 
     public async Task<CustomerQuotationDetails?> GetCustomerQuotationAsync(int customerId, int id, CancellationToken cancellationToken)
     {
@@ -52,7 +48,18 @@ public sealed class QuotationRepository(
     public async Task<PaginatedResponse<QuotationResponse>?> GetQuotationsAsync(int? customerId, QuotationSortType? sort, string? search, int pageIndex, int pageSize, CancellationToken cancellationToken)
     {
         IQueryable<Quotation> query = quotations.Quotations.AsNoTracking(); if (customerId is not null) query = query.Where(x => x.CustomerId == customerId);
-        if (!string.IsNullOrWhiteSpace(search)) { var value = search.Trim(); var numeric = int.TryParse(value, out var id); var pattern = $"%{value}%"; query = query.Where(x => (numeric && (x.Id == id || x.CustomerId == id)) || (x.Comment != null && EF.Functions.ILike(x.Comment, pattern))); }
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var value = search.Trim();
+            if (int.TryParse(value, out var id)) query = query.Where(x => x.Id == id || x.CustomerId == id);
+            else
+            {
+                var literal = value.Replace("\\", "\\\\", StringComparison.Ordinal)
+                    .Replace("%", "\\%", StringComparison.Ordinal).Replace("_", "\\_", StringComparison.Ordinal);
+                var pattern = $"%{literal}%";
+                query = query.Where(x => x.Comment != null && EF.Functions.ILike(x.Comment, pattern, "\\"));
+            }
+        }
         query = sort switch { QuotationSortType.QuotationId_Descending => query.OrderByDescending(x => x.Id), QuotationSortType.QuotationCreatedDate_Ascending => query.OrderBy(x => x.CreatedDate), QuotationSortType.QuotationCreatedDate_Descending => query.OrderBy(x => x.CreatedDate == null).ThenByDescending(x => x.CreatedDate).ThenByDescending(x => x.Id), QuotationSortType.QuotationModifiedDate_Ascending => query.OrderBy(x => x.ModifiedDate), QuotationSortType.QuotationModifiedDate_Descending => query.OrderBy(x => x.ModifiedDate == null).ThenByDescending(x => x.ModifiedDate).ThenByDescending(x => x.Id), _ => query.OrderBy(x => x.Id) };
         return await PageAsync(Project(query), pageIndex, pageSize, cancellationToken);
     }
