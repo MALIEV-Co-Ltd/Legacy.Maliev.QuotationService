@@ -262,6 +262,10 @@ public sealed class QuotationRepository(
         var entity = await quotations.Quotations.FindAsync([id], cancellationToken); if (entity is null) return UpdateResult.NotFound;
         if (request.Accepted == true && entity.Accepted != true) return UpdateResult.Conflict;
         if (expectedModifiedDate is not null) quotations.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified);
+        if (entity.Accepted == true && entity.DecisionOrderVersion is null)
+        {
+            entity.DecisionOrderVersion = entity.ModifiedDate ?? entity.CreatedDate ?? DateTime.SpecifyKind(DateTime.UnixEpoch, DateTimeKind.Unspecified);
+        }
         Map(entity, request).ModifiedDate = Now();
         try { await quotations.SaveChangesAsync(cancellationToken); await cache.RemoveAsync(QuotationKey(id), cancellationToken); return UpdateResult.Updated; } catch (DbUpdateConcurrencyException) { return UpdateResult.Conflict; }
     }
