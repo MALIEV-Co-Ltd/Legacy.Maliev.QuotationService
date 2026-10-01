@@ -744,6 +744,7 @@ public sealed class RequestTriageFixture : IAsyncLifetime
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Production");
+            QuotationTestWorkloadExchange.Prepare(builder);
             foreach (var setting in settings) builder.UseSetting(setting.Key, setting.Value);
             builder.ConfigureLogging(logging => logging.ClearProviders());
             builder.ConfigureTestServices(services =>
@@ -760,6 +761,7 @@ public sealed class RequestTriageFixture : IAsyncLifetime
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            QuotationTestWorkloadExchange.AssertQuotationSubject(request);
             Assert.Equal(HttpMethod.Post, request.Method);
             Assert.Equal("/iam/v1/auth/check-permission", request.RequestUri!.AbsolutePath);
             Assert.Equal("synthetic-triage-live-check", Assert.Single(request.Headers.GetValues("X-Maliev-IAM-Live-Check-Key")));

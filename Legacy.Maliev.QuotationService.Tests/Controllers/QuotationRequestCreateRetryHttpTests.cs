@@ -559,6 +559,7 @@ public sealed class RequestCreateIamTransport(bool allowed) : HttpMessageHandler
     public int Calls { get; private set; }
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        QuotationTestWorkloadExchange.AssertQuotationSubject(request);
         Calls++;
         Assert.Equal(HttpMethod.Post, request.Method);
         Assert.Equal("/iam/v1/auth/check-permission", request.RequestUri!.AbsolutePath);
@@ -782,6 +783,7 @@ public sealed class RequestCreateRetryFixture : IAsyncLifetime
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Production");
+            QuotationTestWorkloadExchange.Prepare(builder);
             foreach (var setting in settings) builder.UseSetting(setting.Key, setting.Value);
             builder.ConfigureLogging(logging => { logging.ClearProviders(); logging.AddProvider(diagnostic); });
             builder.ConfigureTestServices(services =>
