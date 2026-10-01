@@ -212,7 +212,7 @@ public sealed class QuotationRepository(
             : null;
         if (attachInvoice) entity.InvoiceId = invoiceId;
         entity.Accepted = accepted;
-        entity.ModifiedDate = now;
+        entity.ModifiedDate = NextDecisionVersion(now, entity.ModifiedDate);
         if (accepted && !lateAttachment)
         {
             var origin = acceptanceOrigin
@@ -841,6 +841,16 @@ public sealed class QuotationRepository(
     public Task<QuotationRequestFileResponse?> GetRequestFileAsync(int id, CancellationToken cancellationToken) => ProjectRequestFiles(requests.Files.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(cancellationToken);
     public async Task<IReadOnlyList<QuotationRequestFileResponse>> GetRequestFilesAsync(int requestId, CancellationToken cancellationToken) => await ProjectRequestFiles(requests.Files.AsNoTracking().Where(x => x.RequestId == requestId).OrderBy(x => x.Id)).ToListAsync(cancellationToken);
     public async Task<bool> UpdateRequestFileAsync(int id, UpsertQuotationRequestFileRequest request, CancellationToken cancellationToken) { var entity = await requests.Files.FindAsync([id], cancellationToken); if (entity is null) return false; entity.RequestId = request.RequestId; entity.Bucket = request.Bucket; entity.ObjectName = request.ObjectName; entity.ModifiedDate = Now(); await requests.SaveChangesAsync(cancellationToken); return true; }
+
+    private static DateTime NextDecisionVersion(DateTime now, DateTime? previous)
+    {
+        var candidate = LegacyQuotationOutcomeAdopter.TruncateToMicroseconds(now);
+        if (previous is null || previous.Value < candidate) return candidate;
+        var retained = LegacyQuotationOutcomeAdopter.TruncateToMicroseconds(previous.Value);
+        if (retained.Ticks > DateTime.MaxValue.Ticks - 10)
+            throw new OverflowException("Quotation decision version cannot advance.");
+        return retained.AddTicks(10);
+    }
 
     private DateTime Now() => DateTime.SpecifyKind(timeProvider.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified);
     private async Task<QuotationDecisionPersistenceResult> ReconcileDecisionAsync(
