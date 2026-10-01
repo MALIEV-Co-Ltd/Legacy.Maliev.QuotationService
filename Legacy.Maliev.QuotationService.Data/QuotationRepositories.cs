@@ -511,16 +511,141 @@ public sealed class QuotationRepository(
     {
         public RequestCreateAttemptState State { get; } = state;
     }
-    public async Task<bool> DeleteRequestAsync(int id, CancellationToken cancellationToken) { var deleted = await requests.Requests.Where(x => x.Id == id).ExecuteDeleteAsync(cancellationToken) == 1; if (deleted) await cache.RemoveAsync(RequestKey(id), cancellationToken); return deleted; }
-    public async Task<QuotationRequestResponse?> GetRequestAsync(int id, CancellationToken cancellationToken) { var cached = await cache.GetAsync<QuotationRequestResponse>(RequestKey(id), cancellationToken); if (cached is not null) return cached; var value = await ProjectRequests(requests.Requests.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(cancellationToken); if (value is not null) await cache.SetAsync(RequestKey(id), value, TimeSpan.FromMinutes(2), cancellationToken); return value; }
+    public async Task<bool> DeleteRequestAsync(int id, CancellationToken cancellationToken)
+    {
+        var deleted = await ExecuteRequestMutationAsync(async (attempt, token) =>
+        {
+            var changed = await attempt.Requests.Where(x => x.Id == id).ExecuteDeleteAsync(token) == 1;
+            return (changed, changed);
+        }, cancellationToken);
+        if (deleted) await cache.RemoveAsync(RequestKey(id), cancellationToken);
+        return deleted;
+    }
+    public Task<QuotationRequestResponse?> GetRequestAsync(int id, CancellationToken cancellationToken) =>
+        ProjectRequests(requests.Requests.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(cancellationToken);
     public async Task<PaginatedResponse<QuotationRequestResponse>?> GetRequestsAsync(RequestSortType? sort, string? search, int pageIndex, int pageSize, CancellationToken cancellationToken)
     {
-        IQueryable<QuotationRequest> query = requests.Requests.AsNoTracking(); if (!string.IsNullOrWhiteSpace(search)) { var value = search.Trim(); var numeric = int.TryParse(value, out var id); var pattern = $"%{value}%"; query = query.Where(x => (numeric && x.Id == id) || (!numeric && ((x.FirstName != null && EF.Functions.ILike(x.FirstName, pattern)) || (x.LastName != null && EF.Functions.ILike(x.LastName, pattern)) || (x.Message != null && EF.Functions.ILike(x.Message, pattern)) || (x.TelephoneNumber != null && EF.Functions.ILike(x.TelephoneNumber, pattern)) || (x.CompanyName != null && EF.Functions.ILike(x.CompanyName, pattern)) || (x.Email != null && EF.Functions.ILike(x.Email, pattern)) || (x.InternalComment != null && EF.Functions.ILike(x.InternalComment, pattern)) || (x.Country != null && EF.Functions.ILike(x.Country, pattern))))); }
+        IQueryable<QuotationRequest> query = requests.Requests.AsNoTracking(); if (!string.IsNullOrWhiteSpace(search)) { var value = search.Trim(); var numeric = int.TryParse(value, out var id); var pattern = $"%{EscapeRequestSearch(value)}%"; query = query.Where(x => (numeric && x.Id == id) || (!numeric && ((x.FirstName != null && EF.Functions.ILike(x.FirstName, pattern, "\\")) || (x.LastName != null && EF.Functions.ILike(x.LastName, pattern, "\\")) || (x.Message != null && EF.Functions.ILike(x.Message, pattern, "\\")) || (x.TelephoneNumber != null && EF.Functions.ILike(x.TelephoneNumber, pattern, "\\")) || (x.CompanyName != null && EF.Functions.ILike(x.CompanyName, pattern, "\\")) || (x.Email != null && EF.Functions.ILike(x.Email, pattern, "\\")) || (x.InternalComment != null && EF.Functions.ILike(x.InternalComment, pattern, "\\")) || (x.Country != null && EF.Functions.ILike(x.Country, pattern, "\\"))))); }
         query = sort switch { RequestSortType.RequestId_Descending => query.OrderByDescending(x => x.Id), RequestSortType.RequestCreatedDate_Ascending => query.OrderBy(x => x.CreatedDate), RequestSortType.RequestCreatedDate_Descending => query.OrderByDescending(x => x.CreatedDate), RequestSortType.RequestModifiedDate_Ascending => query.OrderBy(x => x.ModifiedDate), RequestSortType.RequestModifiedDate_Descending => query.OrderByDescending(x => x.ModifiedDate), _ => query.OrderBy(x => x.Id) }; return await PageAsync(ProjectRequests(query), pageIndex, pageSize, cancellationToken);
     }
     public async Task<UpdateResult> UpdateRequestAsync(int id, UpsertQuotationRequestRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken)
     {
-        var entity = await requests.Requests.FindAsync([id], cancellationToken); if (entity is null) return UpdateResult.NotFound; if (expectedModifiedDate is not null) requests.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified); Map(entity, request).ModifiedDate = Now(); try { await requests.SaveChangesAsync(cancellationToken); await cache.RemoveAsync(RequestKey(id), cancellationToken); return UpdateResult.Updated; } catch (DbUpdateConcurrencyException) { return UpdateResult.Conflict; }
+        var result = await ExecuteRequestMutationAsync(async (attempt, token) =>
+        {
+            var entity = await attempt.Requests.FindAsync([id], token);
+            if (entity is null) return (UpdateResult.NotFound, false);
+            if (expectedModifiedDate is not null) attempt.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified);
+            Map(entity, request).ModifiedDate = Now();
+            try { await attempt.SaveChangesAsync(token); return (UpdateResult.Updated, true); }
+            catch (DbUpdateConcurrencyException) { return (UpdateResult.Conflict, false); }
+        }, cancellationToken);
+        if (result == UpdateResult.Updated) await cache.RemoveAsync(RequestKey(id), cancellationToken);
+        return result;
+    }
+
+    private static string EscapeRequestSearch(string value) => value.Replace("\\", "\\\\", StringComparison.Ordinal)
+        .Replace("%", "\\%", StringComparison.Ordinal).Replace("_", "\\_", StringComparison.Ordinal);
+
+    private async Task<TResult> ExecuteRequestMutationAsync<TResult>(
+        Func<QuotationRequestDbContext, CancellationToken, Task<(TResult Result, bool Changed)>> mutation,
+        CancellationToken cancellationToken)
+    {
+        var options = (DbContextOptions<QuotationRequestDbContext>)requests.GetService<IDbContextOptions>();
+        try
+        {
+            return await requests.Database.CreateExecutionStrategy().ExecuteAsync(async token =>
+            {
+                var state = new RequestMutationAttemptState();
+                try
+                {
+                    await using var attempt = new QuotationRequestDbContext(options);
+                    var result = await RequestMutationAttemptAsync(attempt, mutation, state, token);
+                    state.OutcomeReturned = true;
+                    return result;
+                }
+                catch (Exception exception) when (state.CommitSubmitted || state.OutcomeReturned || !state.RollbackConfirmed
+                    || state.CleanupReplacedFailure(exception) || IsRequestMutationAvailabilityFailure(exception))
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (state.CommitSubmitted || state.OutcomeReturned || !state.RollbackConfirmed || state.CleanupReplacedFailure(exception))
+                    {
+                        var cause = state.Failure is null || ReferenceEquals(state.Failure, exception)
+                            ? exception
+                            : new AggregateException("Request mutation failed during cleanup.", state.Failure, exception);
+                        // A non-provider wrapper prevents the configured strategy from replaying an uncertain unit.
+                        throw new QuotationRequestMutationUnavailableException(cause);
+                    }
+                    throw;
+                }
+            }, cancellationToken);
+        }
+        catch (Exception exception) when (IsRequestMutationAvailabilityFailure(exception))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new QuotationRequestMutationUnavailableException(exception);
+        }
+    }
+
+    private static async Task<TResult> RequestMutationAttemptAsync<TResult>(QuotationRequestDbContext attempt,
+        Func<QuotationRequestDbContext, CancellationToken, Task<(TResult Result, bool Changed)>> mutation,
+        RequestMutationAttemptState state, CancellationToken cancellationToken)
+    {
+        await using var transaction = await attempt.Database.BeginTransactionAsync(cancellationToken);
+        state.RollbackConfirmed = false;
+        try
+        {
+            var outcome = await mutation(attempt, cancellationToken);
+            if (!outcome.Changed)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                state.RollbackConfirmed = true;
+                // Guard transaction teardown even for a validated missing/conflicting no-write outcome.
+                state.OutcomeReturned = true;
+                return outcome.Result;
+            }
+            state.CommitSubmitted = true;
+            await transaction.CommitAsync(cancellationToken);
+            return outcome.Result;
+        }
+        catch (Exception original)
+        {
+            state.Failure = original;
+            if (!state.CommitSubmitted)
+            {
+                try { await transaction.RollbackAsync(cancellationToken); }
+                catch (Exception rollback)
+                {
+                    state.Failure = new AggregateException("Request mutation rollback could not be confirmed.", original, rollback);
+                    throw state.Failure;
+                }
+                state.RollbackConfirmed = true;
+            }
+            throw;
+        }
+    }
+
+    private static bool IsRequestMutationAvailabilityFailure(Exception exception)
+    {
+        for (var depth = 0; depth < 8; depth++)
+        {
+            if (exception is PostgresException postgres)
+                return postgres.SqlState is "40001" or "40P01" || postgres.SqlState.StartsWith("08", StringComparison.Ordinal)
+                    || postgres.SqlState.StartsWith("53", StringComparison.Ordinal) || postgres.SqlState.StartsWith("57", StringComparison.Ordinal);
+            if (exception is NpgsqlException or IOException or TimeoutException) return true;
+            if (exception is not (DbUpdateException or Microsoft.EntityFrameworkCore.Storage.RetryLimitExceededException)
+                || exception.InnerException is null) return false;
+            exception = exception.InnerException;
+        }
+        return false;
+    }
+
+    private sealed class RequestMutationAttemptState
+    {
+        public bool CommitSubmitted { get; set; }
+        public bool OutcomeReturned { get; set; }
+        public bool RollbackConfirmed { get; set; } = true;
+        public Exception? Failure { get; set; }
+        public bool CleanupReplacedFailure(Exception exception) => Failure is not null && !ReferenceEquals(Failure, exception);
     }
 
     public async Task<QualificationReceipt?> GetRequestQualificationAsync(int id, CancellationToken cancellationToken) =>

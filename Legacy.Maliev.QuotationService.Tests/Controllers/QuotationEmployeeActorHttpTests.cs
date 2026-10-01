@@ -321,8 +321,10 @@ public sealed class QuotationEmployeeActorHttpTests(QuotationEmployeeActorFixtur
         await using (var scope = app.Services.CreateAsyncScope())
         {
             var service = scope.ServiceProvider.GetRequiredService<IQuotationService>();
-            Assert.NotNull(await service.GetRequestAsync(seeded.Id, CancellationToken.None));
+            var detail = await service.GetRequestAsync(seeded.Id, CancellationToken.None);
+            Assert.NotNull(detail);
             var cache = scope.ServiceProvider.GetRequiredService<IQuotationCache>();
+            await cache.SetAsync($"request:{seeded.Id}", detail, TimeSpan.FromMinutes(2), CancellationToken.None);
             Assert.NotNull(await cache.GetAsync<QuotationRequestResponse>($"request:{seeded.Id}", CancellationToken.None));
         }
         using var failed = await SendAsync(client, seeded.Id, Employee("employee-42"));
