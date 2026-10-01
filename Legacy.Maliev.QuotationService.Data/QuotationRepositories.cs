@@ -206,13 +206,14 @@ public sealed class QuotationRepository(
         }
 
         var now = Now();
+        var nextVersion = NextDecisionVersion(now, DecisionVersionFloor(entity));
         var lateAttachment = attachInvoice && entity.Accepted == true;
         entity.DecisionOrderVersion = lateAttachment
             ? entity.DecisionOrderVersion ?? entity.ModifiedDate ?? entity.CreatedDate ?? DateTime.SpecifyKind(DateTime.UnixEpoch, DateTimeKind.Unspecified)
             : null;
         if (attachInvoice) entity.InvoiceId = invoiceId;
         entity.Accepted = accepted;
-        entity.ModifiedDate = NextDecisionVersion(now, entity.ModifiedDate);
+        entity.ModifiedDate = nextVersion;
         if (accepted && !lateAttachment)
         {
             var origin = acceptanceOrigin
@@ -262,11 +263,12 @@ public sealed class QuotationRepository(
         var entity = await quotations.Quotations.FindAsync([id], cancellationToken); if (entity is null) return UpdateResult.NotFound;
         if (request.Accepted == true && entity.Accepted != true) return UpdateResult.Conflict;
         if (expectedModifiedDate is not null) quotations.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified);
+        var nextVersion = NextDecisionVersion(Now(), DecisionVersionFloor(entity));
         if (entity.Accepted == true && entity.DecisionOrderVersion is null)
         {
             entity.DecisionOrderVersion = entity.ModifiedDate ?? entity.CreatedDate ?? DateTime.SpecifyKind(DateTime.UnixEpoch, DateTimeKind.Unspecified);
         }
-        Map(entity, request).ModifiedDate = Now();
+        Map(entity, request).ModifiedDate = nextVersion;
         try { await quotations.SaveChangesAsync(cancellationToken); await cache.RemoveAsync(QuotationKey(id), cancellationToken); return UpdateResult.Updated; } catch (DbUpdateConcurrencyException) { return UpdateResult.Conflict; }
     }
 
@@ -841,6 +843,13 @@ public sealed class QuotationRepository(
     public Task<QuotationRequestFileResponse?> GetRequestFileAsync(int id, CancellationToken cancellationToken) => ProjectRequestFiles(requests.Files.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(cancellationToken);
     public async Task<IReadOnlyList<QuotationRequestFileResponse>> GetRequestFilesAsync(int requestId, CancellationToken cancellationToken) => await ProjectRequestFiles(requests.Files.AsNoTracking().Where(x => x.RequestId == requestId).OrderBy(x => x.Id)).ToListAsync(cancellationToken);
     public async Task<bool> UpdateRequestFileAsync(int id, UpsertQuotationRequestFileRequest request, CancellationToken cancellationToken) { var entity = await requests.Files.FindAsync([id], cancellationToken); if (entity is null) return false; entity.RequestId = request.RequestId; entity.Bucket = request.Bucket; entity.ObjectName = request.ObjectName; entity.ModifiedDate = Now(); await requests.SaveChangesAsync(cancellationToken); return true; }
+
+    private static DateTime DecisionVersionFloor(Quotation entity)
+    {
+        var existingVersion = entity.DecisionOrderVersion ?? entity.ModifiedDate ?? entity.CreatedDate
+            ?? DateTime.SpecifyKind(DateTime.UnixEpoch, DateTimeKind.Unspecified);
+        return entity.ModifiedDate is { } modified && modified > existingVersion ? modified : existingVersion;
+    }
 
     private static DateTime NextDecisionVersion(DateTime now, DateTime? previous)
     {
