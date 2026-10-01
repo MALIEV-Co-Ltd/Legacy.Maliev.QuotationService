@@ -310,8 +310,8 @@ public sealed class QuotationRepository(
 
     public async Task<QuotationRequestResponse> CreateRequestAsync(UpsertQuotationRequestRequest request, CancellationToken cancellationToken)
     {
-        await using var transaction = await requests.Database.BeginTransactionAsync(cancellationToken);
-        var now = Now(); var entity = Map(new QuotationRequest { JourneyId = request.JourneyId }, request); entity.CreatedDate = now; entity.ModifiedDate = now; requests.Add(entity); await requests.SaveChangesAsync(cancellationToken); entity.TransactionId = TransactionId(entity.Id); await requests.SaveChangesAsync(cancellationToken); await transaction.CommitAsync(cancellationToken); return ToResponse(entity);
+        var result = await ExecuteRequestCreateAsync(request, null, null, cancellationToken);
+        return result.Response ?? throw new QuotationRequestCreateUnavailableException();
     }
     public async Task<IdempotentRequestCreateResult> CreateRequestIdempotentlyAsync(
         UpsertQuotationRequestRequest request,
@@ -324,46 +324,192 @@ public sealed class QuotationRepository(
             return new(null, IdempotencyBindingResult.Unavailable);
         }
 
-        await using var transaction = await requests.Database.BeginTransactionAsync(cancellationToken);
-        await requests.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock(hashtextextended({$"quotation-request\n{keyHash}"}, 0))",
-            cancellationToken);
+        return await ExecuteRequestCreateAsync(request, keyHash, fingerprint, cancellationToken);
+    }
 
-        var existingBinding = await requests.RequestCreateIdempotency
-            .AsNoTracking()
-            .SingleOrDefaultAsync(value => value.KeyHash == keyHash, cancellationToken);
-        if (existingBinding is not null)
+    private async Task<IdempotentRequestCreateResult> ExecuteRequestCreateAsync(
+        UpsertQuotationRequestRequest request,
+        string? keyHash,
+        string? fingerprint,
+        CancellationToken cancellationToken)
+    {
+        var options = (DbContextOptions<QuotationRequestDbContext>)requests.GetService<IDbContextOptions>();
+        try
         {
-            if (!string.Equals(existingBinding.Fingerprint, fingerprint, StringComparison.Ordinal))
+            return await requests.Database.CreateExecutionStrategy().ExecuteAsync(async token =>
             {
-                return new(null, IdempotencyBindingResult.Conflict);
+                var state = new RequestCreateAttemptState();
+                try
+                {
+                    // Include transaction and context teardown in the attempt's commit guard.
+                    await using var attempt = new QuotationRequestDbContext(options);
+                    return await CreateRequestAttemptAsync(attempt, request, keyHash, fingerprint, state, token);
+                }
+                catch (Exception exception) when (state.CommitSubmitted || !state.RollbackConfirmed
+                    || state.CleanupReplacedFailure(exception) || IsRequestCreateAvailabilityFailure(exception))
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (state.CommitSubmitted || !state.RollbackConfirmed || state.CleanupReplacedFailure(exception))
+                    {
+                        var cause = state.Failure is null || ReferenceEquals(state.Failure, exception)
+                            ? exception
+                            : new AggregateException("Request creation failed during cleanup.", state.Failure, exception);
+                        throw new RequestCreateAttemptUnconfirmedException(state, cause);
+                    }
+                    throw;
+                }
+            }, cancellationToken);
+        }
+        catch (RequestCreateAttemptUnconfirmedException exception)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (keyHash is not null && exception.State.CommitSubmitted && exception.State.RootId > 0)
+                return await ReconcileRequestCreateAsync(options, keyHash, fingerprint!, exception.State.RootId, cancellationToken);
+            return new(null, IdempotencyBindingResult.Unavailable);
+        }
+        catch (Exception exception) when (IsRequestCreateAvailabilityFailure(exception))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return new(null, IdempotencyBindingResult.Unavailable);
+        }
+    }
+
+    private async Task<IdempotentRequestCreateResult> CreateRequestAttemptAsync(
+        QuotationRequestDbContext attempt,
+        UpsertQuotationRequestRequest request,
+        string? keyHash,
+        string? fingerprint,
+        RequestCreateAttemptState state,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await attempt.Database.BeginTransactionAsync(cancellationToken);
+        state.RollbackConfirmed = false;
+        try
+        {
+            if (keyHash is not null)
+            {
+                await attempt.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtextextended({$"quotation-request\n{keyHash}"}, 0))",
+                    cancellationToken);
+
+                var existingBinding = await attempt.RequestCreateIdempotency.AsNoTracking()
+                    .SingleOrDefaultAsync(value => value.KeyHash == keyHash, cancellationToken);
+                if (existingBinding is not null)
+                {
+                    if (!string.Equals(existingBinding.Fingerprint, fingerprint, StringComparison.Ordinal))
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                        state.RollbackConfirmed = true;
+                        return new(null, IdempotencyBindingResult.Conflict);
+                    }
+                    var existingResponse = await ProjectRequests(attempt.Requests.AsNoTracking()
+                        .Where(value => value.Id == existingBinding.RequestId)).SingleOrDefaultAsync(cancellationToken);
+                    await transaction.RollbackAsync(cancellationToken);
+                    state.RollbackConfirmed = true;
+                    return existingResponse is null || existingBinding.RequestId <= 0
+                        || !string.Equals(existingResponse.TransactionId, TransactionId(existingBinding.RequestId), StringComparison.Ordinal)
+                        ? new(null, IdempotencyBindingResult.Unavailable)
+                        : new(existingResponse, IdempotencyBindingResult.Matched);
+                }
             }
 
-            var existingResponse = await ProjectRequests(
-                    requests.Requests.AsNoTracking().Where(value => value.Id == existingBinding.RequestId))
-                .SingleOrDefaultAsync(cancellationToken);
-            return existingResponse is null
-                ? new(null, IdempotencyBindingResult.Unavailable)
-                : new(existingResponse, IdempotencyBindingResult.Matched);
+            var now = Now();
+            var entity = Map(new QuotationRequest { JourneyId = request.JourneyId }, request);
+            entity.CreatedDate = now;
+            entity.ModifiedDate = now;
+            attempt.Add(entity);
+            await attempt.SaveChangesAsync(cancellationToken);
+            state.RootId = entity.Id;
+            entity.TransactionId = TransactionId(entity.Id);
+            if (keyHash is not null) attempt.RequestCreateIdempotency.Add(new RequestCreateIdempotency
+            {
+                KeyHash = keyHash,
+                Fingerprint = fingerprint!,
+                RequestId = entity.Id,
+            });
+            await attempt.SaveChangesAsync(cancellationToken);
+            await attempt.Entry(entity).ReloadAsync(cancellationToken);
+            state.CommitSubmitted = true;
+            await transaction.CommitAsync(cancellationToken);
+            return new(ToResponse(entity), IdempotencyBindingResult.Acquired);
         }
-
-        var now = Now();
-        var entity = Map(new QuotationRequest { JourneyId = request.JourneyId }, request);
-        entity.CreatedDate = now;
-        entity.ModifiedDate = now;
-        requests.Add(entity);
-        await requests.SaveChangesAsync(cancellationToken);
-        entity.TransactionId = TransactionId(entity.Id);
-        requests.RequestCreateIdempotency.Add(new RequestCreateIdempotency
+        catch (Exception original)
         {
-            KeyHash = keyHash,
-            Fingerprint = fingerprint,
-            RequestId = entity.Id,
-        });
-        await requests.SaveChangesAsync(cancellationToken);
-        await requests.Entry(entity).ReloadAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return new(ToResponse(entity), IdempotencyBindingResult.Acquired);
+            state.Failure = original;
+            if (!state.CommitSubmitted)
+            {
+                try { await transaction.RollbackAsync(cancellationToken); }
+                catch (Exception rollback)
+                {
+                    state.Failure = new AggregateException("Request creation rollback could not be confirmed.", original, rollback);
+                    throw state.Failure;
+                }
+                state.RollbackConfirmed = true;
+            }
+            throw;
+        }
+    }
+
+    private static async Task<IdempotentRequestCreateResult> ReconcileRequestCreateAsync(
+        DbContextOptions<QuotationRequestDbContext> options, string keyHash, string fingerprint, int rootId,
+        CancellationToken cancellationToken)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+        try
+        {
+            await using var verification = new QuotationRequestDbContext(options);
+            var transactionId = TransactionId(rootId);
+            // One database statement proves the receipt/root tuple from a single fresh read snapshot.
+            var response = await ProjectRequests(verification.Requests.AsNoTracking().Where(value => value.Id == rootId
+                    && value.TransactionId == transactionId
+                    && verification.RequestCreateIdempotency.Any(binding => binding.KeyHash == keyHash
+                        && binding.Fingerprint == fingerprint && binding.RequestId == rootId)))
+                .SingleOrDefaultAsync(deadline.Token);
+            return response is not null
+                ? new(response, IdempotencyBindingResult.Matched)
+                : new(null, IdempotencyBindingResult.Unavailable);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new(null, IdempotencyBindingResult.Unavailable);
+        }
+        // After a submitted commit, an unavailable proof is never an input-validation response.
+        catch (Exception)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return new(null, IdempotencyBindingResult.Unavailable);
+        }
+    }
+
+    private static bool IsRequestCreateAvailabilityFailure(Exception exception)
+    {
+        for (var depth = 0; depth < 8; depth++)
+        {
+            if (exception is PostgresException postgres)
+                return postgres.SqlState is "40001" or "40P01" || postgres.SqlState.StartsWith("08", StringComparison.Ordinal)
+                    || postgres.SqlState.StartsWith("53", StringComparison.Ordinal) || postgres.SqlState.StartsWith("57", StringComparison.Ordinal);
+            if (exception is NpgsqlException or IOException or TimeoutException) return true;
+            if (exception is not (DbUpdateException or Microsoft.EntityFrameworkCore.Storage.RetryLimitExceededException)
+                || exception.InnerException is null) return false;
+            exception = exception.InnerException;
+        }
+        return false;
+    }
+
+    private sealed class RequestCreateAttemptState
+    {
+        public bool CommitSubmitted { get; set; }
+        public bool RollbackConfirmed { get; set; } = true;
+        public int RootId { get; set; }
+        public Exception? Failure { get; set; }
+        public bool CleanupReplacedFailure(Exception exception) => Failure is not null && !ReferenceEquals(Failure, exception);
+    }
+
+    private sealed class RequestCreateAttemptUnconfirmedException(RequestCreateAttemptState state, Exception cause)
+        : Exception("Request creation could not be confirmed.", cause)
+    {
+        public RequestCreateAttemptState State { get; } = state;
     }
     public async Task<bool> DeleteRequestAsync(int id, CancellationToken cancellationToken) { var deleted = await requests.Requests.Where(x => x.Id == id).ExecuteDeleteAsync(cancellationToken) == 1; if (deleted) await cache.RemoveAsync(RequestKey(id), cancellationToken); return deleted; }
     public async Task<QuotationRequestResponse?> GetRequestAsync(int id, CancellationToken cancellationToken) { var cached = await cache.GetAsync<QuotationRequestResponse>(RequestKey(id), cancellationToken); if (cached is not null) return cached; var value = await ProjectRequests(requests.Requests.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(cancellationToken); if (value is not null) await cache.SetAsync(RequestKey(id), value, TimeSpan.FromMinutes(2), cancellationToken); return value; }

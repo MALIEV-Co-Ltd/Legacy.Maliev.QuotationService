@@ -48,7 +48,12 @@ public sealed class QuotationRequestsController(IQuotationService service) : Con
 
         if (key is null)
         {
-            return Created(await service.CreateRequestAsync(item, ct));
+            try { return Created(await service.CreateRequestAsync(item, ct)); }
+            catch (QuotationRequestCreateUnavailableException)
+            {
+                return ProblemWithCode(StatusCodes.Status503ServiceUnavailable,
+                    "Request creation could not be confirmed.", "request_create_unavailable");
+            }
         }
 
         var result = await service.CreateRequestIdempotentlyAsync(
