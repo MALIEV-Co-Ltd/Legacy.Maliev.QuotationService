@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Legacy.Maliev.QuotationService.Api\Legacy.Maliev.QuotationService.Api.csproj" />
+    <ProjectReference Include="$(MalievWorkspaceRoot)/Legacy.Maliev.AccountingService/Legacy.Maliev.AccountingService.Data/Legacy.Maliev.AccountingService.Data.csproj" />
     <ProjectReference Include="..\Legacy.Maliev.QuotationService.Application\Legacy.Maliev.QuotationService.Application.csproj" />
     <ProjectReference Include="..\Legacy.Maliev.QuotationService.Data\Legacy.Maliev.QuotationService.Data.csproj" />
     <ProjectReference Include="..\Legacy.Maliev.QuotationService.Domain\Legacy.Maliev.QuotationService.Domain.csproj" />

@@ -296,9 +296,9 @@ internal static partial class WorkflowContractValidator
         RejectDuplicatedValidationActionsAndCommands(jobs);
 
         var steps = RequireSequence(validateJob, "steps");
-        if (steps.Children.Count != 7)
+        if (steps.Children.Count != 8)
         {
-            throw new InvalidOperationException("Validate job must contain exactly seven caller-owned steps.");
+            throw new InvalidOperationException("Validate job must contain exactly eight caller-owned steps.");
         }
 
         ValidateStep(
@@ -330,15 +330,25 @@ internal static partial class WorkflowContractValidator
             });
         ValidateStep(
             steps.Children[3],
+            CheckoutAction,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["repository"] = "MALIEV-Co-Ltd/Legacy.Maliev.AccountingService",
+                ["ref"] = "ae0826156b06c34476e95de8c53dfccfcf5a5972",
+                ["path"] = ".dependencies/Legacy.Maliev.AccountingService",
+                ["persist-credentials"] = "false",
+            });
+        ValidateStep(
+            steps.Children[4],
             SharedValidationAction,
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["solution"] = "Legacy.Maliev.QuotationService.slnx",
                 ["use-local-maliev-dependencies"] = "true",
             });
-        ValidateScriptStep(steps.Children[4], "Prove coverage gate failure and success behavior", CoverageProof);
-        ValidateScriptStep(steps.Children[5], "Collect QuotationService coverage", CoverageCollection);
-        ValidateScriptStep(steps.Children[6], "Enforce 80 percent owned handwritten line coverage", CoverageEnforcement);
+        ValidateScriptStep(steps.Children[5], "Prove coverage gate failure and success behavior", CoverageProof);
+        ValidateScriptStep(steps.Children[6], "Collect QuotationService coverage", CoverageCollection);
+        ValidateScriptStep(steps.Children[7], "Enforce 80 percent owned handwritten line coverage", CoverageEnforcement);
     }
 
     private static void ValidateJoinedAuthorityJob(YamlMappingNode job)
