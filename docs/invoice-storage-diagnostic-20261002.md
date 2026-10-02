@@ -1,5 +1,28 @@
 # PR100 owned PostgreSQL storage diagnostic
 
+## Hosted recurrence and reachable diagnostic output
+
+Head `0ad3868cd9dabb06185bdf284ff712ccd3ff46c1` required run36955873631
+failed584 passed/33 failed/zero skipped. The independent storage probe and
+HighWater/FirstDecisionPrecision fixtures failed during second-database creation;
+the shared InvoiceConsumer class was not among those failed cases. Joined
+authority job110678595697 passed. PostgreSQL process/stream loss remains
+unresolved; no disk/OOM cause is proven and no resource/retry waiver is made.
+
+The probe used xUnit fixture initialization, so initialization failed before its
+ITestOutputHelper body executed. Console and Exception.Data metadata were not
+rendered in the hosted job log. The NEW probe now owns initialization inside the
+test method and emits fixed bounded storage metadata in finally before disposal.
+It retains the original exception and every existing assertion/resource budget;
+this is diagnostic reach, not a process-loss fix. No production logs or rows.
+
+Fresh root Release zero warnings/errors;33 affected tests and617 unfiltered
+tests passed with zero failures/skips. Full duration7m22s, artifact
+`TestResults/root-storage-output-full/full.trx`. Whole verify-only formatting,
+scoped secret scan and whitespace checks passed; dependency graph unchanged
+from the previously completed six-project transitive audit. Exact-head CI remains
+required; PR100 must not merge or close the startup issues on local success alone.
+
 ## Root independent diagnostic validation
 
 Whole Release build zero warnings/errors; affected33 and unfiltered617 passed
