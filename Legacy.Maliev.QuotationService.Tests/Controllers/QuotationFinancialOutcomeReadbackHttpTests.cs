@@ -246,9 +246,9 @@ public sealed class QuotationFinancialOutcomeReadbackHttpTests(FinancialOutcomeF
 
 public sealed class FinancialOutcomeFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly IContainer redis = new ContainerBuilder("redis:7-alpine").WithPortBinding(6379, true)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build();
+    private PostgreSqlContainer postgres = null!;
+    private IContainer redis = null!;
+    private Infrastructure.DisposableContainerPair? containers;
     private readonly RSA key = RSA.Create(2048);
     private readonly Clock clock = new();
     private int day;
@@ -260,7 +260,14 @@ public sealed class FinancialOutcomeFixture : IAsyncLifetime
     public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(postgres.StartAsync(), redis.StartAsync());
+        containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation97-financial",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).Build(),
+            attempt => new ContainerBuilder("redis:7-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true)
+                .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build());
+        postgres = (PostgreSqlContainer)containers.First;
+        redis = containers.Second;
         await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
         {
             await connection.OpenAsync();
@@ -286,7 +293,7 @@ public sealed class FinancialOutcomeFixture : IAsyncLifetime
     }
     public async Task DisposeAsync()
     {
-        await Task.WhenAll(postgres.DisposeAsync().AsTask(), redis.DisposeAsync().AsTask());
+        if (containers is not null) await containers.DisposeAsync();
         key.Dispose();
     }
     private sealed class Clock : TimeProvider
