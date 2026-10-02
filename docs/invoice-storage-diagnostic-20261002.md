@@ -1,5 +1,32 @@
 # PR100 owned PostgreSQL storage diagnostic
 
+## Current peer-correlation diagnostic implementation (2026-10-02)
+
+Fresh Release EXIT0 with zero warnings/errors; NEW pure25 PASS and combined
+old/new pure59 PASS, zero failures/skips. Existing three snapshots are preserved.
+Corrected actual three probes and unchanged DraftRead17 now PASS, zero skips;
+unfiltered full681 now PASS, zero failures/skips; format and ten audits PASS.
+No product failure cause or fix is established. The earlier design paragraphs
+below are historical; the implementation chronology at the end supersedes them.
+
+## Historical peer-correlation TEST/DESIGN phase (2026-10-02)
+
+Base c9601d5775ed1ff556efd83ad4eaa3a9f1fdebe6. Required hosted36964354119/job110704732507 failed604PASS/51FAIL/0skip. Invoice storage independent probe reached ready then57P01 at the combined OpenAsync/CREATE DATABASE line319, before second-database observation. Same owned container/PID1 start, no restart/OOM/space exhaustion was observed. This does not establish actual TCP recipient/backend identity or failure cause. Existing event classifier lacks exact FATAL unexpected-postmaster category, so Ready-only classification is not proof that FATAL was absent.
+
+Allowed four paths: existing OwnedPostgresDiagnostics.cs/Tests.cs, InvoiceConsumer fixture within QuotationInvoiceConsumerContractHttpTests.cs, this doc. Initial phase currently changes only helper compile scaffold, NEW pure tests in existing test file and this doc. No fixture integration, product fix or new startup/readiness/retry/image/resource/policy change. Unrelated Python cache directories preserved.
+
+Typed correlation is evidence only: Unknown/Matched/Mismatched. Selected SDK endpoint and ownership-verified5432/tcp bindings are compared without outputting connection strings. IPv4/IPv6 wildcard published bindings0.0.0.0/:: can correspond to SDKlocalhost; same-port dual-stack aliases are not ambiguous, different ports/foreignhost are mismatches. Missing observations remain Unknown, never invented zeroPID or successful readiness. This is not a new loopback-only startup guard.
+
+Backend correlation compares independently obtained Npgsql ProcessID/SQL pg_backend_pid, SQL pg_postmaster_start_time and unsigned synthetic system_identifier with fixed owned-container proc PID/PPID/startticks, actual postmasterPID, and independently socket-observed server start/systemID. Nonpositive/synthetic-invalid values must not count as matching. If connection open fails before identity is available, retain Unknown; do not issue a product retry or substitute a new successful backend as identity of the failed socket. Independently observed owned server remains a control only.
+
+Proposed fixture integration after root review: separate bounded phase event stream (open-start/open-complete/create-start/create-complete) preserves the existing exactly3 StorageDiagnostics controls; split current line319 into individual awaits. Ownership verification precedes every Docker binding/proc observation. Fixed read-only synthetic identity SQL and socket control only; no application rows, rawSQL/log/errorbody, credentials or connection strings in output. Exact FATAL classification emits fixed category/numericPID only. Observation failure preserves the original initialization exception and existing cleanup. Pipeline success/failure remains unchanged by Unknown/Mismatched diagnostic evidence.
+
+Fresh direct Tests Release0W/E20.21s, exact private Defaults8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3/Contracts78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7/Accountingae0826156b06c34476e95de8c53dfccfcf5a5972 Release graph. First NEWpure15=14 genuine expected Unknown/absentcategory assertionRED/1missing-observationcontrol,0skip, TestResults/peer-correlation-pure-red/red.trx. This is missing diagnostic functionality, not product defect proof or container death reproduction. Dual-stack same-port control added afterward requires fresh build/RED readback. No full/native/container test started. Freeze for root review before diagnostic implementation or fixture integration; no commit/push/GitHub/provider/persistent/source actions.
+
+Primary PG18 source: https://github.com/postgres/postgres/blob/REL_18_STABLE/src/backend/storage/ipc/pmsignal.c#L314 . Linux backend deathwatch reads a pipe and EOF means parent death to that backend; Docker Running alone does not correlate this pipe or backend. Remaining strongest observation is actual client-recipient identity, not a guessed capacity/image repair.
+
+Final pure TEST/DESIGN freeze: fresh direct Tests Release0W/E11.55s, NEW16=15 genuine diagnostic assertionRED/1missing-observationcontrol/0skip, TestResults/peer-correlation-final-pure-red/red.trx. Only compile scaffold returns Unknown; existing fatal classifier remains unchanged, and InvoiceConsumer fixture is byte-unchanged. All handles terminal; stop for root design/RED review before any implementation/integration/heavy tests. No old assertions changed.
+
 ## Hosted recurrence and reachable diagnostic output
 
 Head `0ad3868cd9dabb06185bdf284ff712ccd3ff46c1` required run36955873631
@@ -213,3 +240,78 @@ zero skips, errors, timeouts or aborts. Final full evidence is
 `C68BEE8A79657F6963BE6C5EE7ED2B39CF6877FF5E56B689B7FDA5A2EBE4D9CE`.
 This supersedes the pre-output-guard local full run but does not establish the
 hosted PostgreSQL failure cause or waive the required replacement CI gate.
+# Typed recipient correlation follow-up (current diagnostic candidate)
+
+The hosted SQL57P01 cause is **unproven**. Docker Running/PID1/Ready snapshots do
+not identify the TCP recipient or prove the failed backend's deathwatch state.
+This follow-up owns only OwnedPostgresDiagnostics.cs, its tests, the
+InvoiceConsumerFixture region, and this document. No pooling, startup, image,
+resource, retry, deadline, connection, schema or CI behavior is repaired.
+
+Fresh initial Release: zero warnings/errors. The expanded pure tests reached
+25 cases: 24 assertion failures and one Unknown-observation control passed;
+zero errors/skips. Evidence: TestResults/peer-correlation-invalid-red/red.trx.
+The earlier 16-case RED remains retained separately. These are diagnostics
+feature RED, not new product regression claims. First implementation build
+reached CS8604 (nullable Npgsql Host), fixed locally with an empty invalid host
+classification; it is excluded from passing build evidence.
+
+The observer verifies exact owned container identity before catalog/exec access.
+It compares SDK-selected port/loopback identity with Docker's actual 5432 mapping,
+including wildcard/dual-stack same-port mappings. It never rejects startup.
+On the **actual caller connection** only, it reads backend PID, postmaster start
+and cluster system identifier; a fixed owned Unix-socket psql control reads only
+start/cluster identity and /proc reads that actual backend PID/parent/start ticks.
+The socket control cannot establish a replacement TCP backend match. Missing
+observations are Unknown or DiagnosticUnavailable, never zero-as-known.
+
+Four bounded phase records (open-start/open-complete/create-start/create-complete)
+are embedded in the existing three storage snapshots. Original Open/CREATE,
+migrations and bare rethrow remain; observer/output failure is contained and
+never substitutes for the original exception. No raw host, connection string,
+SQL, application row, server log, stderr, password or environment is emitted.
+The exact FATAL unexpected-postmaster string becomes a fixed enum category.
+The first released actual probe reached 3 cases: unchanged three-snapshot and
+independent storage probes PASS, new correlation probe FAIL. Artifact retained:
+TestResults/peer-correlation-actual-probes/actual-correlation.trx. Its assertion
+isolated a diagnostic error: before Open, Npgsql connector metadata exposes
+port zero, not a selected recipient. All three post-open phases independently
+reported matching published port/backend PID/parent/start/system identity.
+The approved correction reports selected endpoint Unknown and nullable port
+before Open, never substitutes configured connection-string data; the NEW test
+keeps strict endpoint/backend matches in all three opened phases. No product
+startup/pooling fix is implied. Corrected actual rerun/DraftRead/full are held
+while Web owns the serial resource window; no full acceptance is claimed.
+
+The subsequent released serial slot measured free5358452KiB/total33386372KiB.
+Corrected actual3 probes passed with zero skips: TestResults/peer-correlation-corrected-probes/corrected-actual.trx,
+SHA256 5BA5887A6D9300D2F73D8DE631504B1981CC7ABADA243EDC35BFEC4914E74137.
+Unchanged DraftRead17 passed with zero skips: TestResults/peer-correlation-draft-read/draft-read.trx,
+SHA256 74E6DFD01784DA174F78472F1C96E82C88833767F50536765DC713921BC6E05A.
+The independent probe's two later snapshots contain open-start Unknown/Unknown,
+then all three opened phases Matched/Matched. This is actual local correlation
+evidence only, not the cause of the hosted SQL57P01 failure. The original failed
+probe artifact is preserved; no assertion of an unfiltered full pass is made.
+
+## Final integrated local validation (2026-10-02)
+
+The earlier held/full-pending statements are historical, superseded here.
+After memory dropped below the parent's1GiB threshold, the suite was held without
+resource/process/GC changes. A later pre-start measurement2540588KiB allowed the
+approved run from the unchanged fresh warnings-as-errors Release0W/0E build.
+Unfiltered XPlat coverage full681 passed with zero failures/skips,9m21s:
+TestResults/peer-correlation-integrated-full/full.trx,
+SHA256 4DD5197ED5D3523D040FAA6109BDA6360AF8B82B7F48A09BF018DAD42C1B063A.
+Coverage attachment ecafc62e-19ae-4d0f-85fd-c72184ac4b60/coverage.cobertura.xml,
+SHA256 9003884DB3844A75EF261EDEB682D20B6076DDAE2F6F89053A400B529C0DAEF9.
+The unchanged checker passes5239/5523=94.86% at80; its existing five controls
+pass (their expected negative-case stderr is retained). Unexcluded owned raw
+coverage: API465/716=64.94%, Application157/163=96.32%, Data3958/4066=97.34%,
+Domain96/99=96.97%, MigrationRunner667/819=81.44%. No coverage policy changed.
+Whole solution verify-only format and all ten sequential transitive package
+vulnerability audits pass. Actual focused proofs are three correlation/storage
+cases and seventeen unchanged DraftRead HTTP cases; pure diagnostics/startup101
+pass. Scope is four correlation diagnostic files plus two independently reviewed
+root DraftRead-helper-adoption files. All test/build/format/audit handles are
+terminal; original failed hosted and local probe evidence remain. These local
+passes do not prove hosted SQL57P01 cause, fix it, or waive replacement CI.

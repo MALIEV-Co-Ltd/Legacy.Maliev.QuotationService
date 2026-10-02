@@ -9,6 +9,141 @@ public sealed class OwnedPostgresDiagnosticsTests
     private const string Prefix = "2026-10-02 03:22:37.994 UTC [45] ";
 
     [Theory]
+    [InlineData("127.0.0.1")]
+    [InlineData("0.0.0.0")]
+    [InlineData("::")]
+    public void Localhost_selected_endpoint_matches_actual_explicit_or_wildcard_mapping(string binding)
+    {
+        Assert.Equal(PostgresCorrelation.Matched, OwnedPostgresDiagnostics.CorrelateEndpoint(
+            new("localhost", 49123), [new(binding, 49123)]));
+    }
+
+    [Theory]
+    [InlineData("wrong-port")]
+    [InlineData("ambiguous")]
+    [InlineData("wrong-host")]
+    public void Different_or_ambiguous_mapping_is_evidence_mismatch_not_readiness(string scenario)
+    {
+        DiagnosticEndpoint[] mappings = scenario switch
+        {
+            "wrong-port" => [new("127.0.0.1", 49124)],
+            "ambiguous" => [new("127.0.0.1", 49123), new("127.0.0.1", 49124)],
+            _ => [new("192.0.2.1", 49123)]
+        };
+        Assert.Equal(PostgresCorrelation.Mismatched, OwnedPostgresDiagnostics.CorrelateEndpoint(new("localhost", 49123), mappings));
+    }
+
+    [Fact]
+    public void Dual_stack_wildcards_on_the_same_port_are_not_ambiguous()
+    {
+        Assert.Equal(PostgresCorrelation.Matched, OwnedPostgresDiagnostics.CorrelateEndpoint(
+            new("localhost", 49123), [new("0.0.0.0", 49123), new("::", 49123)]));
+    }
+
+    [Fact]
+    public void Missing_endpoint_or_backend_observation_remains_unknown()
+    {
+        Assert.Equal(PostgresCorrelation.Unknown, OwnedPostgresDiagnostics.CorrelateEndpoint(null, [new("127.0.0.1", 49123)]));
+        Assert.Equal(PostgresCorrelation.Unknown, OwnedPostgresDiagnostics.CorrelateEndpoint(new("localhost", 49123), null));
+        Assert.Equal(PostgresCorrelation.Unknown, OwnedPostgresDiagnostics.CorrelateBackend(null, OwnedBackend()));
+        Assert.Equal(PostgresCorrelation.Unknown, OwnedPostgresDiagnostics.CorrelateBackend(SqlBackend(), null));
+    }
+
+    [Fact]
+    public void Independent_backend_pid_parent_start_and_cluster_agree()
+    {
+        Assert.Equal(PostgresCorrelation.Matched, OwnedPostgresDiagnostics.CorrelateBackend(SqlBackend(), OwnedBackend()));
+    }
+
+    [Theory]
+    [InlineData("npgsql-pid")]
+    [InlineData("proc-pid")]
+    [InlineData("parent")]
+    [InlineData("process-start")]
+    [InlineData("postmaster-start")]
+    [InlineData("system-id")]
+    public void Backend_identity_disagreement_is_not_compatible_evidence(string scenario)
+    {
+        var sql = SqlBackend();
+        var owned = OwnedBackend();
+        if (scenario == "npgsql-pid") sql = sql with { NpgsqlPid = 73 };
+        if (scenario == "proc-pid") owned = owned with { Pid = 73 };
+        if (scenario == "parent") owned = owned with { ParentPid = 2 };
+        if (scenario == "process-start") owned = owned with { StartTicks = 0 };
+        if (scenario == "postmaster-start") owned = owned with { PostmasterStart = owned.PostmasterStart.AddSeconds(1) };
+        if (scenario == "system-id") owned = owned with { SystemId = 9002 };
+        Assert.Equal(PostgresCorrelation.Mismatched, OwnedPostgresDiagnostics.CorrelateBackend(sql, owned));
+    }
+
+    [Fact]
+    public void Exact_unexpected_postmaster_FATAL_is_structural_without_retaining_body()
+    {
+        var result = Assert.Single(OwnedPostgresDiagnostics.Classify(Prefix + "FATAL:  terminating connection due to unexpected postmaster exit"));
+        Assert.Equal("UnexpectedPostmasterExit", result.Event.ToString());
+        Assert.Null(result.Signal);
+        Assert.Empty(OwnedPostgresDiagnostics.Classify(Prefix + "LOG:  terminating connection due to unexpected postmaster exit"));
+        Assert.Empty(OwnedPostgresDiagnostics.Classify(Prefix + "FATAL:  user private said terminating connection due to unexpected postmaster exit"));
+    }
+
+    private static SqlBackendIdentity SqlBackend() => new(72, 72, new(2026, 10, 2, 4, 25, 37, TimeSpan.Zero), 9001);
+    private static OwnedBackendIdentity OwnedBackend() => new(72, 1, 14200, 1, new(2026, 10, 2, 4, 25, 37, TimeSpan.Zero), 9001);
+
+    [Theory]
+    [InlineData("localhost", 0)]
+    [InlineData("localhost", 65536)]
+    [InlineData("localhost ", 49123)]
+    [InlineData("https://localhost", 49123)]
+    [InlineData("localhost;Password=synthetic", 49123)]
+    public void Malformed_endpoint_never_counts_as_matched(string host, int port) =>
+        Assert.Equal(PostgresCorrelation.Mismatched, OwnedPostgresDiagnostics.CorrelateEndpoint(new(host, port), [new(host, port)]));
+
+    [Theory]
+    [InlineData("pid")]
+    [InlineData("system")]
+    [InlineData("start")]
+    [InlineData("postmaster")]
+    public void Invalid_identity_values_even_if_equal_never_count_as_matched(string field)
+    {
+        var sql = SqlBackend();
+        var owned = OwnedBackend();
+        if (field == "pid") { sql = sql with { NpgsqlPid = 0, SqlPid = 0 }; owned = owned with { Pid = 0 }; }
+        if (field == "system") { sql = sql with { SystemId = 0 }; owned = owned with { SystemId = 0 }; }
+        if (field == "start") { sql = sql with { PostmasterStart = default }; owned = owned with { PostmasterStart = default }; }
+        if (field == "postmaster") owned = owned with { ParentPid = 0, PostmasterPid = 0 };
+        Assert.Equal(PostgresCorrelation.Mismatched, OwnedPostgresDiagnostics.CorrelateBackend(sql, owned));
+    }
+
+    [Fact]
+    public async Task Actual_caller_backend_correlates_with_owned_mapping_socket_and_process_without_a_surrogate()
+    {
+        var fixture = new Controllers.InvoiceConsumerFixture();
+        try
+        {
+            await fixture.InitializeAsync();
+            Assert.Equal(3, fixture.StorageDiagnostics.Count);
+            using var snapshot = JsonDocument.Parse(fixture.StorageDiagnostics[^1]);
+            var phases = snapshot.RootElement.GetProperty("ConnectionPhases").EnumerateArray().ToArray();
+            Assert.Equal(new[] { "open-start", "open-complete", "create-start", "create-complete" }, phases.Select(item => item.GetProperty("phase").GetString()));
+            Assert.Equal("Unknown", phases[0].GetProperty("Endpoint").GetString());
+            Assert.Equal(JsonValueKind.Null, phases[0].GetProperty("SelectedPort").ValueKind);
+            Assert.Equal("Unknown", phases[0].GetProperty("Backend").GetString());
+            Assert.Equal(JsonValueKind.Null, phases[0].GetProperty("Sql").ValueKind);
+            foreach (var phase in phases.Skip(1))
+            {
+                Assert.Equal("Matched", phase.GetProperty("Endpoint").GetString());
+                Assert.Equal("Matched", phase.GetProperty("Backend").GetString());
+                var sql = phase.GetProperty("Sql"); var owned = phase.GetProperty("Owned");
+                Assert.Equal(sql.GetProperty("NpgsqlPid").GetInt32(), sql.GetProperty("SqlPid").GetInt32());
+                Assert.Equal(sql.GetProperty("SqlPid").GetInt32(), owned.GetProperty("Pid").GetInt32());
+                Assert.Equal(owned.GetProperty("ParentPid").GetInt32(), owned.GetProperty("PostmasterPid").GetInt32());
+                Assert.Equal(sql.GetProperty("SystemId").GetUInt64(), owned.GetProperty("SystemId").GetUInt64());
+                Assert.Equal(sql.GetProperty("PostmasterStart").GetString(), owned.GetProperty("PostmasterStart").GetString());
+            }
+        }
+        finally { await fixture.DisposeAsync(); }
+    }
+
+    [Theory]
     [InlineData("LOG:  database system is ready to accept connections", "Ready")]
     [InlineData("LOG:  received fast shutdown request", "FastShutdown")]
     [InlineData("LOG:  received immediate shutdown request", "ImmediateShutdown")]

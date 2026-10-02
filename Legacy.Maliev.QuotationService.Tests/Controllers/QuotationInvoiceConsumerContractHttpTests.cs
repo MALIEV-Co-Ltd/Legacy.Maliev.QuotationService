@@ -297,6 +297,7 @@ public sealed class InvoiceConsumerFixture : IAsyncLifetime
     private Infrastructure.DisposableContainerPair? containers;
     private readonly RSA key = RSA.Create(2048);
     public List<string> StorageDiagnostics { get; } = [];
+    private readonly List<string> connectionPhases = [];
     private string Requests => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "invoice_consumer_requests" }.ConnectionString;
     public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
     public async Task InitializeAsync()
@@ -316,7 +317,13 @@ public sealed class InvoiceConsumerFixture : IAsyncLifetime
         {
             await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
             {
-                await connection.OpenAsync(); await using var command = new NpgsqlCommand("CREATE DATABASE invoice_consumer_requests", connection); await command.ExecuteNonQueryAsync();
+                await CaptureConnectionAsync("open-start", connection);
+                await connection.OpenAsync();
+                await CaptureConnectionAsync("open-complete", connection);
+                await using var command = new NpgsqlCommand("CREATE DATABASE invoice_consumer_requests", connection);
+                await CaptureConnectionAsync("create-start", connection);
+                await command.ExecuteNonQueryAsync();
+                await CaptureConnectionAsync("create-complete", connection);
             }
             await CaptureStorageAsync("second-database");
             await using var db = Context(); await db.Database.MigrateAsync();
@@ -337,8 +344,20 @@ public sealed class InvoiceConsumerFixture : IAsyncLifetime
     }
     private async Task CaptureStorageAsync(string phase)
     {
-        StorageDiagnostics.Add(await Infrastructure.OwnedPostgresDiagnostics.ObserveAsync(
-            postgres, "quotation99-invoice-consumer", phase));
+        var snapshot = await Infrastructure.OwnedPostgresDiagnostics.ObserveAsync(postgres, "quotation99-invoice-consumer", phase);
+        StorageDiagnostics.Add(await Infrastructure.OwnedPostgresDiagnostics.PreserveFailureAsync(() =>
+        {
+            var metadata = System.Text.Json.Nodes.JsonNode.Parse(snapshot)!.AsObject();
+            var phases = new System.Text.Json.Nodes.JsonArray();
+            foreach (var item in connectionPhases) phases.Add(System.Text.Json.Nodes.JsonNode.Parse(item));
+            metadata["ConnectionPhases"] = phases;
+            return Task.FromResult(metadata.ToJsonString());
+        }));
+    }
+    private async Task CaptureConnectionAsync(string phase, NpgsqlConnection connection)
+    {
+        if (connectionPhases.Count < 4)
+            connectionPhases.Add(await Infrastructure.OwnedPostgresDiagnostics.ObserveConnectionAsync(postgres, "quotation99-invoice-consumer", phase, connection));
     }
     private static void ConfigureOwnedStorage(CreateContainerParameters parameters, string port, string path, int bytes)
     {

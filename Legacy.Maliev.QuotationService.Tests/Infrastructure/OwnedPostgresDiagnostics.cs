@@ -5,19 +5,42 @@ using System.Text.RegularExpressions;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using DotNet.Testcontainers.Containers;
+using Npgsql;
 
 namespace Legacy.Maliev.QuotationService.Tests.Infrastructure;
 
 internal enum PostgresDiagnosticEvent
 {
-    Ready, FastShutdown, ImmediateShutdown, Reinitializing, ProcessSignal, NoSpace, SharedMemoryResize, Panic
+    Ready, FastShutdown, ImmediateShutdown, Reinitializing, ProcessSignal, NoSpace, SharedMemoryResize, Panic, UnexpectedPostmasterExit
 }
 
 internal sealed record PostgresEvent(PostgresDiagnosticEvent Event, int? Signal = null);
 
+internal enum PostgresCorrelation { Unknown, Matched, Mismatched }
+internal sealed record DiagnosticEndpoint(string Host, int Port);
+internal sealed record SqlBackendIdentity(int NpgsqlPid, int SqlPid, DateTimeOffset PostmasterStart, ulong SystemId);
+internal sealed record OwnedBackendIdentity(int Pid, int ParentPid, ulong StartTicks, int PostmasterPid, DateTimeOffset PostmasterStart, ulong SystemId);
+
 /// <summary>Test-only, owned-container observations; never emits server log text or exception messages.</summary>
 internal static class OwnedPostgresDiagnostics
 {
+    internal static PostgresCorrelation CorrelateEndpoint(DiagnosticEndpoint? selected, IReadOnlyList<DiagnosticEndpoint>? published)
+    {
+        if (selected is null || published is null || published.Count == 0) return PostgresCorrelation.Unknown;
+        return selected.Port is > 0 and <= 65535 && selected.Host is "localhost" or "127.0.0.1" or "::1"
+            && published.All(binding => binding.Port == selected.Port && binding.Host is "localhost" or "127.0.0.1" or "::1" or "0.0.0.0" or "::")
+            ? PostgresCorrelation.Matched : PostgresCorrelation.Mismatched;
+    }
+
+    internal static PostgresCorrelation CorrelateBackend(SqlBackendIdentity? sql, OwnedBackendIdentity? owned)
+    {
+        if (sql is null || owned is null) return PostgresCorrelation.Unknown;
+        return sql.NpgsqlPid > 0 && sql.NpgsqlPid == sql.SqlPid && sql.SqlPid == owned.Pid
+            && owned.PostmasterPid > 0 && owned.ParentPid == owned.PostmasterPid && owned.StartTicks > 0
+            && sql.PostmasterStart != default && sql.PostmasterStart == owned.PostmasterStart
+            && sql.SystemId > 0 && sql.SystemId == owned.SystemId
+            ? PostgresCorrelation.Matched : PostgresCorrelation.Mismatched;
+    }
     internal const int InputBudget = 16 * 1024;
     private static readonly string[] Phases = ["ready", "second-database", "both-migrations", "initialization-failed"];
     private const string MetricsCommand = "awk '{sub(/^.*\\) /,\"\"); split($0,a,\" \"); print \"pid1_ppid=\" a[2]; print \"pid1_start=\" a[20]}' /proc/1/stat; "
@@ -37,6 +60,62 @@ internal static class OwnedPostgresDiagnostics
         "memory.events.oom_group_kill", "shm_total", "shm_used", "shm_free", "pgdata_total",
         "pgdata_used", "pgdata_free", "pgdata_du", "wal_du"
     };
+
+    internal static Task<string> ObserveConnectionAsync(IContainer container, string owner, string phase, NpgsqlConnection connection) =>
+        PreserveFailureAsync(async () =>
+        {
+            if (phase is not ("open-start" or "open-complete" or "create-start" or "create-complete")) throw new InvalidOperationException();
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var docker = new DockerClientBuilder().WithEndpoint(new Uri(await DisposableContainerStartup.LocalDockerEndpointAsync(deadline.Token))).Build();
+            var inspected = await docker.Containers.InspectContainerAsync(container.Id, deadline.Token);
+            VerifyOwnership(container.Id, owner, inspected);
+            var selected = connection.State == System.Data.ConnectionState.Open
+                ? new DiagnosticEndpoint(connection.Host ?? string.Empty, connection.Port) : null;
+            var published = new List<DiagnosticEndpoint>();
+            if (inspected.NetworkSettings?.Ports?.TryGetValue("5432/tcp", out var bindings) == true && bindings is not null)
+                foreach (var binding in bindings)
+                    published.Add(new(binding.HostIP, int.TryParse(binding.HostPort, NumberStyles.None, CultureInfo.InvariantCulture, out var port) ? port : 0));
+            SqlBackendIdentity? sql = null;
+            OwnedBackendIdentity? owned = null;
+            if (connection.State == System.Data.ConnectionState.Open)
+            {
+                // This is the actual caller connection, never a replacement TCP backend.
+                await using (var command = new NpgsqlCommand("SELECT pg_backend_pid(), (extract(epoch from pg_postmaster_start_time()) * 1000000)::bigint, system_identifier::text FROM pg_control_system()", connection))
+                await using (var reader = await command.ExecuteReaderAsync(deadline.Token))
+                {
+                    if (!await reader.ReadAsync(deadline.Token)) throw new InvalidOperationException();
+                    sql = new(connection.ProcessID, reader.GetInt32(0), FromMicroseconds(reader.GetInt64(1)), ulong.Parse(reader.GetString(2), CultureInfo.InvariantCulture));
+                }
+                if (sql.SqlPid <= 0) throw new InvalidOperationException();
+                // The independently owned socket supplies only cluster/start identity, not a surrogate backend identity.
+                var control = await container.ExecAsync(["psql", "--no-psqlrc", "-X", "-h", "/var/run/postgresql", "-U", "postgres", "-d", "postgres", "-Atqc",
+                    "SELECT (extract(epoch from pg_postmaster_start_time()) * 1000000)::bigint, system_identifier::text FROM pg_control_system()"], deadline.Token);
+                CheckBudget(control.Stdout);
+                var fields = control.Stdout.Trim().Split('|');
+                if (control.ExitCode != 0 || fields.Length != 2) throw new InvalidOperationException();
+                var ownedStart = FromMicroseconds(long.Parse(fields[0], NumberStyles.None, CultureInfo.InvariantCulture));
+                var system = ulong.Parse(fields[1], NumberStyles.None, CultureInfo.InvariantCulture);
+                var pid = sql.SqlPid.ToString(CultureInfo.InvariantCulture);
+                var proc = await container.ExecAsync(["sh", "-c", "awk '{print $1; sub(/^.*\\) /,\"\"); split($0,a,\" \"); print a[2]; print a[20]}' /proc/" + pid + "/stat; head -n 1 /var/lib/postgresql/18/docker/postmaster.pid"], deadline.Token);
+                CheckBudget(proc.Stdout);
+                var numbers = proc.Stdout.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+                if (proc.ExitCode != 0 || numbers.Length != 4) throw new InvalidOperationException();
+                owned = new(int.Parse(numbers[0], CultureInfo.InvariantCulture), int.Parse(numbers[1], CultureInfo.InvariantCulture),
+                    ulong.Parse(numbers[2], CultureInfo.InvariantCulture), int.Parse(numbers[3], CultureInfo.InvariantCulture), ownedStart, system);
+            }
+            return JsonSerializer.Serialize(new
+            {
+                phase,
+                Endpoint = CorrelateEndpoint(selected, published).ToString(),
+                SelectedPort = selected?.Port,
+                PublishedPorts = published.Select(item => item.Port).Distinct().Take(4).ToArray(),
+                Backend = CorrelateBackend(sql, owned).ToString(),
+                Sql = sql,
+                Owned = owned
+            });
+        });
+
+    private static DateTimeOffset FromMicroseconds(long value) => DateTimeOffset.UnixEpoch.AddTicks(checked(value * 10));
 
     internal static async Task<string> ObserveAsync(IContainer container, string owner, string phase)
     {
@@ -129,6 +208,7 @@ internal static class OwnedPostgresDiagnostics
             else if (structuralLevel && text == "received fast shutdown request") observed = new(PostgresDiagnosticEvent.FastShutdown);
             else if (structuralLevel && text == "received immediate shutdown request") observed = new(PostgresDiagnosticEvent.ImmediateShutdown);
             else if (structuralLevel && text == "all server processes terminated; reinitializing") observed = new(PostgresDiagnosticEvent.Reinitializing);
+            else if (match.Groups[1].Value == "FATAL" && text == "terminating connection due to unexpected postmaster exit") observed = new(PostgresDiagnosticEvent.UnexpectedPostmasterExit);
             else if (text.Contains("No space left on device", StringComparison.Ordinal)) observed = new(PostgresDiagnosticEvent.NoSpace);
             else if (text.StartsWith("could not resize shared memory segment", StringComparison.Ordinal)) observed = new(PostgresDiagnosticEvent.SharedMemoryResize);
             else if (match.Groups[1].Value == "PANIC") observed = new(PostgresDiagnosticEvent.Panic);
