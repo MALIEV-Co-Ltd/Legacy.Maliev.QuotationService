@@ -296,6 +296,7 @@ public sealed class InvoiceConsumerFixture : IAsyncLifetime
     private IContainer redis = null!;
     private Infrastructure.DisposableContainerPair? containers;
     private readonly RSA key = RSA.Create(2048);
+    public List<string> StorageDiagnostics { get; } = [];
     private string Requests => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "invoice_consumer_requests" }.ConnectionString;
     public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
     public async Task InitializeAsync()
@@ -310,12 +311,48 @@ public sealed class InvoiceConsumerFixture : IAsyncLifetime
                 .WithCreateParameterModifier(parameters => ConfigureOwnedStorage(parameters, "6379/tcp", "/data", 16777216)).Build());
         postgres = (PostgreSqlContainer)containers.First;
         redis = containers.Second;
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        await CaptureStorageAsync("ready");
+        try
         {
-            await connection.OpenAsync(); await using var command = new NpgsqlCommand("CREATE DATABASE invoice_consumer_requests", connection); await command.ExecuteNonQueryAsync();
+            await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+            {
+                await connection.OpenAsync(); await using var command = new NpgsqlCommand("CREATE DATABASE invoice_consumer_requests", connection); await command.ExecuteNonQueryAsync();
+            }
+            await CaptureStorageAsync("second-database");
+            await using var db = Context(); await db.Database.MigrateAsync();
+            await using var requests = new QuotationRequestDbContext(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(Requests).Options); await requests.Database.MigrateAsync();
+            await CaptureStorageAsync("both-migrations");
         }
-        await using var db = Context(); await db.Database.MigrateAsync();
-        await using var requests = new QuotationRequestDbContext(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(Requests).Options); await requests.Database.MigrateAsync();
+        catch (Exception error)
+        {
+            await CaptureStorageAsync("initialization-failed");
+            error.Data["OwnedPostgresStorage"] = string.Join(Environment.NewLine, StorageDiagnostics);
+            Console.WriteLine(string.Join(Environment.NewLine, StorageDiagnostics));
+            throw;
+        }
+    }
+    private async Task CaptureStorageAsync(string phase)
+    {
+        // Observe only the already-owned container, never environment/configuration or rows.
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            var endpoint = new Uri(await Infrastructure.DisposableContainerStartup.LocalDockerEndpointAsync(deadline.Token));
+            using var docker = new Docker.DotNet.DockerClientBuilder().WithEndpoint(endpoint).Build();
+            var state = await docker.Containers.InspectContainerAsync(postgres.Id, deadline.Token);
+            var status = state.State ?? throw new InvalidOperationException("Owned container state unavailable.");
+            StorageDiagnostics.Add(JsonSerializer.Serialize(new { phase, ContainerId = postgres.Id, state.Image, status.Running, status.ExitCode, status.OOMKilled }));
+            if (!status.Running) return;
+            // Fixed shell commands return storage metadata only; no arbitrary SQL/log body.
+            var result = await postgres.ExecAsync(["sh", "-c", "df -k /var/lib/postgresql; du -sk /var/lib/postgresql; du -sk /var/lib/postgresql/18/docker/pg_wal"], deadline.Token);
+            if (result.Stdout.Length > 4096) throw new InvalidOperationException("Storage diagnostic budget exceeded.");
+            StorageDiagnostics.Add($"{phase}: storage-exit={result.ExitCode}\n{result.Stdout}");
+        }
+        catch (Exception error)
+        {
+            // Diagnostic failure must never replace the original initialization failure.
+            StorageDiagnostics.Add($"{phase}: diagnostic-unavailable={error.GetType().Name}");
+        }
     }
     private static void ConfigureOwnedStorage(CreateContainerParameters parameters, string port, string path, int bytes)
     {
