@@ -297,6 +297,7 @@ public sealed class InvoiceConsumerFixture : IAsyncLifetime
     private Infrastructure.DisposableContainerPair? containers;
     private readonly RSA key = RSA.Create(2048);
     public List<string> StorageDiagnostics { get; } = [];
+    internal Infrastructure.PostgresFailureSignal? InitializationFailure { get; private set; }
     private readonly List<string> connectionPhases = [];
     private string Requests => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "invoice_consumer_requests" }.ConnectionString;
     public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
@@ -332,6 +333,7 @@ public sealed class InvoiceConsumerFixture : IAsyncLifetime
         }
         catch (Exception error)
         {
+            InitializationFailure = Infrastructure.OwnedPostgresDiagnostics.ClassifyFailure(error);
             await CaptureStorageAsync("initialization-failed");
             await Infrastructure.OwnedPostgresDiagnostics.PreserveFailureAsync(() =>
             {

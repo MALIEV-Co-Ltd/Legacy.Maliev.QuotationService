@@ -20,10 +20,80 @@ internal enum PostgresCorrelation { Unknown, Matched, Mismatched }
 internal sealed record DiagnosticEndpoint(string Host, int Port);
 internal sealed record SqlBackendIdentity(int NpgsqlPid, int SqlPid, DateTimeOffset PostmasterStart, ulong SystemId);
 internal sealed record OwnedBackendIdentity(int Pid, int ParentPid, ulong StartTicks, int PostmasterPid, DateTimeOffset PostmasterStart, ulong SystemId);
+internal enum PostgresFailureCategory { Unknown, Postgres, Npgsql, EndOfStream, Io, Canceled, Timeout }
+internal sealed record PostgresFailureSignal(IReadOnlyList<PostgresFailureCategory> Categories, string? SqlState);
+internal sealed record PassiveOwnedProcess(int Pid, int ParentPid, ulong StartTicks);
 
 /// <summary>Test-only, owned-container observations; never emits server log text or exception messages.</summary>
 internal static class OwnedPostgresDiagnostics
 {
+    // A passive PID is separate from SQL/owned lineage proof.
+    internal static int? ReadPassivePid(bool connectionOpen, Func<int> readPid)
+    {
+        if (!connectionOpen) return null;
+        try { var pid = readPid(); return pid > 0 ? pid : null; }
+        catch { return null; }
+    }
+
+    internal static async Task<PassiveOwnedProcess?> ReadOwnedProcessAsync(string id, string owner,
+        ContainerInspectResponse inspected, int? pid, Func<int, Task<string>> readProc)
+    {
+        VerifyOwnership(id, owner, inspected);
+        if (pid is null or <= 0) return null;
+        try
+        {
+            var input = await readProc(pid.Value);
+            CheckBudget(input);
+            var fields = input.TrimEnd('\n').Split('\n');
+            if (fields.Length != 3
+                || !int.TryParse(fields[0].TrimEnd('\r'), NumberStyles.None, CultureInfo.InvariantCulture, out var observedPid)
+                || observedPid != pid.Value
+                || !int.TryParse(fields[1].TrimEnd('\r'), NumberStyles.None, CultureInfo.InvariantCulture, out var parentPid) || parentPid <= 0
+                || !ulong.TryParse(fields[2].TrimEnd('\r'), NumberStyles.None, CultureInfo.InvariantCulture, out var startTicks) || startTicks == 0) return null;
+            return new(observedPid, parentPid, startTicks);
+        }
+        catch { return null; }
+    }
+
+    internal static PostgresFailureSignal ClassifyFailure(Exception error)
+    {
+        var categories = new List<PostgresFailureCategory>(8);
+        string? state = null;
+        for (Exception? current = error; current is not null && categories.Count < 8; current = current.InnerException)
+        {
+            categories.Add(current switch
+            {
+                PostgresException => PostgresFailureCategory.Postgres,
+                NpgsqlException => PostgresFailureCategory.Npgsql,
+                EndOfStreamException => PostgresFailureCategory.EndOfStream,
+                IOException => PostgresFailureCategory.Io,
+                OperationCanceledException => PostgresFailureCategory.Canceled,
+                TimeoutException => PostgresFailureCategory.Timeout,
+                _ => PostgresFailureCategory.Unknown
+            });
+            if (state is null && current is PostgresException postgres && IsSafeSqlState(postgres.SqlState)) state = postgres.SqlState;
+        }
+        return new(categories, state);
+    }
+
+    internal static async Task EmitFailureAsync(Func<Task<PostgresFailureSignal>> observe, Action<string> output)
+    {
+        try
+        {
+            var signal = await observe();
+            var safe = JsonSerializer.Serialize(new
+            {
+                Categories = signal.Categories.Take(8).Select(category => Enum.IsDefined(category) ? category.ToString() : "Unknown").ToArray(),
+                SqlState = IsSafeSqlState(signal.SqlState) ? signal.SqlState : null
+            });
+            if (safe.Length <= 2048) output(safe);
+        }
+        catch { /* Diagnostics/output must never replace the original caught failure. */ }
+    }
+
+    private static bool IsSafeSqlState(string? state) => state is { Length: 5 }
+        && state.All(character => character is >= 'A' and <= 'Z' or >= '0' and <= '9');
+
     internal static PostgresCorrelation CorrelateEndpoint(DiagnosticEndpoint? selected, IReadOnlyList<DiagnosticEndpoint>? published)
     {
         if (selected is null || published is null || published.Count == 0) return PostgresCorrelation.Unknown;
@@ -71,6 +141,13 @@ internal static class OwnedPostgresDiagnostics
             VerifyOwnership(container.Id, owner, inspected);
             var selected = connection.State == System.Data.ConnectionState.Open
                 ? new DiagnosticEndpoint(connection.Host ?? string.Empty, connection.Port) : null;
+            var passivePid = ReadPassivePid(connection.State == System.Data.ConnectionState.Open, () => connection.ProcessID);
+            var passiveProcess = await ReadOwnedProcessAsync(container.Id, owner, inspected, passivePid, async pid =>
+            {
+                var observed = await container.ExecAsync(["sh", "-c", "awk '{print $1; sub(/^.*\\) /,\"\"); split($0,a,\" \"); print a[2]; print a[20]}' /proc/"
+                    + pid.ToString(CultureInfo.InvariantCulture) + "/stat"], deadline.Token);
+                return observed.ExitCode == 0 ? observed.Stdout : string.Empty;
+            });
             var published = new List<DiagnosticEndpoint>();
             if (inspected.NetworkSettings?.Ports?.TryGetValue("5432/tcp", out var bindings) == true && bindings is not null)
                 foreach (var binding in bindings)
@@ -107,6 +184,8 @@ internal static class OwnedPostgresDiagnostics
                 phase,
                 Endpoint = CorrelateEndpoint(selected, published).ToString(),
                 SelectedPort = selected?.Port,
+                PassivePid = passivePid,
+                PassiveOwnedProcess = passiveProcess,
                 PublishedPorts = published.Select(item => item.Port).Distinct().Take(4).ToArray(),
                 Backend = CorrelateBackend(sql, owned).ToString(),
                 Sql = sql,

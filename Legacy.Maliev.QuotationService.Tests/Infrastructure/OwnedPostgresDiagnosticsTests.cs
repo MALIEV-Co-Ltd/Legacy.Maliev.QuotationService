@@ -178,9 +178,19 @@ public sealed class OwnedPostgresDiagnosticsTests
             Assert.Equal(JsonValueKind.Null, phases[0].GetProperty("SelectedPort").ValueKind);
             Assert.Equal("Unknown", phases[0].GetProperty("Backend").GetString());
             Assert.Equal(JsonValueKind.Null, phases[0].GetProperty("Sql").ValueKind);
+            Assert.True(phases[0].TryGetProperty("PassivePid", out var unopenedPid), "Passive PID must be explicitly unknown before Open.");
+            Assert.Equal(JsonValueKind.Null, unopenedPid.ValueKind);
+            Assert.True(phases[0].TryGetProperty("PassiveOwnedProcess", out var unopenedProcess), "Owned process observation must be explicitly unknown before Open.");
+            Assert.Equal(JsonValueKind.Null, unopenedProcess.ValueKind);
             foreach (var phase in phases.Skip(1))
             {
                 Assert.Equal("Matched", phase.GetProperty("Endpoint").GetString());
+                Assert.True(phase.TryGetProperty("PassivePid", out var passivePid), "An opened actual caller must expose its passive PID independently of SQL identity.");
+                Assert.True(passivePid.GetInt32() > 0);
+                Assert.True(phase.TryGetProperty("PassiveOwnedProcess", out var passiveProcess), "Exact-owned numeric process observation must be available for this healthy actual fixture.");
+                Assert.Equal(passivePid.GetInt32(), passiveProcess.GetProperty("Pid").GetInt32());
+                Assert.True(passiveProcess.GetProperty("ParentPid").GetInt32() > 0);
+                Assert.True(passiveProcess.GetProperty("StartTicks").GetUInt64() > 0);
                 if (phase.GetProperty("phase").GetString() != "create-complete")
                 {
                     Assert.Equal("Unknown", phase.GetProperty("Backend").GetString());
