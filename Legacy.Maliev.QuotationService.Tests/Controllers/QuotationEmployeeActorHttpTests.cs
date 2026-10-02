@@ -481,16 +481,23 @@ public sealed class QuotationEmployeeActorHttpTests(QuotationEmployeeActorFixtur
 /// <summary>Fixture-owned disposable stores, keys and actual production application entry point.</summary>
 public sealed class QuotationEmployeeActorFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly IContainer redis = new ContainerBuilder("redis:7-alpine").WithPortBinding(6379, true)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build();
+    private Infrastructure.DisposableContainerPair? containers;
+    private PostgreSqlContainer postgres => (PostgreSqlContainer)containers!.First;
+    private IContainer redis => containers!.Second;
     public RSA SigningKey { get; } = RSA.Create(2048);
     public RSA WrongKey { get; } = RSA.Create(2048);
     private string RequestConnection => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "quotation70_requests" }.ConnectionString;
 
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(postgres.StartAsync(), redis.StartAsync());
+        containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation99-employee-actor",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels)
+                .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "5432/tcp")).Build(),
+            attempt => new ContainerBuilder("redis:7-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true)
+                .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
+                .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "6379/tcp")).Build());
         await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
         {
             await connection.OpenAsync();
@@ -553,8 +560,15 @@ public sealed class QuotationEmployeeActorFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        await Task.WhenAll(postgres.DisposeAsync().AsTask(), redis.DisposeAsync().AsTask());
-        SigningKey.Dispose(); WrongKey.Dispose();
+        try { if (containers is not null) await containers.DisposeAsync(); }
+        finally { SigningKey.Dispose(); WrongKey.Dispose(); }
+    }
+
+    private static void ConfigureLoopback(Docker.DotNet.Models.CreateContainerParameters parameters, string port)
+    {
+        parameters.HostConfig ??= new Docker.DotNet.Models.HostConfig();
+        parameters.HostConfig.PortBindings ??= new Dictionary<string, IList<Docker.DotNet.Models.PortBinding>>();
+        parameters.HostConfig.PortBindings[port] = [new Docker.DotNet.Models.PortBinding { HostIP = "127.0.0.1", HostPort = "" }];
     }
 
     private sealed class ProductionFactory(Dictionary<string, string?> settings, bool allowed, bool unavailable, IInterceptor? interceptor, bool cacheFailure)
