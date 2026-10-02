@@ -9,6 +9,56 @@ public sealed class OwnedPostgresDiagnosticsTests
     private const string Prefix = "2026-10-02 03:22:37.994 UTC [45] ";
 
     [Theory]
+    [InlineData("open-complete")]
+    [InlineData("create-start")]
+    public async Task Borrowed_sql_boundary_never_executes_a_query_before_original_create(string phase)
+    {
+        var calls = 0;
+        var observed = await OwnedPostgresDiagnostics.ReadCallerIdentityAsync(phase, true, () =>
+        {
+            calls++;
+            return Task.FromResult(SqlBackend());
+        });
+        Assert.Equal(0, calls);
+        Assert.Null(observed);
+    }
+
+    [Fact]
+    public async Task Borrowed_sql_boundary_after_original_create_executes_exactly_once()
+    {
+        var expected = SqlBackend(); var calls = 0;
+        var observed = await OwnedPostgresDiagnostics.ReadCallerIdentityAsync("create-complete", true, () =>
+        {
+            calls++;
+            return Task.FromResult(expected);
+        });
+        Assert.Equal(1, calls);
+        Assert.Same(expected, observed);
+    }
+
+    [Fact]
+    public async Task Borrowed_sql_boundary_unopened_connection_preserves_unknown_without_query()
+    {
+        var observed = await OwnedPostgresDiagnostics.ReadCallerIdentityAsync("open-start", false,
+            () => throw new InvalidOperationException("Unexpected query"));
+        Assert.Null(observed);
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("CREATE-COMPLETE")]
+    public async Task Borrowed_sql_boundary_unknown_phase_fails_closed_before_query(string phase)
+    {
+        var calls = 0;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => OwnedPostgresDiagnostics.ReadCallerIdentityAsync(phase, true, () =>
+        {
+            calls++;
+            return Task.FromResult(SqlBackend());
+        }));
+        Assert.Equal(0, calls);
+    }
+
+    [Theory]
     [InlineData("127.0.0.1")]
     [InlineData("0.0.0.0")]
     [InlineData("::")]
@@ -131,6 +181,13 @@ public sealed class OwnedPostgresDiagnosticsTests
             foreach (var phase in phases.Skip(1))
             {
                 Assert.Equal("Matched", phase.GetProperty("Endpoint").GetString());
+                if (phase.GetProperty("phase").GetString() != "create-complete")
+                {
+                    Assert.Equal("Unknown", phase.GetProperty("Backend").GetString());
+                    Assert.Equal(JsonValueKind.Null, phase.GetProperty("Sql").ValueKind);
+                    Assert.Equal(JsonValueKind.Null, phase.GetProperty("Owned").ValueKind);
+                    continue;
+                }
                 Assert.Equal("Matched", phase.GetProperty("Backend").GetString());
                 var sql = phase.GetProperty("Sql"); var owned = phase.GetProperty("Owned");
                 Assert.Equal(sql.GetProperty("NpgsqlPid").GetInt32(), sql.GetProperty("SqlPid").GetInt32());

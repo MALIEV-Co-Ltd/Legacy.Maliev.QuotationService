@@ -75,17 +75,16 @@ internal static class OwnedPostgresDiagnostics
             if (inspected.NetworkSettings?.Ports?.TryGetValue("5432/tcp", out var bindings) == true && bindings is not null)
                 foreach (var binding in bindings)
                     published.Add(new(binding.HostIP, int.TryParse(binding.HostPort, NumberStyles.None, CultureInfo.InvariantCulture, out var port) ? port : 0));
-            SqlBackendIdentity? sql = null;
-            OwnedBackendIdentity? owned = null;
-            if (connection.State == System.Data.ConnectionState.Open)
+            var sql = await ReadCallerIdentityAsync(phase, connection.State == System.Data.ConnectionState.Open, async () =>
             {
-                // This is the actual caller connection, never a replacement TCP backend.
-                await using (var command = new NpgsqlCommand("SELECT pg_backend_pid(), (extract(epoch from pg_postmaster_start_time()) * 1000000)::bigint, system_identifier::text FROM pg_control_system()", connection))
-                await using (var reader = await command.ExecuteReaderAsync(deadline.Token))
-                {
-                    if (!await reader.ReadAsync(deadline.Token)) throw new InvalidOperationException();
-                    sql = new(connection.ProcessID, reader.GetInt32(0), FromMicroseconds(reader.GetInt64(1)), ulong.Parse(reader.GetString(2), CultureInfo.InvariantCulture));
-                }
+                await using var command = new NpgsqlCommand("SELECT pg_backend_pid(), (extract(epoch from pg_postmaster_start_time()) * 1000000)::bigint, system_identifier::text FROM pg_control_system()", connection);
+                await using var reader = await command.ExecuteReaderAsync(deadline.Token);
+                if (!await reader.ReadAsync(deadline.Token)) throw new InvalidOperationException();
+                return new SqlBackendIdentity(connection.ProcessID, reader.GetInt32(0), FromMicroseconds(reader.GetInt64(1)), ulong.Parse(reader.GetString(2), CultureInfo.InvariantCulture));
+            });
+            OwnedBackendIdentity? owned = null;
+            if (sql is not null)
+            {
                 if (sql.SqlPid <= 0) throw new InvalidOperationException();
                 // The independently owned socket supplies only cluster/start identity, not a surrogate backend identity.
                 var control = await container.ExecAsync(["psql", "--no-psqlrc", "-X", "-h", "/var/run/postgresql", "-U", "postgres", "-d", "postgres", "-Atqc",
@@ -114,6 +113,13 @@ internal static class OwnedPostgresDiagnostics
                 Owned = owned
             });
         });
+
+    // Never let active diagnostics run on the borrowed connection before its original SQL completes.
+    internal static async Task<SqlBackendIdentity?> ReadCallerIdentityAsync(string phase, bool connectionOpen, Func<Task<SqlBackendIdentity>> query)
+    {
+        if (phase is not ("open-start" or "open-complete" or "create-start" or "create-complete")) throw new InvalidOperationException();
+        return connectionOpen && phase == "create-complete" ? await query() : null;
+    }
 
     private static DateTimeOffset FromMicroseconds(long value) => DateTimeOffset.UnixEpoch.AddTicks(checked(value * 10));
 
