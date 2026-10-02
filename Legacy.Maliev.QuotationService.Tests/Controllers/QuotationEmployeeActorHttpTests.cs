@@ -498,17 +498,38 @@ public sealed class QuotationEmployeeActorFixture : IAsyncLifetime
                 .WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true)
                 .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
                 .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "6379/tcp")).Build());
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        await ObserveAsync("ready");
+        try
         {
-            await connection.OpenAsync();
-            await using var command = new NpgsqlCommand("CREATE DATABASE quotation70_requests", connection);
-            await command.ExecuteNonQueryAsync();
+            await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+            {
+                await connection.OpenAsync();
+                await using var command = new NpgsqlCommand("CREATE DATABASE quotation70_requests", connection);
+                await command.ExecuteNonQueryAsync();
+            }
+            await ObserveAsync("second-database");
+            await using var quotations = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
+            await quotations.Database.MigrateAsync();
+            await using var requests = RequestContext();
+            await requests.Database.MigrateAsync();
+            await ObserveAsync("both-migrations");
         }
-        await using var quotations = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
-        await quotations.Database.MigrateAsync();
-        await using var requests = RequestContext();
-        await requests.Database.MigrateAsync();
+        catch (Exception error)
+        {
+            await ObserveAsync("initialization-failed");
+            await Infrastructure.OwnedPostgresDiagnostics.PreserveFailureAsync(() =>
+            {
+                error.Data["OwnedPostgresDiagnostics"] = string.Join(Environment.NewLine, Diagnostics);
+                Console.WriteLine(string.Join(Environment.NewLine, Diagnostics));
+                return Task.FromResult(string.Empty);
+            });
+            throw;
+        }
     }
+
+    private List<string> Diagnostics { get; } = [];
+    private async Task ObserveAsync(string phase) => Diagnostics.Add(await Infrastructure.OwnedPostgresDiagnostics.ObserveAsync(
+        postgres, "quotation99-employee-actor", phase));
 
     public QuotationRequestDbContext RequestContext() => new(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(RequestConnection).Options);
 

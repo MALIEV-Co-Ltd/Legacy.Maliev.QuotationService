@@ -97,3 +97,119 @@ supported by these results alone; no storage fix has been made.
 Scoped format verification and `git diff --check` passed. Normal owned fixture
 disposal completed; a read-only owner-filtered Docker inventory found no retained
 containers. No full suite, CI rerun, commit, push or persistent operation ran.
+
+## Bounded process diagnostic extension (Quotation #99)
+
+The subsequent exact-head validation run36959769436/job110690656606 at
+`b03fc4ed9a949a82df3688b2f1aabf6be647c9e9` failed538PASS/79FAIL/0skip.
+Failure groups:46 EmployeeActor,14 FirstDecisionPrecision,18 InvoiceConsumer and
+one storage probe. They fail during fixture initialization's second CREATE DATABASE,
+before migrations/controller acceptance. EmployeeActor uses default storage: this
+contradicts a conclusion that the InvoiceConsumer256MiB tmpfs alone caused failure.
+Invoice metadata showed running/exit0/OOMfalse,39776KiB used of262144, WAL16384KiB,
+both ready and failed. These Docker/storage observations do not establish the
+postmaster's process identity or cause of57P01/unexpected postmaster exit/EOF.
+Failed hosted evidence is preserved; no unchanged hosted rerun is an acceptance.
+
+Approved TEST-only five-file scope: new `Infrastructure/OwnedPostgresDiagnostics.cs`
+and `OwnedPostgresDiagnosticsTests.cs`, existing InvoiceConsumer and EmployeeActor
+fixture observers, and this doc. No API/runtime/startup helper/CI change. Both
+fixtures retain image/wait/retry/cap/timeouts and original migrations/SQL/assertions.
+Employee wraps only its original database initialization with observation and bare
+rethrow; Invoice uses the same helper instead of fixed-path raw df output. Disposal
+and container allocation are unchanged. Existing unrelated Python cache dirs remain.
+
+Shared observation verifies inspected exact64hex DockerId, expected owner label,
+32hex run label, pg resource,1-3 attempt and exact owned name **before** Exec/log
+access. One10second diagnostic cancellation budget applies. It emits only Docker
+state/process numbers/timestamps/image identity, fixed allowlisted numeric proc1/
+postmaster start-time/PPID, cgroupmemory/pids counters, /dev/shm and PGDATA/WAL
+capacity numbers. It never reads command lines/environment/database rows. Fixed
+shell metadata output is capped inside the owned container and parsed fail-closed.
+Docker log Tail100/Followfalse is read internally with a16KiB actual stream budget;
+overflow does not retain/print raw log content. Unknown text is discarded.
+
+The log classifier returns only event enums/numeric signals. Ready, shutdown,
+reinitializing and process-signal structural records require the actual LOG level;
+ERROR-level lookalikes are rejected. NoSpace, shared-memory resize and Panic are
+**diagnostic categories, not verified causes**. Any observation failure returns a
+fixed unavailable marker, never its exception type/message/body. There is no Docker
+event stream, retry, sleep, storage adjustment or speculative fix in this slice.
+
+Pinned SDK verification used Docker.DotNet.Enhanced4.3.3's actual XML/API and source
+commit `1e4015a84fa48cbcfe9002ecc4e2cf14177edc2d`: non-follow container logs return
+MultiplexedStream with ReadOutputAsync/count/EOF. Initial new-test DTO-name/nullability
+compile setup errors were corrected before test execution; they are not productRED.
+Release then built0W/E. Initial32diagnostic controls and actualfresh owned two-database
+probe passed; affected111 passed0skip before review refinement. Five new ERROR-level
+spoof controls reproduced a genuine **new diagnostic classifier** RED (33PASS/5FAIL,
+0skip), retained in `quotation99-classifier-level-red/classifier-level-red.trx`.
+It is not a reproduction of hosted PostgreSQL failure. A real nested observer
+failure/bare-rethrow control checks original exception instance and throw-site.
+
+After restricting structural records toLOG, freshRelease0W/E and final38controls
+pass0skip, `quotation99-process-diagnostic-final-focus/final-focus.trx`. Actualowned
+probe asserts all three phases have available metadata, numeric postmasterPID,
+positive storage/shm totals and reached classified events. Local image/kernel still
+differ from hosted: these passes establish observation reach/safety, not rootcause.
+Final affected/full/static evidence will be appended after terminal validation.
+
+## Final diagnostic candidate validation
+
+Repository `.gitattributes` requires LF. Only the five owned files were mechanically
+normalized to that policy; unrelated Python cache dirs were preserved. Fresh serial
+Release build using the command above then passed0warnings/0errors. The final
+38-case focus passes0fail/0skip, TRX SHA256
+`6B5DC0C113701D161CA343DC57987D78F56EAFC4F159DDF9B6569D1FE831B55E`.
+The fresh combined five-class filter (new diagnostic controls plus original four
+affected classes) passes117/117,0skip,2m23s:
+`quotation99-process-diagnostic-final-affected/final-affected.trx`, SHA256
+`4FD2D0E6406B31858326EF8481F62ADE2821A1DE4493E993C51FAA18428934DA`.
+The diagnostic classifier's retained5RED SHA256 is
+`1734137727D76416808547F332D891053C76670616839EB8C03EBE08ED2DA1CE`.
+
+Same direct test command without filter, collect XPlat coverage, results directory
+`TestResults/quotation99-process-diagnostic-full`:655PASS/0FAIL/0skip,6m59s,
+`diagnostic-full.trx` SHA256
+`D1E0BEDCAA9CB7B89C28229FD2797E4339770BE344B1E7EF5D1C866268921747`.
+Root observed low host memory headroom during this run; its actual green result is
+retained, but no additional full run is started without a serial-window decision.
+No user processes/containers were stopped, and no pruning/resource/budget changes
+were made. Raw coverage remains API465/716=64.94%, Application157/163=96.32%,
+Data3958/4066=97.34%, Domain96/99=96.97%, MigrationRunner667/819=81.44%.
+The **unchanged existing Quotation** owned-handwritten checker passes5239/5523=94.86%
+at minimum80; its five existing success/failure unit controls pass using Python-B
+so unrelated cache files are not touched. Expected negative-control stderr is not
+a product coverage failure. No new exclusion/checker or coverage waiver was added.
+
+Local reached metadata shows postmasterPID1/PPID0 at all three phases, /dev/shm
+65536KiB total/1056KiB used, PGDATAfree222368/220392/219520KiB and Ready category.
+Local cgroup memory.events.oom_kill is **absent**, not zero. DockerOOMfalse plus
+missing cgroup data cannot rule out host/child OOM. These facts do not establish
+the failed hosted image's process/reaper/cgroup/shared-memory state or rootcause.
+No speculative PostgreSQL/storage/readiness fix or hosted rerun has occurred.
+
+Whole solution format verification completed successfully. Ten sequential
+`dotnet list <project> package --vulnerable --include-transitive` audits completed
+with no vulnerable packages: six solution projects, private Defaults/Contracts and
+private Accounting Application/Data. Five owned files passed
+`gitleaks stdin --redact --no-banner`, `git diff --check`, explicit trailing/extraEOF
+whitespace and LF-policy checks. Owner-filtered Docker inventory found no retained
+InvoiceConsumer/EmployeeActor containers. All handles are terminal and the five-file
+candidate is frozen for root independent review; unrelated cache dirs remain.
+No commit, push, external GitHub mutation or persistent database/provider operation
+is authorized by this diagnostic candidate.
+
+Root integration review additionally places exception-Data attachment and console
+output inside the already tested PreserveFailureAsync boundary in both fixtures.
+An observer output failure must not replace the original initialization exception;
+the original bare rethrow remains. Prior655 evidence is pre-refinement; fresh root
+focused/full validation is required before committing this final integration.
+
+Final root integration: the fresh Release build had zero warnings/errors; all38
+focused diagnostic cases passed, then the unfiltered suite passed655/655 with
+zero skips, errors, timeouts or aborts. Final full evidence is
+`TestResults/root-quotation99-output-guard-full/full.trx`, SHA256
+`C68BEE8A79657F6963BE6C5EE7ED2B39CF6877FF5E56B689B7FDA5A2EBE4D9CE`.
+This supersedes the pre-output-guard local full run but does not establish the
+hosted PostgreSQL failure cause or waive the required replacement CI gate.

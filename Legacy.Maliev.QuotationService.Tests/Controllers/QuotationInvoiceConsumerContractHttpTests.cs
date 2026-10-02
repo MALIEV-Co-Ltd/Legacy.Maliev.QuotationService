@@ -326,33 +326,19 @@ public sealed class InvoiceConsumerFixture : IAsyncLifetime
         catch (Exception error)
         {
             await CaptureStorageAsync("initialization-failed");
-            error.Data["OwnedPostgresStorage"] = string.Join(Environment.NewLine, StorageDiagnostics);
-            Console.WriteLine(string.Join(Environment.NewLine, StorageDiagnostics));
+            await Infrastructure.OwnedPostgresDiagnostics.PreserveFailureAsync(() =>
+            {
+                error.Data["OwnedPostgresStorage"] = string.Join(Environment.NewLine, StorageDiagnostics);
+                Console.WriteLine(string.Join(Environment.NewLine, StorageDiagnostics));
+                return Task.FromResult(string.Empty);
+            });
             throw;
         }
     }
     private async Task CaptureStorageAsync(string phase)
     {
-        // Observe only the already-owned container, never environment/configuration or rows.
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        try
-        {
-            var endpoint = new Uri(await Infrastructure.DisposableContainerStartup.LocalDockerEndpointAsync(deadline.Token));
-            using var docker = new Docker.DotNet.DockerClientBuilder().WithEndpoint(endpoint).Build();
-            var state = await docker.Containers.InspectContainerAsync(postgres.Id, deadline.Token);
-            var status = state.State ?? throw new InvalidOperationException("Owned container state unavailable.");
-            StorageDiagnostics.Add(JsonSerializer.Serialize(new { phase, ContainerId = postgres.Id, state.Image, status.Running, status.ExitCode, status.OOMKilled }));
-            if (!status.Running) return;
-            // Fixed shell commands return storage metadata only; no arbitrary SQL/log body.
-            var result = await postgres.ExecAsync(["sh", "-c", "df -k /var/lib/postgresql; du -sk /var/lib/postgresql; du -sk /var/lib/postgresql/18/docker/pg_wal"], deadline.Token);
-            if (result.Stdout.Length > 4096) throw new InvalidOperationException("Storage diagnostic budget exceeded.");
-            StorageDiagnostics.Add($"{phase}: storage-exit={result.ExitCode}\n{result.Stdout}");
-        }
-        catch (Exception error)
-        {
-            // Diagnostic failure must never replace the original initialization failure.
-            StorageDiagnostics.Add($"{phase}: diagnostic-unavailable={error.GetType().Name}");
-        }
+        StorageDiagnostics.Add(await Infrastructure.OwnedPostgresDiagnostics.ObserveAsync(
+            postgres, "quotation99-invoice-consumer", phase));
     }
     private static void ConfigureOwnedStorage(CreateContainerParameters parameters, string port, string path, int bytes)
     {
