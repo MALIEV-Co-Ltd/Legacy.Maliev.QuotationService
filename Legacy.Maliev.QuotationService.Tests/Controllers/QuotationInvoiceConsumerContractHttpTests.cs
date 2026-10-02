@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Docker.DotNet.Models;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Legacy.Maliev.AccountingService.Application.Models;
@@ -291,20 +292,37 @@ public sealed class QuotationInvoiceConsumerContractHttpTests(InvoiceConsumerFix
 public sealed class InvoiceConsumerFixture : IAsyncLifetime
 {
     public static readonly DateTime Modified = new(2026, 9, 29, 4, 4, 5, DateTimeKind.Unspecified);
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly IContainer redis = new ContainerBuilder("redis:7-alpine").WithPortBinding(6379, true).WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build();
+    private PostgreSqlContainer postgres = null!;
+    private IContainer redis = null!;
+    private Infrastructure.DisposableContainerPair? containers;
     private readonly RSA key = RSA.Create(2048);
     private string Requests => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "invoice_consumer_requests" }.ConnectionString;
     public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(postgres.StartAsync(), redis.StartAsync());
+        containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation99-invoice-consumer",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels)
+                .WithCreateParameterModifier(parameters => ConfigureOwnedStorage(parameters, "5432/tcp", "/var/lib/postgresql", 268435456)).Build(),
+            attempt => new ContainerBuilder("redis:7-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true)
+                .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
+                .WithCreateParameterModifier(parameters => ConfigureOwnedStorage(parameters, "6379/tcp", "/data", 16777216)).Build());
+        postgres = (PostgreSqlContainer)containers.First;
+        redis = containers.Second;
         await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
         {
             await connection.OpenAsync(); await using var command = new NpgsqlCommand("CREATE DATABASE invoice_consumer_requests", connection); await command.ExecuteNonQueryAsync();
         }
         await using var db = Context(); await db.Database.MigrateAsync();
         await using var requests = new QuotationRequestDbContext(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(Requests).Options); await requests.Database.MigrateAsync();
+    }
+    private static void ConfigureOwnedStorage(CreateContainerParameters parameters, string port, string path, int bytes)
+    {
+        parameters.HostConfig ??= new HostConfig();
+        parameters.HostConfig.PortBindings ??= new Dictionary<string, IList<PortBinding>>();
+        parameters.HostConfig.PortBindings[port] = [new PortBinding { HostIP = "127.0.0.1", HostPort = "" }];
+        parameters.HostConfig.Tmpfs = new Dictionary<string, string> { [path] = $"rw,noexec,nosuid,size={bytes}" };
     }
     public async Task<Quotation> SeedAsync(bool? accepted = null, int? invoice = null)
     {
@@ -349,7 +367,11 @@ public sealed class InvoiceConsumerFixture : IAsyncLifetime
         if (profile == "employee") claims.Add(new("role", "Employee"));
         return new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken("https://invoice-fixture-auth.example", "invoice-fixture-services", claims, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(10), new SigningCredentials(new RsaSecurityKey(key), SecurityAlgorithms.RsaSha256)));
     }
-    public async Task DisposeAsync() { await Task.WhenAll(postgres.DisposeAsync().AsTask(), redis.DisposeAsync().AsTask()); key.Dispose(); }
+    public async Task DisposeAsync()
+    {
+        try { if (containers is not null) await containers.DisposeAsync(); }
+        finally { key.Dispose(); }
+    }
     private sealed class Factory(InvoiceConsumerFixture fixture, InvoiceOrderTransport orders, bool allowed) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
