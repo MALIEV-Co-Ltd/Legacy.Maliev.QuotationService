@@ -16,6 +16,7 @@ builder.AddStandardCache("legacy:quotation:");
 builder.AddStandardCors();
 builder.AddJwtAuthentication();
 builder.AddLegacyAuthServiceTokenExchange();
+builder.AddQuotationIamClient();
 builder.Services.AddOptions<QualificationAuthorityOptions>().Bind(builder.Configuration.GetSection("QualificationAuthority"));
 builder.Services.AddScoped<QualificationAuthorityClient>();
 builder.Services.AddHttpClient(QualificationAuthorityClient.ClientName, client =>
