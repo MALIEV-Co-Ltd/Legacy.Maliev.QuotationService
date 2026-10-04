@@ -731,15 +731,18 @@ public sealed class RequestCreateReadbackFault(RequestCreateCommitFault ack, Can
 
 public sealed class RequestCreateRetryFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly IContainer redis = new ContainerBuilder("redis:7-alpine").WithPortBinding(6379, true)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build();
+    private Infrastructure.DisposableContainerPair? containers;
+    private PostgreSqlContainer postgres => (PostgreSqlContainer)containers!.First;
+    private IContainer redis => containers!.Second;
     private readonly RSA key = RSA.Create(2048);
     private string RequestConnection => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "request_create_retry" }.ConnectionString;
 
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(postgres.StartAsync(), redis.StartAsync());
+        containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation100-QuotationRequestCreateRetryHttpTests",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).Build(),
+            attempt => new ContainerBuilder("redis:7-alpine").WithDockerEndpoint(attempt.Endpoint).WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true).WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build());
         await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
@@ -774,7 +777,7 @@ public sealed class RequestCreateRetryFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        await Task.WhenAll(postgres.DisposeAsync().AsTask(), redis.DisposeAsync().AsTask());
+        if (containers is not null) await containers.DisposeAsync();
         key.Dispose();
     }
 

@@ -25,11 +25,16 @@ namespace Legacy.Maliev.QuotationService.Tests.Data;
 
 public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer quotationPostgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly PostgreSqlContainer requestPostgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
+    private Infrastructure.DisposableContainerPair? containers;
+    private PostgreSqlContainer quotationPostgres => (PostgreSqlContainer)containers!.First;
+    private PostgreSqlContainer requestPostgres => (PostgreSqlContainer)containers!.Second;
 
-    public Task InitializeAsync() => Task.WhenAll(quotationPostgres.StartAsync(), requestPostgres.StartAsync());
-    public async Task DisposeAsync() { await quotationPostgres.DisposeAsync(); await requestPostgres.DisposeAsync(); }
+    public async Task InitializeAsync() => containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation100-quotationPostgres",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).Build(),
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).Build(), secondResource: "pg-request");
+    public async Task DisposeAsync() { if (containers is not null) await containers.DisposeAsync(); }
 
     [Fact]
     public async Task QualificationOutcomeReadback_ProjectsOrderedPiiFreeCurrentStateFromPostgreSql()

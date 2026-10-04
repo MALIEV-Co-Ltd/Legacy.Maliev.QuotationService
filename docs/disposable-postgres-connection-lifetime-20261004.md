@@ -35,3 +35,17 @@ existing operator worktree; the original uncommitted files were preserved.
 Dependency validation uses the same pinned Defaults, Contracts and Accounting
 commits as required CI. Full-suite and hosted exact-head acceptance evidence is
 recorded in the PR; this document does not waive those gates.
+
+Hosted validation of the initial pool fix had 690 passes and 34 failures, all
+from the invoice-decision fixture's unguarded single-container startup hitting
+the exact Docker bind-collision signature. The Auth-to-Quotation joined gate
+passed. A single-container adapter now uses the same reviewed three-attempt
+startup predicate and ownership-checked cleanup. All remaining direct fixture
+startups were converted, including paired PostgreSQL migration tests with
+distinct resource labels. SQL and assertions are not retried.
+
+The follow-up focused suite passed all 78 cases, including 34 invoice-decision
+cases and the existing startup contracts. A new real single-container test
+opens the current backend and independently verifies Docker's exact named
+container returns 404 after teardown. The full suite and exact hosted-head
+gates must also pass before integration.

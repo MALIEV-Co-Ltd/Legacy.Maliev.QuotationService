@@ -10,19 +10,23 @@ namespace Legacy.Maliev.QuotationService.Tests.MigrationRunner;
 
 public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer quotation = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly PostgreSqlContainer request = new PostgreSqlBuilder("postgres:18-alpine").Build();
+    private Infrastructure.DisposableContainerPair? containers;
+    private PostgreSqlContainer quotation => (PostgreSqlContainer)containers!.First;
+    private PostgreSqlContainer request => (PostgreSqlContainer)containers!.Second;
     private readonly ECDsa signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
     private readonly ECDsa snapshotSigner = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
-    public Task InitializeAsync() => Task.WhenAll(quotation.StartAsync(), request.StartAsync());
+    public async Task InitializeAsync() => containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation100-quotation",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).Build(),
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).Build(), secondResource: "pg-request");
 
     public async Task DisposeAsync()
     {
         signer.Dispose();
         snapshotSigner.Dispose();
-        await quotation.DisposeAsync();
-        await request.DisposeAsync();
+        if (containers is not null) await containers.DisposeAsync();
     }
 
     [Theory]

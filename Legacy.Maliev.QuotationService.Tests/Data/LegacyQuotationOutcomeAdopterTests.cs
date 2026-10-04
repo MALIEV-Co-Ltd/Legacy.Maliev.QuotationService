@@ -9,11 +9,14 @@ namespace Legacy.Maliev.QuotationService.Tests.Data;
 
 public sealed class LegacyQuotationOutcomeAdopterTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
+    private Infrastructure.DisposableContainerSingle? containers;
+    private PostgreSqlContainer postgres => (PostgreSqlContainer)containers!.Container;
 
-    public Task InitializeAsync() => postgres.StartAsync();
+    public async Task InitializeAsync() => containers = await Infrastructure.DisposableContainerSingle.StartAsync("quotation100-outcome-adopter",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).Build());
 
-    public async Task DisposeAsync() => await postgres.DisposeAsync();
+    public async Task DisposeAsync() { if (containers is not null) await containers.DisposeAsync(); }
 
     [Fact]
     public async Task AdoptAsync_ExactSourceFacts_PreservesEveryValueAndNextIdentity()

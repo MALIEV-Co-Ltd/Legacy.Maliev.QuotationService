@@ -650,13 +650,16 @@ public sealed class QuotationInvoiceDecisionHttpPostgresTests(QuotationInvoiceDe
 public sealed class QuotationInvoiceDecisionPostgresFixture : IAsyncLifetime
 {
     public RSA SigningKey { get; } = RSA.Create(2048);
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
+    private Infrastructure.DisposableContainerSingle? containers;
+    private PostgreSqlContainer postgres => (PostgreSqlContainer)containers!.Container;
     public string QuotationConnectionString => Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString());
     private string RequestConnectionString => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "quotation68_requests" }.ConnectionString;
 
     public async Task InitializeAsync()
     {
-        await postgres.StartAsync();
+        containers = await Infrastructure.DisposableContainerSingle.StartAsync("quotation100-invoice-decision",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).Build());
         await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
@@ -669,7 +672,7 @@ public sealed class QuotationInvoiceDecisionPostgresFixture : IAsyncLifetime
         await requests.Database.MigrateAsync();
     }
 
-    public async Task DisposeAsync() { await postgres.DisposeAsync(); SigningKey.Dispose(); }
+    public async Task DisposeAsync() { try { if (containers is not null) await containers.DisposeAsync(); } finally { SigningKey.Dispose(); } }
     public QuotationDbContext QuotationContext(IInterceptor? interceptor = null)
     {
         var options = new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(QuotationConnectionString);
