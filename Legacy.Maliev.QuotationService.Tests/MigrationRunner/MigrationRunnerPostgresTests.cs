@@ -31,12 +31,12 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
     public async Task EmptyDatabase_MigratesOnlySelectedSchemaWithoutSeed(MigrationWorkload workload, int expectedTables)
     {
         await ResetBothAsync();
-        var target = workload == MigrationWorkload.Quotation ? quotation.GetConnectionString() : request.GetConnectionString();
+        var target = workload == MigrationWorkload.Quotation ? Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()) : Infrastructure.DisposablePostgresConnectionPolicy.Isolate(request.GetConnectionString());
         await Runner(target, workload).RunAsync(CancellationToken.None);
 
         Assert.Equal(expectedTables, await ApplicationTableCountAsync(target));
         Assert.Equal(0, await DataRowCountAsync(target));
-        var other = workload == MigrationWorkload.Quotation ? request.GetConnectionString() : quotation.GetConnectionString();
+        var other = workload == MigrationWorkload.Quotation ? Infrastructure.DisposablePostgresConnectionPolicy.Isolate(request.GetConnectionString()) : Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString());
         Assert.Equal(0, await ApplicationTableCountAsync(other));
     }
 
@@ -44,15 +44,15 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
     public async Task NonEmptyDatabase_RequiresValidBoundReceiptBeforeMigration()
     {
         await ResetBothAsync();
-        await ExecuteAsync(quotation.GetConnectionString(), "CREATE TABLE legacy_marker(id integer primary key)");
-        var runner = Runner(quotation.GetConnectionString(), MigrationWorkload.Quotation);
+        await ExecuteAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), "CREATE TABLE legacy_marker(id integer primary key)");
+        var runner = Runner(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation);
 
         await Assert.ThrowsAsync<SchemaBaselineRejectedException>(() => runner.RunAsync(CancellationToken.None));
-        Assert.Equal(0, await HistoryCountAsync(quotation.GetConnectionString()));
+        Assert.Equal(0, await HistoryCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
 
-        runner = Runner(quotation.GetConnectionString(), MigrationWorkload.Quotation, ValidReceipt(quotation.GetConnectionString(), MigrationWorkload.Quotation));
+        runner = Runner(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation, ValidReceipt(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation));
         await runner.RunAsync(CancellationToken.None);
-        Assert.Equal(5, await ApplicationTableCountAsync(quotation.GetConnectionString()));
+        Assert.Equal(5, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
     }
 
     [Fact]
@@ -61,10 +61,10 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
         foreach (var receipt in InvalidReceipts())
         {
             await ResetBothAsync();
-            await ExecuteAsync(quotation.GetConnectionString(), "CREATE TABLE legacy_marker(id integer primary key)");
-            var runner = Runner(quotation.GetConnectionString(), MigrationWorkload.Quotation, receipt);
+            await ExecuteAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), "CREATE TABLE legacy_marker(id integer primary key)");
+            var runner = Runner(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation, receipt);
             await Assert.ThrowsAsync<SchemaBaselineRejectedException>(() => runner.RunAsync(CancellationToken.None));
-            Assert.Equal(0, await HistoryCountAsync(quotation.GetConnectionString()));
+            Assert.Equal(0, await HistoryCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
         }
     }
 
@@ -76,30 +76,30 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
     public async Task UserOwnedSchemaObject_RequiresValidReceiptBeforeMigration(string objectSql)
     {
         await ResetBothAsync();
-        await ExecuteAsync(quotation.GetConnectionString(), objectSql);
+        await ExecuteAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), objectSql);
 
         await Assert.ThrowsAsync<SchemaBaselineRejectedException>(() =>
-            Runner(quotation.GetConnectionString(), MigrationWorkload.Quotation).RunAsync(CancellationToken.None));
-        Assert.Equal(0, await HistoryCountAsync(quotation.GetConnectionString()));
+            Runner(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation).RunAsync(CancellationToken.None));
+        Assert.Equal(0, await HistoryCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
 
         await Runner(
-            quotation.GetConnectionString(),
+            Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()),
             MigrationWorkload.Quotation,
-            ValidReceipt(quotation.GetConnectionString(), MigrationWorkload.Quotation)).RunAsync(CancellationToken.None);
-        Assert.Equal(5, await ApplicationTableCountAsync(quotation.GetConnectionString()));
+            ValidReceipt(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation)).RunAsync(CancellationToken.None);
+        Assert.Equal(5, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
     }
 
     [Fact]
     public async Task ExtensionOnlyFreshDatabase_RemainsEligibleForUnsignedInitialization()
     {
         await ResetBothAsync();
-        await ExecuteAsync(quotation.GetConnectionString(), "CREATE EXTENSION pgcrypto");
+        await ExecuteAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), "CREATE EXTENSION pgcrypto");
 
-        await Runner(quotation.GetConnectionString(), MigrationWorkload.Quotation).RunAsync(CancellationToken.None);
+        await Runner(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation).RunAsync(CancellationToken.None);
 
-        Assert.Equal(5, await ApplicationTableCountAsync(quotation.GetConnectionString()));
+        Assert.Equal(5, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
         Assert.Equal(1, await ScalarAsync(
-            quotation.GetConnectionString(),
+            Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()),
             "SELECT count(*)::int FROM pg_extension WHERE extname='pgcrypto'"));
     }
 
@@ -107,26 +107,26 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
     public async Task IdempotentRerun_SucceedsWithoutSeeding()
     {
         await ResetBothAsync();
-        var first = Runner(quotation.GetConnectionString(), MigrationWorkload.Quotation);
+        var first = Runner(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation);
         await first.RunAsync(CancellationToken.None);
-        var receipt = ValidReceipt(quotation.GetConnectionString(), MigrationWorkload.Quotation);
-        await Runner(quotation.GetConnectionString(), MigrationWorkload.Quotation, receipt).RunAsync(CancellationToken.None);
-        Assert.Equal(5, await ApplicationTableCountAsync(quotation.GetConnectionString()));
-        Assert.Equal(0, await DataRowCountAsync(quotation.GetConnectionString()));
+        var receipt = ValidReceipt(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation);
+        await Runner(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation, receipt).RunAsync(CancellationToken.None);
+        Assert.Equal(5, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
+        Assert.Equal(0, await DataRowCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
     }
 
     [Fact]
     public async Task ConcurrentRunner_FailsWithinBoundedLockTimeoutAndLockIsReusableAfterRelease()
     {
         await ResetBothAsync();
-        await using var blocker = new NpgsqlConnection(quotation.GetConnectionString());
+        await using var blocker = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()));
         await blocker.OpenAsync();
         await using (var command = new NpgsqlCommand("SELECT pg_advisory_lock(hashtext('legacy-maliev-quotation:migration:quotation'))", blocker))
         {
             await command.ExecuteScalarAsync();
         }
 
-        var runner = Runner(quotation.GetConnectionString(), MigrationWorkload.Quotation, lockTimeout: TimeSpan.FromMilliseconds(200));
+        var runner = Runner(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation, lockTimeout: TimeSpan.FromMilliseconds(200));
         await Assert.ThrowsAsync<MigrationLockUnavailableException>(() => runner.RunAsync(CancellationToken.None));
         await using (var release = new NpgsqlCommand("SELECT pg_advisory_unlock(hashtext('legacy-maliev-quotation:migration:quotation'))", blocker))
         {
@@ -135,18 +135,18 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
         await blocker.CloseAsync();
 
         await runner.RunAsync(CancellationToken.None);
-        Assert.Equal(5, await ApplicationTableCountAsync(quotation.GetConnectionString()));
+        Assert.Equal(5, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
     }
 
     [Fact]
     public async Task Failure_ReleasesAdvisoryLock()
     {
         await ResetBothAsync();
-        await ExecuteAsync(quotation.GetConnectionString(), "CREATE TABLE legacy_marker(id integer primary key)");
+        await ExecuteAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), "CREATE TABLE legacy_marker(id integer primary key)");
         await Assert.ThrowsAsync<SchemaBaselineRejectedException>(() =>
-            Runner(quotation.GetConnectionString(), MigrationWorkload.Quotation).RunAsync(CancellationToken.None));
+            Runner(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation).RunAsync(CancellationToken.None));
 
-        await using var connection = new NpgsqlConnection(quotation.GetConnectionString());
+        await using var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()));
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand("SELECT pg_try_advisory_lock(hashtext('legacy-maliev-quotation:migration:quotation'))", connection);
         Assert.True((bool)(await command.ExecuteScalarAsync())!);
@@ -207,10 +207,10 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
 
     private IEnumerable<SignedSchemaBaselineReceipt> InvalidReceipts()
     {
-        var valid = ValidReceipt(quotation.GetConnectionString(), MigrationWorkload.Quotation);
+        var valid = ValidReceipt(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation);
         yield return valid with { Signature = Convert.ToBase64String([1, 2, 3]) };
-        yield return ValidReceipt(quotation.GetConnectionString(), MigrationWorkload.Quotation, DateTimeOffset.UtcNow.AddMinutes(-1));
-        yield return ValidReceipt(quotation.GetConnectionString(), MigrationWorkload.QuotationRequest);
+        yield return ValidReceipt(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation, DateTimeOffset.UtcNow.AddMinutes(-1));
+        yield return ValidReceipt(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.QuotationRequest);
     }
 
     private static TargetDatabaseIdentity Identity(string connectionString)
@@ -220,7 +220,7 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
     }
 
     private async Task ResetBothAsync() => await Task.WhenAll(
-        ResetAsync(quotation.GetConnectionString()), ResetAsync(request.GetConnectionString()));
+        ResetAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())), ResetAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(request.GetConnectionString())));
 
     private static Task ResetAsync(string connectionString) => ExecuteAsync(
         connectionString, "DROP SCHEMA public CASCADE; CREATE SCHEMA public");

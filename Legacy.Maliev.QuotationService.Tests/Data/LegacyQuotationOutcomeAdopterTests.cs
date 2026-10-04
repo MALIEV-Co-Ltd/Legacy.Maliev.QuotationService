@@ -189,7 +189,7 @@ public sealed class LegacyQuotationOutcomeAdopterTests : IAsyncLifetime
 
     private QuotationDbContext Context() => new(
         new DbContextOptionsBuilder<QuotationDbContext>()
-            .UseNpgsql(postgres.GetConnectionString())
+            .UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString()))
             .Options);
 
     private static LegacyQuotationOutcomeBatch LoadFixture()

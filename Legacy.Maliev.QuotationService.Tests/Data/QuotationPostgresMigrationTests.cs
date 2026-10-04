@@ -1409,8 +1409,8 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         null);
     private static string Hash(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-    private QuotationDbContext QuotationContext(params IInterceptor[] interceptors) => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(quotationPostgres.GetConnectionString()).AddInterceptors(interceptors).Options);
-    private QuotationRequestDbContext RequestContext() => new(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(requestPostgres.GetConnectionString()).Options);
+    private QuotationDbContext QuotationContext(params IInterceptor[] interceptors) => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotationPostgres.GetConnectionString())).AddInterceptors(interceptors).Options);
+    private QuotationRequestDbContext RequestContext() => new(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(requestPostgres.GetConnectionString())).Options);
 
     private sealed class CommandCounter : DbCommandInterceptor
     {

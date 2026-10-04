@@ -651,13 +651,13 @@ public sealed class QuotationInvoiceDecisionPostgresFixture : IAsyncLifetime
 {
     public RSA SigningKey { get; } = RSA.Create(2048);
     private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    public string QuotationConnectionString => postgres.GetConnectionString();
-    private string RequestConnectionString => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "quotation68_requests" }.ConnectionString;
+    public string QuotationConnectionString => Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString());
+    private string RequestConnectionString => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "quotation68_requests" }.ConnectionString;
 
     public async Task InitializeAsync()
     {
         await postgres.StartAsync();
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("CREATE DATABASE quotation68_requests", connection);

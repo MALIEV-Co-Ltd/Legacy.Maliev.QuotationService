@@ -270,9 +270,9 @@ public sealed class QuotationNormalIamFixture : IAsyncLifetime
     private PostgreSqlContainer? postgres;
     private IContainer? redis;
     private Infrastructure.DisposableContainerPair? containers;
-    private string Requests => new NpgsqlConnectionStringBuilder(postgres!.GetConnectionString()) { Database = "quotation95_requests", Pooling = false }.ConnectionString;
+    private string Requests => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres!.GetConnectionString())) { Database = "quotation95_requests", Pooling = false }.ConnectionString;
     public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>()
-        .UseNpgsql(new NpgsqlConnectionStringBuilder(postgres!.GetConnectionString()) { Pooling = false }.ConnectionString).Options);
+        .UseNpgsql(new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres!.GetConnectionString())) { Pooling = false }.ConnectionString).Options);
 
     public async Task InitializeAsync()
     {
@@ -287,7 +287,7 @@ public sealed class QuotationNormalIamFixture : IAsyncLifetime
                 .WithCreateParameterModifier(parameters => ConfigureOwnedStorage(parameters, "6379/tcp", "/data", 16777216)).Build());
         postgres = (PostgreSqlContainer)containers.First;
         redis = containers.Second;
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("CREATE DATABASE quotation95_requests", connection);
@@ -367,7 +367,7 @@ public sealed class QuotationNormalIamFixture : IAsyncLifetime
             builder.UseEnvironment(environment);
             foreach (var setting in new Dictionary<string, string?>
             {
-                ["ConnectionStrings:QuotationDbContext"] = new NpgsqlConnectionStringBuilder(fixture.postgres!.GetConnectionString()) { Pooling = false }.ConnectionString,
+                ["ConnectionStrings:QuotationDbContext"] = new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(fixture.postgres!.GetConnectionString())) { Pooling = false }.ConnectionString,
                 ["ConnectionStrings:QuotationRequestDbContext"] = fixture.Requests,
                 ["ConnectionStrings:redis"] = $"127.0.0.1:{fixture.redis!.GetMappedPublicPort(6379)}",
                 ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(fixture.key.ExportSubjectPublicKeyInfoPem())),

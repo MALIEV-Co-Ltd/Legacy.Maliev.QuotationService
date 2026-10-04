@@ -202,8 +202,8 @@ public sealed class DraftReadFixture : IAsyncLifetime
     public string? ExpectedLiveResource;
     public string? ReceivedLiveResource;
     public int Customer() => Interlocked.Increment(ref customer);
-    private string Requests => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "draft_requests" }.ConnectionString;
-    public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
+    private string Requests => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "draft_requests" }.ConnectionString;
+    public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
     public async Task InitializeAsync()
     {
         containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation99-draft-read",
@@ -214,7 +214,7 @@ public sealed class DraftReadFixture : IAsyncLifetime
                 .WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true)
                 .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
                 .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "6379/tcp")).Build());
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("CREATE DATABASE draft_requests", connection);
@@ -277,7 +277,7 @@ public sealed class DraftReadFixture : IAsyncLifetime
             if (resourceScoped) builder.UseSetting("Features:ResourceScopedAuthEnabled", "true");
             foreach (var setting in new Dictionary<string, string?>
             {
-                ["ConnectionStrings:QuotationDbContext"] = fixture.postgres.GetConnectionString(),
+                ["ConnectionStrings:QuotationDbContext"] = Infrastructure.DisposablePostgresConnectionPolicy.Isolate(fixture.postgres.GetConnectionString()),
                 ["ConnectionStrings:QuotationRequestDbContext"] = fixture.Requests,
                 ["ConnectionStrings:redis"] = $"{fixture.redis.Hostname}:{fixture.redis.GetMappedPublicPort(6379)}",
                 ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(fixture.key.ExportSubjectPublicKeyInfoPem())),

@@ -254,10 +254,10 @@ public sealed class FinancialOutcomeFixture : IAsyncLifetime
     private int day;
     public int ReadChecks;
     private static readonly string[] Permissions = ["legacy.quotations.create", "legacy.quotations.read", "legacy.quotations.update", "legacy.quotations.delete", "legacy.customer-quotations.read"];
-    private string Requests => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "financial_requests" }.ConnectionString;
+    private string Requests => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "financial_requests" }.ConnectionString;
     public DateTime NextDay() => new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddDays(40 * Interlocked.Increment(ref day));
     public void SetTime(DateTime value) => clock.Set(value);
-    public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
+    public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
     public async Task InitializeAsync()
     {
         containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation97-financial",
@@ -268,7 +268,7 @@ public sealed class FinancialOutcomeFixture : IAsyncLifetime
                 .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build());
         postgres = (PostgreSqlContainer)containers.First;
         redis = containers.Second;
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("CREATE DATABASE financial_requests", connection);
@@ -310,7 +310,7 @@ public sealed class FinancialOutcomeFixture : IAsyncLifetime
             QuotationTestWorkloadExchange.Prepare(builder);
             foreach (var setting in new Dictionary<string, string?>
             {
-                ["ConnectionStrings:QuotationDbContext"] = fixture.postgres.GetConnectionString(),
+                ["ConnectionStrings:QuotationDbContext"] = Infrastructure.DisposablePostgresConnectionPolicy.Isolate(fixture.postgres.GetConnectionString()),
                 ["ConnectionStrings:QuotationRequestDbContext"] = fixture.Requests,
                 ["ConnectionStrings:redis"] = $"{fixture.redis.Hostname}:{fixture.redis.GetMappedPublicPort(6379)}",
                 ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(fixture.key.ExportSubjectPublicKeyInfoPem())),

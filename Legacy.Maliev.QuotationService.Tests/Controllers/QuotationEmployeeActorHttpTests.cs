@@ -486,7 +486,7 @@ public sealed class QuotationEmployeeActorFixture : IAsyncLifetime
     private IContainer redis => containers!.Second;
     public RSA SigningKey { get; } = RSA.Create(2048);
     public RSA WrongKey { get; } = RSA.Create(2048);
-    private string RequestConnection => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "quotation70_requests" }.ConnectionString;
+    private string RequestConnection => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "quotation70_requests" }.ConnectionString;
 
     public async Task InitializeAsync()
     {
@@ -501,14 +501,14 @@ public sealed class QuotationEmployeeActorFixture : IAsyncLifetime
         await ObserveAsync("ready");
         try
         {
-            await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+            await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
             {
                 await connection.OpenAsync();
                 await using var command = new NpgsqlCommand("CREATE DATABASE quotation70_requests", connection);
                 await command.ExecuteNonQueryAsync();
             }
             await ObserveAsync("second-database");
-            await using var quotations = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
+            await using var quotations = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
             await quotations.Database.MigrateAsync();
             await using var requests = RequestContext();
             await requests.Database.MigrateAsync();
@@ -569,7 +569,7 @@ public sealed class QuotationEmployeeActorFixture : IAsyncLifetime
     public WebApplicationFactory<Program> App(bool allowed = true, bool unavailable = false, IInterceptor? interceptor = null, bool cacheFailure = false) =>
         new ProductionFactory(new Dictionary<string, string?>
         {
-            ["ConnectionStrings:QuotationDbContext"] = postgres.GetConnectionString(),
+            ["ConnectionStrings:QuotationDbContext"] = Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString()),
             ["ConnectionStrings:QuotationRequestDbContext"] = RequestConnection,
             ["ConnectionStrings:redis"] = $"{redis.Hostname}:{redis.GetMappedPublicPort(6379)}",
             ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(SigningKey.ExportSubjectPublicKeyInfoPem())),

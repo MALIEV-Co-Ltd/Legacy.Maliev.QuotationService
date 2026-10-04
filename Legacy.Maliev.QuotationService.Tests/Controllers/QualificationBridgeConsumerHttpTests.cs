@@ -489,7 +489,7 @@ public sealed class QualificationBridgeConsumerFixture : IAsyncLifetime
     private string? workloadToken;
     public string WorkloadToken => workloadToken ??= IssueToken([new("sub", "service:legacy-quotation"), new("identity_kind", "service"),
         new("permissions", "legacy-auth.quotation-qualification.introspect")]);
-    private string RequestConnection => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "quotation76_requests" }.ConnectionString;
+    private string RequestConnection => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "quotation76_requests" }.ConnectionString;
 
     public async Task InitializeAsync()
     {
@@ -501,13 +501,13 @@ public sealed class QualificationBridgeConsumerFixture : IAsyncLifetime
                 .WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true)
                 .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
                 .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "6379/tcp")).Build());
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("CREATE DATABASE quotation76_requests", connection);
             await command.ExecuteNonQueryAsync();
         }
-        await using var quotation = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
+        await using var quotation = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
         await quotation.Database.MigrateAsync();
         await using var requests = RequestContext();
         await requests.Database.MigrateAsync();
@@ -546,7 +546,7 @@ public sealed class QualificationBridgeConsumerFixture : IAsyncLifetime
 
     public WebApplicationFactory<Program> App(bool enabled, HttpMessageHandler? transport, AllowedIamTransport? iam = null, string? authOrigin = null) => new Factory(new Dictionary<string, string?>
     {
-        ["ConnectionStrings:QuotationDbContext"] = postgres.GetConnectionString(),
+        ["ConnectionStrings:QuotationDbContext"] = Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString()),
         ["ConnectionStrings:QuotationRequestDbContext"] = RequestConnection,
         ["ConnectionStrings:redis"] = $"{redis.Hostname}:{redis.GetMappedPublicPort(6379)}",
         ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(key.ExportSubjectPublicKeyInfoPem())),

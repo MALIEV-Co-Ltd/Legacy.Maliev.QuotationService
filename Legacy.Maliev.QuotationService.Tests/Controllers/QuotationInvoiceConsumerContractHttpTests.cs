@@ -299,8 +299,8 @@ public sealed class InvoiceConsumerFixture : IAsyncLifetime
     public List<string> StorageDiagnostics { get; } = [];
     internal Infrastructure.PostgresFailureSignal? InitializationFailure { get; private set; }
     private readonly List<string> connectionPhases = [];
-    private string Requests => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "invoice_consumer_requests" }.ConnectionString;
-    public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
+    private string Requests => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "invoice_consumer_requests" }.ConnectionString;
+    public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
     public async Task InitializeAsync()
     {
         containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation99-invoice-consumer",
@@ -316,7 +316,7 @@ public sealed class InvoiceConsumerFixture : IAsyncLifetime
         await CaptureStorageAsync("ready");
         try
         {
-            await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+            await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
             {
                 await CaptureConnectionAsync("open-start", connection);
                 await connection.OpenAsync();
@@ -423,7 +423,7 @@ public sealed class InvoiceConsumerFixture : IAsyncLifetime
             builder.UseEnvironment("Production");
             foreach (var setting in new Dictionary<string, string?>
             {
-                ["ConnectionStrings:QuotationDbContext"] = fixture.postgres.GetConnectionString(),
+                ["ConnectionStrings:QuotationDbContext"] = Infrastructure.DisposablePostgresConnectionPolicy.Isolate(fixture.postgres.GetConnectionString()),
                 ["ConnectionStrings:QuotationRequestDbContext"] = fixture.Requests,
                 ["ConnectionStrings:redis"] = $"{fixture.redis.Hostname}:{fixture.redis.GetMappedPublicPort(6379)}",
                 ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(fixture.key.ExportSubjectPublicKeyInfoPem())),

@@ -178,12 +178,12 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
         .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build();
     private readonly RSA key = RSA.Create(2048);
     private static readonly string[] Permissions = ["legacy.quotations.create", "legacy.quotations.read", "legacy.customer-quotations.read", "legacy.quotation-lines.write", "legacy.quotation-lines.read", "legacy.quotation-orders.write", "legacy.quotation-orders.read"];
-    private string Requests => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "aggregate_requests" }.ConnectionString;
-    public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
+    private string Requests => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "aggregate_requests" }.ConnectionString;
+    public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
     public async Task InitializeAsync()
     {
         await Task.WhenAll(postgres.StartAsync(), redis.StartAsync());
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("CREATE DATABASE aggregate_requests", connection);
@@ -218,7 +218,7 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
             QuotationTestWorkloadExchange.Prepare(builder);
             foreach (var setting in new Dictionary<string, string?>
             {
-                ["ConnectionStrings:QuotationDbContext"] = fixture.postgres.GetConnectionString(),
+                ["ConnectionStrings:QuotationDbContext"] = Infrastructure.DisposablePostgresConnectionPolicy.Isolate(fixture.postgres.GetConnectionString()),
                 ["ConnectionStrings:QuotationRequestDbContext"] = fixture.Requests,
                 ["ConnectionStrings:redis"] = $"{fixture.redis.Hostname}:{fixture.redis.GetMappedPublicPort(6379)}",
                 ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(fixture.key.ExportSubjectPublicKeyInfoPem())),
