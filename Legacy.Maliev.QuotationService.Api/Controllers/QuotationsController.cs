@@ -49,13 +49,13 @@ public sealed class QuotationsController(
     [HttpGet("stats"), RequirePermission(QuotationPermissions.QuotationsRead, RequireLiveCheck = true)]
     public async Task<ActionResult<QuotationStatsResponse>> GetQuotationStatsAsync(CancellationToken cancellationToken) => await service.GetStatsAsync(cancellationToken);
 
-    [HttpGet("outcomes/readback"), Authorize(Roles = "Employee"), RequirePermission(QuotationPermissions.QuotationsRead, RequireLiveCheck = true)]
+    [HttpGet("outcomes/readback"), Authorize(Policy = QuotationEmployeeActorPolicy.Name), RequirePermission(QuotationPermissions.QuotationsRead, RequireLiveCheck = true)]
     public async Task<ActionResult<QuotationOutcomeReadback>> GetOutcomeReadbackAsync(
         DateTime fromUtc,
         DateTime toUtc,
         CancellationToken cancellationToken)
     {
-        if (!User.IsInRole("Employee"))
+        if (!QuotationEmployeeActorPolicy.IsEmployee(User))
         {
             return Forbid();
         }
@@ -74,6 +74,11 @@ public sealed class QuotationsController(
     [HttpPut("{quotationId:int}"), RequirePermission(QuotationPermissions.QuotationsUpdate, ResourcePathTemplate = "/quotations/{quotationId}", RequireLiveCheck = true, IsCritical = true)]
     public async Task<IActionResult> UpdateQuotationAsync(int quotationId, UpsertQuotationRequest item, [FromHeader(Name = "X-Expected-Modified-Date")] DateTimeOffset? expected, CancellationToken cancellationToken) => (await service.UpdateQuotationAsync(quotationId, item, expected, cancellationToken)) switch { UpdateResult.Updated => NoContent(), UpdateResult.Conflict => Conflict("Quotation was modified by another request."), _ => NotFound() };
 
+    /// <summary>Records a quotation decision with its invoice and optional first-acceptance analytics context.</summary>
+    /// <param name="quotationId">Quotation identifier whose decision is being recorded.</param>
+    /// <param name="request">Decision and optional consent-gated context supplied by the authorized first writer.</param>
+    /// <param name="expected">Optional quotation version precondition.</param>
+    /// <param name="cancellationToken">Cancels the request.</param>
     [HttpPut("{quotationId:int}/decision"), RequirePermission(QuotationPermissions.QuotationsUpdate, ResourcePathTemplate = "/quotations/{quotationId}", RequireLiveCheck = true, IsCritical = true)]
     public async Task<IActionResult> DecideQuotationAsync(
         int quotationId,
@@ -93,6 +98,11 @@ public sealed class QuotationsController(
             return Forbid();
         }
 
+        if (request.Accepted && !ValidAnalyticsContext(request))
+        {
+            return BadRequest();
+        }
+
         var result = await decisions.DecideAsync(quotationId, request, expected, cancellationToken);
         return result.Status switch
         {
@@ -103,6 +113,9 @@ public sealed class QuotationsController(
             _ => StatusCode(StatusCodes.Status503ServiceUnavailable, result),
         };
     }
+
+    private static bool ValidAnalyticsContext(QuotationDecisionRequest request)
+        => request.TryGetAnalyticsContext(out _);
 
     [HttpGet("{quotationId:int}/withholdingtax", Name = "GetQuotationWithholdingTax"), RequirePermission(QuotationPermissions.QuotationsRead, ResourcePathTemplate = "/quotations/{quotationId}", RequireLiveCheck = true)]
     public async Task<ActionResult<decimal>> GetQuotationWithholdingTaxAsync(int quotationId, CancellationToken cancellationToken) { var value = await service.GetWithholdingTaxAsync(quotationId, cancellationToken); return value is null ? NotFound() : value.Value; }
@@ -125,10 +138,9 @@ public sealed class QuotationsController(
     private bool IsTrustedEmployeeDecisionCaller()
     {
         var identityKinds = User.FindAll("identity_kind").Select(claim => claim.Value).ToArray();
-        if (User.IsInRole("Employee"))
+        if (QuotationEmployeeActorPolicy.IsEmployee(User))
         {
-            return identityKinds.Length == 0
-                || identityKinds is ["employee"];
+            return true;
         }
 
         if (identityKinds is not ["service"])

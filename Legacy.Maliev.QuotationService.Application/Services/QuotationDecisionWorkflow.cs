@@ -15,17 +15,17 @@ public sealed class QuotationDecisionWorkflow(
         DateTimeOffset? expectedModifiedDate,
         CancellationToken cancellationToken)
     {
-        var persistence = await quotations.ApplyDecisionAsync(
-            quotationId,
-            request.Accepted,
-            request.Accepted
-                ? request.EmployeeInitiated
-                    ? QuotationAcceptanceOrigin.Employee
-                    : QuotationAcceptanceOrigin.Customer
-                : null,
-            expectedModifiedDate,
-            cancellationToken,
-            request.InvoiceId);
+        QuotationAnalyticsContext? analyticsContext = null;
+        if (request.Accepted && !request.TryGetAnalyticsContext(out analyticsContext))
+            throw new ArgumentException("Invalid analytics context.", nameof(request));
+        var origin = request.Accepted
+            ? request.EmployeeInitiated ? QuotationAcceptanceOrigin.Employee : QuotationAcceptanceOrigin.Customer
+            : (QuotationAcceptanceOrigin?)null;
+        var persistence = analyticsContext is null
+            ? await quotations.ApplyDecisionAsync(quotationId, request.Accepted, origin,
+                expectedModifiedDate, cancellationToken, request.InvoiceId)
+            : await quotations.ApplyDecisionAsync(quotationId, request.Accepted, origin,
+                expectedModifiedDate, cancellationToken, request.InvoiceId, analyticsContext);
         if (persistence.Status == QuotationDecisionPersistenceStatus.NotFound)
         {
             return Result(QuotationDecisionStatus.NotFound);

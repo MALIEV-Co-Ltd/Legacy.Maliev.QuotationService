@@ -106,7 +106,8 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
             {
                 HttpContext = new DefaultHttpContext
                 {
-                    User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Role, "Employee")], "test")),
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim("sub", "joined-employee"), new Claim("identity_kind", "employee")], "test")),
                 },
             },
         };
@@ -1318,8 +1319,8 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
                 {
                     User = new ClaimsPrincipal(new ClaimsIdentity(
                     [
-                        new Claim(ClaimTypes.NameIdentifier, "employee-7"),
-                        new Claim(ClaimTypes.Role, "Employee"),
+                        new Claim("sub", "joined-employee"),
+                        new Claim("identity_kind", "employee"),
                     ], "test")),
                 },
             },

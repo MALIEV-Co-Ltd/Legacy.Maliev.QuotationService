@@ -111,7 +111,7 @@ public sealed class QuotationRequestsController(IQuotationService service) : Con
         return receipt is null ? NotFound() : receipt;
     }
 
-    [HttpGet("qualification-outcomes/readback"), Authorize(Roles = "Employee"),
+    [HttpGet("qualification-outcomes/readback"), Authorize(Policy = QuotationEmployeeActorPolicy.Name),
         RequirePermission(QuotationPermissions.RequestsRead, RequireLiveCheck = true),
         ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> GetQualificationOutcomeReadbackAsync(
@@ -119,7 +119,7 @@ public sealed class QuotationRequestsController(IQuotationService service) : Con
         DateTime toUtc,
         CancellationToken ct)
     {
-        if (!User.IsInRole("Employee"))
+        if (!QuotationEmployeeActorPolicy.IsEmployee(User))
         {
             return Forbid();
         }

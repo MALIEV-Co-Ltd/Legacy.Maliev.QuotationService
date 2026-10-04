@@ -35,6 +35,17 @@ def report(api_hits: str, include_all_owned: bool = True) -> ET.Element:
 
 
 class OwnedCoverageGateTests(unittest.TestCase):
+    def test_raw_command_rejects_generated_gap_even_when_handwritten_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "coverage.cobertura.xml"
+            path.write_text(ET.tostring(report("1"), encoding="unicode"), encoding="utf-8")
+            self.assertEqual(1, gate.main([str(path), "--minimum", "80", "--raw"]))
+
+    def test_raw_gate_includes_every_generated_owned_line(self) -> None:
+        assemblies = gate.summarize(report("1"))
+        self.assertEqual((6, 11), gate.owned_totals(assemblies, raw=True))
+        self.assertLess(gate.percentage(*gate.owned_totals(assemblies, raw=True)), 80)
+
     def test_owned_pass_excludes_visible_generated_and_external_lines(self) -> None:
         assemblies = gate.summarize(report("1"))
         self.assertEqual((6, 6), gate.owned_totals(assemblies))

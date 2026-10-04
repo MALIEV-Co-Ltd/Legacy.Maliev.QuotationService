@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <ProjectReference Include="..\Legacy.Maliev.QuotationService.Application\Legacy.Maliev.QuotationService.Application.csproj" />
     <ProjectReference Include="..\Legacy.Maliev.QuotationService.Data\Legacy.Maliev.QuotationService.Data.csproj" />
   </ItemGroup>

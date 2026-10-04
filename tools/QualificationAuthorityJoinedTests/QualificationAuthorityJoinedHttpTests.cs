@@ -187,6 +187,48 @@ public sealed class JoinedFixture : IAsyncLifetime
     }
 
     public QuotationRequestDbContext RequestContext() => new(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(Connection("requests")).Options);
+    public QuotationDbContext QuotationContext() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Connection("quotations")).Options);
+    public async Task<int> SeedQuotationAsync()
+    {
+        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+        await using var requests = RequestContext();
+        var source = new QuotationRequest
+        {
+            Message = "synthetic joined employee acceptance source",
+            JourneyId = Guid.NewGuid(),
+            QualificationState = "unreviewed",
+            QualificationVersion = 0,
+            CreatedDate = now,
+            ModifiedDate = now,
+        };
+        requests.Requests.Add(source);
+        await requests.SaveChangesAsync();
+        source.TransactionId = $"request-{source.Id}";
+        await requests.SaveChangesAsync();
+        await using var quotations = QuotationContext();
+        var row = new Quotation
+        {
+            CustomerId = 42,
+            EmployeeId = 17,
+            CurrencyId = 764,
+            Period = 30,
+            ExpirationDate = new DateTime(2035, 1, 1),
+            Subtotal = 100m,
+            Vat = 7m,
+            Total = 107m,
+            WithholdingTax = 3m,
+            Accepted = null,
+            InvoiceId = null,
+            SourceRequestId = source.Id,
+            SourceJourneyId = source.JourneyId,
+            Comment = "synthetic joined employee acceptance",
+            CreatedDate = now,
+            ModifiedDate = now,
+        };
+        quotations.Quotations.Add(row);
+        await quotations.SaveChangesAsync();
+        return row.Id;
+    }
     public async Task<int> SeedRequestAsync()
     {
         await using var db = RequestContext();

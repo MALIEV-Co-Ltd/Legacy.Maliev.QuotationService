@@ -93,6 +93,9 @@ public sealed class QuotationReadbackHttpAuthorizationTests
         builder.Services.AddAuthorization(options => options.AddPolicy(
             $"Permission:{QuotationPermissions.RequestsRead}:live_check",
             policy => policy.RequireAuthenticatedUser().RequireClaim("permission", QuotationPermissions.RequestsRead)));
+        builder.Services.AddAuthorization(options => options.AddPolicy(QuotationEmployeeActorPolicy.Name,
+            policy => policy.RequireAuthenticatedUser().RequireAssertion(context =>
+                QuotationEmployeeActorPolicy.IsEmployee(context.User))));
         builder.Services.AddControllers().AddApplicationPart(typeof(QuotationRequestsController).Assembly);
         var app = builder.Build();
         app.UseAuthentication();
@@ -123,9 +126,12 @@ public sealed class QuotationReadbackHttpAuthorizationTests
                 return Task.FromResult(AuthenticateResult.NoResult());
             }
 
-            var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, fixtureIdentity) };
-            claims.Add(new Claim(ClaimTypes.Role, fixtureIdentity.StartsWith("employee-", StringComparison.Ordinal)
-                ? "Employee" : "Customer"));
+            var claims = new List<Claim>
+            {
+                new("sub", fixtureIdentity),
+                new(ClaimTypes.NameIdentifier, fixtureIdentity),
+                new("identity_kind", fixtureIdentity.StartsWith("employee-", StringComparison.Ordinal) ? "employee" : "customer"),
+            };
             if (fixtureIdentity is "employee-read" or "customer-read")
             {
                 claims.Add(new Claim("permission", QuotationPermissions.RequestsRead));

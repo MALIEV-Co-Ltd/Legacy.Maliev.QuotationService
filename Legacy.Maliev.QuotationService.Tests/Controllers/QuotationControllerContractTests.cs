@@ -17,7 +17,7 @@ public sealed class QuotationControllerContractTests
 {
     public static TheoryData<Claim[], bool> EmployeeDecisionCallers => new()
     {
-        { [new Claim(ClaimTypes.Role, "Employee"), new Claim("identity_kind", "employee")], true },
+        { [new Claim("sub", "joined-employee"), new Claim("identity_kind", "employee")], true },
         { [new Claim("identity_kind", "service"), new Claim("sub", "service:legacy-intranet"), new Claim("permissions", "legacy.quotations.update")], true },
         { [new Claim(ClaimTypes.Role, "Customer"), new Claim("identity_kind", "customer"), new Claim("permissions", "legacy.quotations.update")], false },
         { [new Claim("identity_kind", "service"), new Claim("sub", "service:other"), new Claim("permissions", "legacy.quotations.update")], false },
@@ -84,8 +84,8 @@ public sealed class QuotationControllerContractTests
 
         var readback = typeof(QuotationRequestsController).GetMethod(nameof(QuotationRequestsController.GetQualificationOutcomeReadbackAsync))!;
         Assert.Equal("qualification-outcomes/readback", Assert.Single(readback.GetCustomAttributes<HttpGetAttribute>()).Template);
-        Assert.Equal("Employee", Assert.Single(readback.GetCustomAttributes<AuthorizeAttribute>(),
-            attribute => attribute.GetType() == typeof(AuthorizeAttribute)).Roles);
+        Assert.Equal(QuotationEmployeeActorPolicy.Name, Assert.Single(readback.GetCustomAttributes<AuthorizeAttribute>(),
+            attribute => attribute.GetType() == typeof(AuthorizeAttribute)).Policy);
         var readbackPermission = Assert.Single(readback.GetCustomAttributes<RequirePermissionAttribute>());
         Assert.Equal(QuotationPermissions.RequestsRead, readbackPermission.Permission);
         Assert.True(readbackPermission.RequireLiveCheck);
@@ -194,8 +194,9 @@ public sealed class QuotationControllerContractTests
     {
         var action = typeof(QuotationsController).GetMethod(nameof(QuotationsController.GetOutcomeReadbackAsync))!;
         Assert.Equal("outcomes/readback", Assert.Single(action.GetCustomAttributes<HttpGetAttribute>()).Template);
-        var roles = Assert.Single(action.GetCustomAttributes<AuthorizeAttribute>(), value => value.Roles is not null);
-        Assert.Equal("Employee", roles.Roles);
+        var actorPolicy = Assert.Single(action.GetCustomAttributes<AuthorizeAttribute>(), value => value.GetType() == typeof(AuthorizeAttribute));
+        Assert.Equal(QuotationEmployeeActorPolicy.Name, actorPolicy.Policy);
+        Assert.Null(actorPolicy.Roles);
         var permission = Assert.Single(action.GetCustomAttributes<RequirePermissionAttribute>());
         Assert.Equal(QuotationPermissions.QuotationsRead, permission.Permission);
         Assert.True(permission.RequireLiveCheck);
@@ -214,7 +215,8 @@ public sealed class QuotationControllerContractTests
         var employeeController = Controller(service, AuthorizationResult.Failed());
         employeeController.ControllerContext.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
         [
-            new Claim(ClaimTypes.Role, "Employee"),
+            new Claim("sub", "employee-controller-fixture"),
+            new Claim("identity_kind", "employee"),
         ], "test"));
 
         var forbidden = await customerController.GetOutcomeReadbackAsync(
