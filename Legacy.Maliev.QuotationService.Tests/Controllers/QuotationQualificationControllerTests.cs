@@ -119,7 +119,7 @@ public sealed class QuotationQualificationControllerTests
             .ReturnsAsync(new QualificationOutcomeReadback(from, to,
             [new(7, from.AddHours(1), "request-7", Guid.Parse("5cda380d-fd95-4fe4-bd5c-b378f7515160"), "qualified"),
              new(8, from.AddHours(2), null, null, "unreviewed")]));
-        var employee = Controller(service.Object, "employee-42", employeeRole: true);
+        var employee = Controller(service.Object, "joined-employee");
         var result = Assert.IsType<JsonResult>(await employee.GetQualificationOutcomeReadbackAsync(
             from, to, CancellationToken.None));
         var options = Assert.IsType<JsonSerializerOptions>(result.SerializerSettings);
@@ -134,7 +134,7 @@ public sealed class QuotationQualificationControllerTests
         Assert.False(requests[1].TryGetProperty("journeyId", out _));
         Assert.DoesNotContain("email", body, StringComparison.OrdinalIgnoreCase);
 
-        var customer = Controller(service.Object, "customer-42");
+        var customer = Controller(service.Object, "customer-42", identityKind: "customer");
         Assert.IsType<ForbidResult>(await customer.GetQualificationOutcomeReadbackAsync(
             from, to, CancellationToken.None));
         Assert.IsType<BadRequestResult>(await employee.GetQualificationOutcomeReadbackAsync(
@@ -144,11 +144,9 @@ public sealed class QuotationQualificationControllerTests
         service.Verify(value => value.GetQualificationOutcomeReadbackAsync(from, to, It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    private static QuotationRequestsController Controller(IQuotationService service, string? actor, bool employeeRole = false)
+    private static QuotationRequestsController Controller(IQuotationService service, string? actor, string identityKind = "employee")
     {
-        Claim[] claims = actor is null ? [] : employeeRole
-            ? [new Claim("sub", actor), new Claim("identity_kind", "employee"), new Claim(ClaimTypes.Role, "Employee")]
-            : [new Claim("sub", actor), new Claim("identity_kind", "employee")];
+        Claim[] claims = actor is null ? [] : [new Claim("sub", actor), new Claim("identity_kind", identityKind)];
         return new QuotationRequestsController(service)
         {
             ControllerContext = new ControllerContext

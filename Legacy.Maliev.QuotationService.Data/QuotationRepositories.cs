@@ -153,13 +153,23 @@ public sealed class QuotationRepository(
         return new(fromUtc, toUtc, days);
     }
 
-    public async Task<QuotationDecisionPersistenceResult> ApplyDecisionAsync(
+    public Task<QuotationDecisionPersistenceResult> ApplyDecisionAsync(
         int id,
         bool accepted,
         QuotationAcceptanceOrigin? acceptanceOrigin,
         DateTimeOffset? expectedModifiedDate,
         CancellationToken cancellationToken,
         int? invoiceId = null)
+        => ApplyDecisionAsync(id, accepted, acceptanceOrigin, expectedModifiedDate, cancellationToken, invoiceId, null);
+
+    public async Task<QuotationDecisionPersistenceResult> ApplyDecisionAsync(
+        int id,
+        bool accepted,
+        QuotationAcceptanceOrigin? acceptanceOrigin,
+        DateTimeOffset? expectedModifiedDate,
+        CancellationToken cancellationToken,
+        int? invoiceId,
+        QuotationAnalyticsContext? analyticsContext)
     {
         if (invoiceId < 0 || invoiceId > 0 && !accepted
             || invoiceId == 0 && (!accepted || acceptanceOrigin != QuotationAcceptanceOrigin.Employee))
@@ -173,6 +183,7 @@ public sealed class QuotationRepository(
             return new(QuotationDecisionPersistenceStatus.NotFound, null);
         }
 
+        var firstAcceptance = accepted && entity.Accepted != true && entity.AcceptedUtc is null;
         var attachInvoice = invoiceId > 0 && entity.InvoiceId is null;
         if (invoiceId > 0 && entity.InvoiceId is not null && entity.InvoiceId != invoiceId
             || attachInvoice && entity.Accepted == true && acceptanceOrigin != QuotationAcceptanceOrigin.Employee)
@@ -234,6 +245,24 @@ public sealed class QuotationRepository(
                     AcceptedUtcSubMicrosecondTicks = LegacyQuotationOutcomeAdopter.SubMicrosecondTicks(entity.AcceptedUtc.Value),
                     AcceptanceOrigin = entity.AcceptanceOrigin,
                 });
+                if (firstAcceptance && analyticsContext is not null)
+                {
+                    quotations.GoogleAnalyticsOutbox.Add(new GoogleAnalyticsOutbox
+                    {
+                        QuotationId = id,
+                        EventKey = $"quotation-{id}:close_convert_lead:v1",
+                        EventName = "close_convert_lead",
+                        SourceRequestId = entity.SourceRequestId,
+                        SourceJourneyId = entity.SourceJourneyId,
+                        ClientId = analyticsContext.ClientId,
+                        SessionId = analyticsContext.SessionId,
+                        UserId = analyticsContext.UserId,
+                        Currency = analyticsContext.Currency,
+                        Value = entity.QuotedAmount ?? entity.Total,
+                        OccurredUtc = entity.AcceptedUtc.Value,
+                        NextAttemptUtc = entity.AcceptedUtc.Value,
+                    });
+                }
             }
         }
 
@@ -251,7 +280,7 @@ public sealed class QuotationRepository(
             exception.InnerException is PostgresException
             {
                 SqlState: PostgresErrorCodes.UniqueViolation,
-                ConstraintName: "IX_QuotationAcceptedOutcome_EventKey",
+                ConstraintName: "IX_QuotationAcceptedOutcome_EventKey" or "IX_GoogleAnalyticsOutbox_EventKey",
             })
         {
             return await ReconcileDecisionAsync(id, accepted, eventKey, invoiceId, lateAttachment, cancellationToken);

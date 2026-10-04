@@ -107,7 +107,38 @@ public sealed record PaginatedResponse<T>(IReadOnlyList<T> Items, int PageIndex,
 public enum QuotationSortType { QuotationId_Ascending, QuotationId_Descending, QuotationCreatedDate_Ascending, QuotationCreatedDate_Descending, QuotationModifiedDate_Ascending, QuotationModifiedDate_Descending }
 public enum RequestSortType { RequestId_Ascending, RequestId_Descending, RequestCreatedDate_Ascending, RequestCreatedDate_Descending, RequestModifiedDate_Ascending, RequestModifiedDate_Descending }
 public enum UpdateResult { Updated, NotFound, Conflict }
-public sealed record QuotationDecisionRequest(bool Accepted, bool EmployeeInitiated = false, int? InvoiceId = null);
+/// <summary>A quotation decision with optional consent-gated first-acceptance analytics context.</summary>
+/// <param name="Accepted">Whether the quotation is accepted.</param>
+/// <param name="EmployeeInitiated">Whether this is an authorized employee-origin decision; service identity alone does not set this flag.</param>
+/// <param name="InvoiceId">Optional invoice intent; positive identifiers link the persisted invoice atomically with the decision.</param>
+public sealed record QuotationDecisionRequest(bool Accepted, bool EmployeeInitiated = false, int? InvoiceId = null)
+{
+    /// <summary>Optional consent-gated client identifier, supplied together with SessionId and limited to 128 raw characters.</summary>
+    public string? ClientId { get; init; }
+    /// <summary>Optional consent-gated session identifier, supplied together with ClientId and limited to 128 raw characters.</summary>
+    public string? SessionId { get; init; }
+    /// <summary>Optional opaque user identifier; nonblank values are limited to 128 raw characters and must not contain an at sign.</summary>
+    public string? UserId { get; init; }
+    /// <summary>Three-letter analytics currency required when the identifier pair is supplied, normalized to uppercase.</summary>
+    public string? Currency { get; init; }
+
+    public bool TryGetAnalyticsContext(out QuotationAnalyticsContext? context)
+    {
+        context = null;
+        var hasClient = !string.IsNullOrWhiteSpace(ClientId);
+        var hasSession = !string.IsNullOrWhiteSpace(SessionId);
+        if (hasClient != hasSession) return false;
+        if (!hasClient) return true;
+        if (ClientId!.Length > 128 || SessionId!.Length > 128
+            || !string.IsNullOrWhiteSpace(UserId) && (UserId.Length > 128 || UserId.Contains('@'))
+            || Currency is not { Length: 3 } currency || !currency.All(char.IsLetter)) return false;
+
+        context = new(ClientId.Trim(), SessionId.Trim(), currency.ToUpperInvariant(),
+            string.IsNullOrWhiteSpace(UserId) ? null : UserId.Trim());
+        return true;
+    }
+}
+public sealed record QuotationAnalyticsContext(string ClientId, string SessionId, string Currency, string? UserId);
 public sealed record QuotationDecisionResponse(QuotationDecisionStatus Status, int CompletedOrders, int TotalOrders, DateTime? ModifiedDate);
 public enum QuotationDecisionStatus { Completed, NotFound, Conflict, DependencyConflict, DependencyUnavailable }
 public sealed record QuotationDecisionPersistenceResult(

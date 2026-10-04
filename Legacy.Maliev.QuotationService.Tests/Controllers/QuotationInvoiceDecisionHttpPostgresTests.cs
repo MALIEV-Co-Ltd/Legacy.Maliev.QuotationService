@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Legacy.Maliev.QuotationService.Api.Authorization;
 using Legacy.Maliev.QuotationService.Api.Clients;
 using Legacy.Maliev.QuotationService.Api.Controllers;
@@ -41,6 +42,270 @@ public sealed class QuotationInvoiceDecisionHttpPostgresTests(QuotationInvoiceDe
     : IClassFixture<QuotationInvoiceDecisionPostgresFixture>
 {
     private static readonly DateTime SeedTime = new(2026, 9, 29, 3, 4, 5, DateTimeKind.Unspecified);
+    private static readonly JsonSerializerOptions SourceRequestJson = new() { PropertyNamingPolicy = null };
+
+    [Theory]
+    [InlineData("123.456", null, null, "THB")]
+    [InlineData(null, "789", null, "THB")]
+    [InlineData(" ", "789", null, "THB")]
+    [InlineData("123.456", "789", "private@example.test", "THB")]
+    [InlineData("123.456", "789", null, "123")]
+    [InlineData("123.456", "789", null, null)]
+    [InlineData("123.456", "789", null, "TH")]
+    [MemberData(nameof(OversizedAnalyticsContexts))]
+    public async Task Decision_InvalidAnalyticsHttpContext_DoesNotWriteFinancialOrDeliveryRows(
+        string? clientId, string? sessionId, string? userId, string? currency)
+    {
+        var seeded = await SeedAsync();
+        await using var app = await StartAppAsync();
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"/quotations/{seeded.Id}/decision")
+        {
+            Content = JsonContent.Create(new
+            {
+                Accepted = true,
+                EmployeeInitiated = true,
+                InvoiceId = 901,
+                ClientId = clientId,
+                SessionId = sessionId,
+                UserId = userId,
+                Currency = currency
+            }, options: SourceRequestJson),
+        };
+        Authenticate(request);
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await AssertUnchangedAsync(seeded, 0);
+        Assert.Empty(await DeliveryRowsAsync(seeded.Id));
+    }
+
+    public static TheoryData<string?, string?, string?, string?> OversizedAnalyticsContexts => new()
+    {
+        { new string('1', 129), "789", null, "THB" },
+        { "123.456", new string('1', 129), null, "THB" },
+        { "123.456", "789", new string('u', 129), "THB" },
+    };
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(" ", " ")]
+    public async Task Decision_NoAnalyticsIdPair_OptionalUserAndCurrencyDoNotPreventNeutralAcceptance(
+        string? clientId, string? sessionId)
+    {
+        var seeded = await SeedAsync();
+        await using var app = await StartAppAsync();
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"/quotations/{seeded.Id}/decision")
+        {
+            Content = JsonContent.Create(new
+            {
+                Accepted = true,
+                EmployeeInitiated = true,
+                InvoiceId = 901,
+                ClientId = clientId,
+                SessionId = sessionId,
+                UserId = "private@example.test",
+                Currency = "123"
+            },
+                options: SourceRequestJson),
+        };
+        Authenticate(request);
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var read = database.QuotationContext();
+        var stored = await read.Quotations.AsNoTracking().SingleAsync(x => x.Id == seeded.Id);
+        Assert.True(stored.Accepted);
+        Assert.Equal(901, stored.InvoiceId);
+        Assert.Single(await read.AcceptedOutcomes.Where(x => x.QuotationId == seeded.Id).ToListAsync());
+        Assert.Empty(await DeliveryRowsAsync(seeded.Id));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Decision_ConsentedFirstIntent_IsAtomicAndNeverDuplicatedByReplay(bool concurrent)
+    {
+        var seeded = await SeedAsync();
+        var occurred = new DateTimeOffset(2026, 9, 30, 4, 5, 6, TimeSpan.Zero).AddTicks(7);
+        await using var app = await StartAppAsync(concurrent ? new TwoDecisionSaveBarrier() : null, clock: occurred);
+        using var client = app.GetTestClient();
+        var responses = concurrent
+            ? await Task.WhenAll(DecideAsync(client, seeded.Id, 901, consented: true), DecideAsync(client, seeded.Id, 901, consented: true))
+            : [await DecideAsync(client, seeded.Id, 901, consented: true)];
+        try { Assert.All(responses, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode)); }
+        finally { foreach (var response in responses) response.Dispose(); }
+        using var replay = await DecideAsync(client, seeded.Id, 901, consented: true);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        await using var read = database.QuotationContext();
+        var stored = await read.Quotations.AsNoTracking().SingleAsync(x => x.Id == seeded.Id);
+        var neutral = Assert.Single(await read.AcceptedOutcomes.Where(x => x.QuotationId == seeded.Id).ToListAsync());
+        // The business decision, invoice and neutral fact must succeed before checking the missing delivery behavior.
+        Assert.True(stored.Accepted);
+        Assert.Equal(901, stored.InvoiceId);
+        var delivery = Assert.Single(await DeliveryRowsAsync(seeded.Id));
+        Assert.Equal(neutral.AcceptedUtc.AddTicks(neutral.AcceptedUtcSubMicrosecondTicks), delivery.OccurredUtc);
+        Assert.Equal(stored.AcceptedUtc, delivery.OccurredUtc);
+        Assert.Equal(seeded.SourceRequestId, delivery.SourceRequestId);
+        Assert.Equal(seeded.SourceJourneyId, delivery.SourceJourneyId);
+        Assert.Equal("quotation-" + seeded.Id + ":close_convert_lead:v1", delivery.EventKey);
+        Assert.Equal("close_convert_lead", delivery.EventName);
+        Assert.Equal("123.456", delivery.ClientId);
+        Assert.Equal("789", delivery.SessionId);
+        Assert.Equal("opaque-7", delivery.UserId);
+        Assert.Equal("THB", delivery.Currency);
+        Assert.Equal(104m, delivery.Value);
+        Assert.Equal(0, delivery.AttemptCount);
+        Assert.Null(delivery.SentUtc);
+    }
+
+    // Service identity is synthetic here; real Accounting delegation/live authorization requires the joined lane.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Decision_AccountingServicePositiveInvoice_PreservesCustomerOriginAndOptionalContext(bool consented)
+    {
+        var seeded = await SeedAsync();
+        var orders = new FixtureOrderHandler();
+        await using var app = await StartAppAsync(orders: orders);
+        using var client = app.GetTestClient();
+        using var response = await DecideAsync(client, seeded.Id, 901, employeeInitiated: false,
+            profile: "accounting", consented: consented);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var read = database.QuotationContext();
+        var quotation = await read.Quotations.AsNoTracking().SingleAsync(value => value.Id == seeded.Id);
+        var neutral = Assert.Single(await read.AcceptedOutcomes.Where(value => value.QuotationId == seeded.Id).ToListAsync());
+        Assert.True(quotation.Accepted);
+        Assert.Equal(901, quotation.InvoiceId);
+        Assert.Equal("customer", quotation.AcceptanceOrigin);
+        Assert.Equal("customer", neutral.AcceptanceOrigin);
+        Assert.Single(orders.Requests);
+        var delivery = await DeliveryRowsAsync(seeded.Id);
+        if (consented)
+        {
+            var captured = Assert.Single(delivery);
+            Assert.Equal("123.456", captured.ClientId);
+            Assert.Equal("789", captured.SessionId);
+            Assert.Equal(quotation.AcceptedUtc, captured.OccurredUtc);
+        }
+        else Assert.Empty(delivery);
+    }
+
+    // Characterizes the private candidate's migrated null/zero-invoice annex; not source acceptance parity.
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(null, true)]
+    [InlineData(0, true)]
+    public async Task Decision_ConsentedNonPositiveInvoice_CharacterizesFirstCaptureBeforeLateAttachment(
+        int? invoiceId, bool employeeInitiated)
+    {
+        var seeded = await SeedAsync();
+        await using var app = await StartAppAsync();
+        using var client = app.GetTestClient();
+        using var first = await DecideAsync(client, seeded.Id, invoiceId,
+            employeeInitiated: employeeInitiated, consented: true);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var original = Assert.Single(await DeliveryRowsAsync(seeded.Id));
+        await using (var read = database.QuotationContext())
+        {
+            var quotation = await read.Quotations.AsNoTracking().SingleAsync(value => value.Id == seeded.Id);
+            Assert.True(quotation.Accepted);
+            Assert.Null(quotation.InvoiceId);
+            Assert.Equal(employeeInitiated ? "employee" : "customer", quotation.AcceptanceOrigin);
+            Assert.Equal(quotation.AcceptedUtc, original.OccurredUtc);
+            Assert.Single(await read.AcceptedOutcomes.Where(value => value.QuotationId == seeded.Id).ToListAsync());
+        }
+
+        using var attachment = await DecideAsync(client, seeded.Id, 901, consented: false);
+        Assert.Equal(HttpStatusCode.OK, attachment.StatusCode);
+        Assert.Equal(original, Assert.Single(await DeliveryRowsAsync(seeded.Id)));
+        await using var attached = database.QuotationContext();
+        var stored = await attached.Quotations.AsNoTracking().SingleAsync(value => value.Id == seeded.Id);
+        Assert.Equal(901, stored.InvoiceId);
+        Assert.Equal(original.OccurredUtc, stored.AcceptedUtc);
+        Assert.Single(await attached.AcceptedOutcomes.Where(value => value.QuotationId == seeded.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task Decision_ConsentedFirstIntent_ReplayCannotReplaceContextOrInvoice()
+    {
+        var seeded = await SeedAsync();
+        await using var app = await StartAppAsync();
+        using var client = app.GetTestClient();
+        using var first = await DecideAsync(client, seeded.Id, 901, consented: true);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var before = Assert.Single(await DeliveryRowsAsync(seeded.Id));
+        foreach (var invoice in new[] { 901, 902 })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Put, $"/quotations/{seeded.Id}/decision")
+            {
+                Content = JsonContent.Create(new
+                {
+                    Accepted = true,
+                    EmployeeInitiated = true,
+                    InvoiceId = invoice,
+                    ClientId = "999.888",
+                    SessionId = "777",
+                    UserId = "opaque-other",
+                    Currency = "USD"
+                }, options: SourceRequestJson),
+            };
+            Authenticate(request);
+            using var response = await client.SendAsync(request);
+            Assert.Equal(invoice == 901 ? HttpStatusCode.OK : HttpStatusCode.Conflict, response.StatusCode);
+            Assert.Equal(before, Assert.Single(await DeliveryRowsAsync(seeded.Id)));
+        }
+        await using var read = database.QuotationContext();
+        var stored = await read.Quotations.AsNoTracking().SingleAsync(x => x.Id == seeded.Id);
+        Assert.Equal(901, stored.InvoiceId);
+        Assert.Equal(before.OccurredUtc, stored.AcceptedUtc);
+        Assert.Single(await read.AcceptedOutcomes.Where(x => x.QuotationId == seeded.Id).ToListAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Decision_NoFirstConsent_ReplayAndLateInvoiceNeverCreateDelivery(bool historical)
+    {
+        var seeded = await SeedAsync(accepted: historical ? true : null);
+        await using var app = await StartAppAsync();
+        using var client = app.GetTestClient();
+        using var first = await DecideAsync(client, seeded.Id, 0);
+        using var replay = await DecideAsync(client, seeded.Id, 0, consented: true);
+        using var attachment = await DecideAsync(client, seeded.Id, 901, consented: true);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, attachment.StatusCode);
+        await using var read = database.QuotationContext();
+        Assert.Empty(await DeliveryRowsAsync(seeded.Id));
+        Assert.Single(await read.AcceptedOutcomes.Where(x => x.QuotationId == seeded.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task Decision_DeliveryInsertDatabaseFault_RollsBackInvoiceDecisionAndNeutralFact()
+    {
+        var seeded = await SeedAsync();
+        Assert.True(await AnalyticsTableExistsAsync(), "Accepted runtime has no durable analytics delivery table; rollback acceptance cannot run until the intent slice exists.");
+        await using var connection = new NpgsqlConnection(database.QuotationConnectionString);
+        await connection.OpenAsync();
+        // Disposable fixture only: inject a real PostgreSQL constraint failure after decision mutation.
+        var constraint = $"quotation101_reject_{seeded.Id}";
+        await using (var command = new NpgsqlCommand($"ALTER TABLE \"GoogleAnalyticsOutbox\" ADD CONSTRAINT \"{constraint}\" CHECK (\"QuotationID\" <> {seeded.Id})", connection))
+            await command.ExecuteNonQueryAsync();
+        try
+        {
+            await using var app = await StartAppAsync();
+            using var client = app.GetTestClient();
+            using var failure = await DecideAsync(client, seeded.Id, 901, consented: true);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, failure.StatusCode);
+            await AssertUnchangedAsync(seeded, 0);
+            Assert.Empty(await DeliveryRowsAsync(seeded.Id));
+        }
+        finally
+        {
+            await using var command = new NpgsqlCommand($"ALTER TABLE \"GoogleAnalyticsOutbox\" DROP CONSTRAINT \"{constraint}\"", connection);
+            await command.ExecuteNonQueryAsync();
+        }
+    }
 
     [Theory]
     [InlineData(false)]
@@ -210,14 +475,33 @@ public sealed class QuotationInvoiceDecisionHttpPostgresTests(QuotationInvoiceDe
     [InlineData("intranet-wildcard")]
     [InlineData("intranet-singular")]
     [InlineData("employee-service-kind")]
+    [InlineData("employee-role-only")]
+    [InlineData("employee-duplicate-sub")]
+    [InlineData("employee-duplicate-kind")]
+    [InlineData("employee-conflicting-alias")]
+    [InlineData("employee-service-prefix")]
+    [InlineData("employee-customer-kind")]
     public async Task Decision_UntrustedEmployeeOverride_IsForbidden(string profile)
     {
         var seeded = await SeedAsync();
         await using var app = await StartAppAsync();
         using var client = app.GetTestClient();
         using var response = await DecideAsync(client, seeded.Id, 901, profile: profile);
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(profile == "employee-duplicate-sub" ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, response.StatusCode);
         await AssertUnchangedAsync(seeded, 0);
+    }
+
+    [Fact]
+    public async Task Decision_CurrentEmployeeShapeWithoutRole_PreservesEmployeeOrigin()
+    {
+        var seeded = await SeedAsync();
+        await using var app = await StartAppAsync();
+        using var client = app.GetTestClient();
+        using var response = await DecideAsync(client, seeded.Id, 0, profile: "employee-no-role");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var read = database.QuotationContext();
+        Assert.Equal("employee", (await read.Quotations.SingleAsync(value => value.Id == seeded.Id)).AcceptanceOrigin);
+        Assert.Single(await read.AcceptedOutcomes.Where(value => value.QuotationId == seeded.Id).ToListAsync());
     }
 
     [Fact]
@@ -432,7 +716,8 @@ public sealed class QuotationInvoiceDecisionHttpPostgresTests(QuotationInvoiceDe
     public async Task GenericUpdate_AccountingOldPromotionIntent_IsRejectedWithoutPersistingInvoice()
     {
         var seeded = await SeedAsync();
-        await using var app = await StartAppAsync();
+        var orders = new FixtureOrderHandler();
+        await using var app = await StartAppAsync(orders: orders);
         using var client = app.GetTestClient();
         using var request = new HttpRequestMessage(HttpMethod.Put, $"/quotations/{seeded.Id}")
         {
@@ -460,6 +745,8 @@ public sealed class QuotationInvoiceDecisionHttpPostgresTests(QuotationInvoiceDe
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         await AssertUnchangedAsync(seeded, outcomeCount: 0);
+        Assert.Empty(await DeliveryRowsAsync(seeded.Id));
+        Assert.Empty(orders.Requests);
     }
 
     [Fact]
@@ -487,6 +774,43 @@ public sealed class QuotationInvoiceDecisionHttpPostgresTests(QuotationInvoiceDe
         Assert.Equal("/orderstatuses/histories/701/accepted", transition.Path);
         Assert.StartsWith($"quotation-{seeded.Id}-accepted-", transition.Key, StringComparison.Ordinal);
     }
+
+    private async Task<bool> AnalyticsTableExistsAsync()
+    {
+        await using var connection = new NpgsqlConnection(database.QuotationConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand("SELECT to_regclass('public.\"GoogleAnalyticsOutbox\"') IS NOT NULL", connection);
+        return (bool)(await command.ExecuteScalarAsync())!;
+    }
+
+    private async Task<IReadOnlyList<AnalyticsDeliverySnapshot>> DeliveryRowsAsync(int quotationId)
+    {
+        // Absence means no persisted delivery intent, rather than an undefined-table fixture failure.
+        if (!await AnalyticsTableExistsAsync()) return [];
+        await using var connection = new NpgsqlConnection(database.QuotationConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand("""
+            SELECT "SourceRequestID", "SourceJourneyID", "EventKey", "EventName", "ClientId", "SessionId",
+                   "UserId", "Currency", "Value", "OccurredUtc", "AttemptCount", "SentUtc"
+            FROM "GoogleAnalyticsOutbox" WHERE "QuotationID" = @quotationId
+            """, connection);
+        command.Parameters.AddWithValue("quotationId", quotationId);
+        await using var reader = await command.ExecuteReaderAsync();
+        var rows = new List<AnalyticsDeliverySnapshot>();
+        while (await reader.ReadAsync())
+            rows.Add(new(reader.IsDBNull(0) ? null : reader.GetInt32(0), reader.IsDBNull(1) ? null : reader.GetGuid(1),
+                reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6), reader.GetString(7), reader.GetDecimal(8),
+                ReadExactDate(reader.GetValue(9)), reader.GetInt32(10), reader.IsDBNull(11) ? null : ReadExactDate(reader.GetValue(11))));
+        return rows;
+    }
+
+    private static DateTime ReadExactDate(object value) => value is DateTime date ? date
+        : DateTime.ParseExact((string)value, "yyyy-MM-dd'T'HH:mm:ss.fffffff", CultureInfo.InvariantCulture, DateTimeStyles.None);
+
+    private sealed record AnalyticsDeliverySnapshot(int? SourceRequestId, Guid? SourceJourneyId, string EventKey,
+        string EventName, string ClientId, string SessionId, string? UserId, string Currency, decimal Value,
+        DateTime OccurredUtc, int AttemptCount, DateTime? SentUtc);
 
     private async Task<Quotation> SeedAsync(bool? accepted = null, int? invoiceId = null)
     {
@@ -543,7 +867,8 @@ public sealed class QuotationInvoiceDecisionHttpPostgresTests(QuotationInvoiceDe
         Assert.Equal(outcomeCount, await read.AcceptedOutcomes.CountAsync(value => value.QuotationId == seeded.Id));
     }
 
-    private async Task<WebApplication> StartAppAsync(IInterceptor? interceptor = null, FixtureOrderHandler? orders = null)
+    private async Task<WebApplication> StartAppAsync(IInterceptor? interceptor = null, FixtureOrderHandler? orders = null,
+        DateTimeOffset? clock = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -552,7 +877,7 @@ public sealed class QuotationInvoiceDecisionHttpPostgresTests(QuotationInvoiceDe
         builder.Services.AddScoped(_ => database.RequestContext());
         builder.Services.AddSingleton<IQuotationCache, FixtureCache>();
         builder.Services.AddSingleton(Mock.Of<IIdempotencyStore>());
-        builder.Services.AddSingleton<TimeProvider>(new FakeTimeProvider(new DateTimeOffset(2026, 9, 30, 4, 5, 6, TimeSpan.Zero)));
+        builder.Services.AddSingleton<TimeProvider>(new FakeTimeProvider(clock ?? new DateTimeOffset(2026, 9, 30, 4, 5, 6, TimeSpan.Zero)));
         builder.Services.AddScoped<IQuotationService, QuotationRepository>();
         builder.Services.AddScoped<IQuotationDecisionWorkflow, QuotationDecisionWorkflow>();
         builder.Services.AddHttpClient<IOrderDecisionClient, OrderDecisionClient>(client => client.BaseAddress = new Uri("http://fixture-orders/"))
@@ -587,12 +912,32 @@ public sealed class QuotationInvoiceDecisionHttpPostgresTests(QuotationInvoiceDe
 
     private async Task<HttpResponseMessage> DecideAsync(HttpClient client, int id, int? invoiceId,
         bool accepted = true, bool employeeInitiated = true, DateTime? expected = null,
-        string profile = "employee")
+        string profile = "employee", bool consented = false)
     {
         using var request = new HttpRequestMessage(HttpMethod.Put, $"/quotations/{id}/decision")
         {
-            Content = JsonContent.Create(new { Accepted = accepted, EmployeeInitiated = employeeInitiated, InvoiceId = invoiceId }),
+            Content = consented
+                ? JsonContent.Create(new
+                {
+                    Accepted = accepted,
+                    EmployeeInitiated = employeeInitiated,
+                    InvoiceId = invoiceId,
+                    ClientId = " 123.456 ",
+                    SessionId = "789",
+                    UserId = "opaque-7",
+                    Currency = "thb"
+                },
+                    options: SourceRequestJson)
+                : JsonContent.Create(new { Accepted = accepted, EmployeeInitiated = employeeInitiated, InvoiceId = invoiceId }),
         };
+        if (consented)
+        {
+            using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+            Assert.Equal(new[] { "Accepted", "EmployeeInitiated", "InvoiceId", "ClientId", "SessionId", "UserId", "Currency" },
+                body.RootElement.EnumerateObject().Select(property => property.Name));
+            Assert.Equal("application/json", request.Content.Headers.ContentType?.MediaType);
+            Assert.Equal("utf-8", request.Content.Headers.ContentType?.CharSet);
+        }
         if (expected is not null) request.Headers.Add("X-Expected-Modified-Date", DateTime.SpecifyKind(expected.Value, DateTimeKind.Utc).ToString("O"));
         Authenticate(request, profile);
         return await client.SendAsync(request);
@@ -602,9 +947,23 @@ public sealed class QuotationInvoiceDecisionHttpPostgresTests(QuotationInvoiceDe
     {
         List<Claim> claims = [new("sub", profile.StartsWith("employee", StringComparison.Ordinal) ? "employee:7"
                 : profile.StartsWith("intranet", StringComparison.Ordinal) ? "service:legacy-intranet" : $"service:legacy-{profile}"),
-            new("identity_kind", profile == "employee" ? "employee" : "service"),
+            new("identity_kind", profile.StartsWith("employee", StringComparison.Ordinal) && profile != "employee-service-kind" ? "employee" : "service"),
             new("permissions", QuotationPermissions.QuotationsUpdate)];
-        if (profile.StartsWith("employee", StringComparison.Ordinal)) claims.Add(new("role", "Employee"));
+        if (profile.StartsWith("employee", StringComparison.Ordinal) && profile != "employee-no-role") claims.Add(new("role", "Employee"));
+        if (profile == "employee-role-only") claims.RemoveAll(claim => claim.Type == "identity_kind");
+        if (profile == "employee-duplicate-sub") claims.Add(new("sub", "employee:7"));
+        if (profile == "employee-duplicate-kind") claims.Add(new("identity_kind", "employee"));
+        if (profile == "employee-conflicting-alias") claims.Add(new(ClaimTypes.NameIdentifier, "employee:8"));
+        if (profile == "employee-service-prefix")
+        {
+            claims.RemoveAll(claim => claim.Type == "sub");
+            claims.Add(new("sub", "service:legacy-intranet"));
+        }
+        if (profile == "employee-customer-kind")
+        {
+            claims.RemoveAll(claim => claim.Type == "identity_kind");
+            claims.Add(new("identity_kind", "customer"));
+        }
         if (profile.Contains("wildcard", StringComparison.Ordinal)) claims.Add(new("permissions", "quotation.*"));
         if (profile == "intranet-singular") claims.Add(new("permission", QuotationPermissions.QuotationsUpdate));
         var now = DateTime.UtcNow;

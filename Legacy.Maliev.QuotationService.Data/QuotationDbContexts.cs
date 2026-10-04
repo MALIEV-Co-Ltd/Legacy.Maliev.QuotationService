@@ -13,6 +13,7 @@ public sealed class QuotationDbContext(DbContextOptions<QuotationDbContext> opti
     public DbSet<QuotationFile> Files => Set<QuotationFile>();
     public DbSet<QuotationOrderLink> OrderLinks => Set<QuotationOrderLink>();
     public DbSet<QuotationAcceptedOutcome> AcceptedOutcomes => Set<QuotationAcceptedOutcome>();
+    public DbSet<GoogleAnalyticsOutbox> GoogleAnalyticsOutbox => Set<GoogleAnalyticsOutbox>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,6 +31,33 @@ public sealed class QuotationDbContext(DbContextOptions<QuotationDbContext> opti
         var acceptedOutcome = modelBuilder.Entity<QuotationAcceptedOutcome>();
         acceptedOutcome.ToTable("QuotationAcceptedOutcome"); acceptedOutcome.HasKey(x => x.Id); acceptedOutcome.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd(); acceptedOutcome.Property(x => x.QuotationId).HasColumnName("QuotationID"); acceptedOutcome.Property(x => x.SourceRequestId).HasColumnName("SourceRequestID"); acceptedOutcome.Property(x => x.SourceJourneyId).HasColumnName("SourceJourneyID"); acceptedOutcome.Property(x => x.EventKey).HasMaxLength(128).IsRequired(); acceptedOutcome.Property(x => x.AcceptedUtc).HasColumnType("timestamp without time zone"); acceptedOutcome.Property(x => x.AcceptedUtcSubMicrosecondTicks).HasColumnType("smallint").HasDefaultValue((short)0); acceptedOutcome.Property(x => x.AcceptanceOrigin).HasMaxLength(16).IsRequired();
         acceptedOutcome.HasIndex(x => x.EventKey).IsUnique(); acceptedOutcome.HasIndex(x => x.QuotationId); acceptedOutcome.HasIndex(x => x.AcceptedUtc); acceptedOutcome.HasIndex(x => x.SourceRequestId); acceptedOutcome.HasIndex(x => x.SourceJourneyId);
+
+        var delivery = modelBuilder.Entity<GoogleAnalyticsOutbox>();
+        delivery.ToTable("GoogleAnalyticsOutbox");
+        delivery.HasKey(x => x.Id);
+        delivery.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd();
+        delivery.Property(x => x.QuotationId).HasColumnName("QuotationID");
+        delivery.Property(x => x.SourceRequestId).HasColumnName("SourceRequestID");
+        delivery.Property(x => x.SourceJourneyId).HasColumnName("SourceJourneyID");
+        delivery.Property(x => x.EventKey).HasMaxLength(128).IsRequired();
+        delivery.Property(x => x.EventName).HasMaxLength(40).IsRequired();
+        delivery.Property(x => x.ClientId).HasMaxLength(128).IsRequired();
+        delivery.Property(x => x.SessionId).HasMaxLength(128).IsRequired();
+        delivery.Property(x => x.UserId).HasMaxLength(128);
+        delivery.Property(x => x.Currency).HasMaxLength(3).IsRequired();
+        delivery.Property(x => x.Value).HasPrecision(18, 2);
+        delivery.Property(x => x.OccurredUtc).HasConversion(ExactDateTime2Text.Converter).HasColumnType("text");
+        delivery.Property(x => x.NextAttemptUtc).HasConversion(ExactDateTime2Text.Converter).HasColumnType("text");
+        delivery.Property(x => x.LeaseUntilUtc).HasConversion(ExactDateTime2Text.NullableConverter).HasColumnType("text");
+        delivery.Property(x => x.SentUtc).HasConversion(ExactDateTime2Text.NullableConverter).HasColumnType("text");
+        delivery.Property(x => x.FailedUtc).HasConversion(ExactDateTime2Text.NullableConverter).HasColumnType("text");
+        delivery.Property(x => x.LastError).HasMaxLength(1024);
+        delivery.HasIndex(x => x.EventKey).IsUnique();
+        delivery.HasIndex(x => x.QuotationId);
+        delivery.HasIndex(x => x.SourceRequestId);
+        delivery.HasIndex(x => x.SourceJourneyId);
+        delivery.HasIndex(x => new { x.SentUtc, x.FailedUtc, x.NextAttemptUtc, x.LeaseUntilUtc })
+            .HasDatabaseName("IX_GoogleAnalyticsOutbox_DeliveryDue");
 
         var item = modelBuilder.Entity<QuotationOrderItem>();
         item.ToTable("OrderItem"); item.HasKey(x => x.Id); item.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd(); item.Property(x => x.QuotationId).HasColumnName("QuotationID"); item.Property(x => x.OrderId).HasColumnName("OrderID"); item.Property(x => x.UnitPrice).HasPrecision(18, 2); item.Property(x => x.Subtotal).HasPrecision(18, 2).HasComputedColumnSql("(\"UnitPrice\" * \"Quantity\")::numeric(18,2)", stored: true); Dates(item); item.Property(x => x.ModifiedDate).IsConcurrencyToken();

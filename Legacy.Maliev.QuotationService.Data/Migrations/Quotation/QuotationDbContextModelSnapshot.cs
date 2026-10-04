@@ -22,6 +22,38 @@ namespace Legacy.Maliev.QuotationService.Data.Migrations.Quotation
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Legacy.Maliev.QuotationService.Domain.GoogleAnalyticsOutbox", b =>
+            {
+                b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint").HasColumnName("ID");
+                NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+                b.Property<int>("QuotationId").HasColumnType("integer").HasColumnName("QuotationID");
+                b.Property<string>("EventKey").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)");
+                b.Property<string>("EventName").IsRequired().HasMaxLength(40).HasColumnType("character varying(40)");
+                b.Property<int?>("SourceRequestId").HasColumnType("integer").HasColumnName("SourceRequestID");
+                b.Property<Guid?>("SourceJourneyId").HasColumnType("uuid").HasColumnName("SourceJourneyID");
+                b.Property<string>("ClientId").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)");
+                b.Property<string>("SessionId").IsRequired().HasMaxLength(128).HasColumnType("character varying(128)");
+                b.Property<string>("UserId").HasMaxLength(128).HasColumnType("character varying(128)");
+                b.Property<string>("Currency").IsRequired().HasMaxLength(3).HasColumnType("character varying(3)");
+                b.Property<decimal>("Value").HasPrecision(18, 2).HasColumnType("numeric(18,2)");
+                b.Property<DateTime>("OccurredUtc").HasColumnType("text");
+                b.Property<DateTime>("NextAttemptUtc").HasColumnType("text");
+                b.Property<int>("AttemptCount").HasColumnType("integer");
+                b.Property<Guid?>("LeaseToken").HasColumnType("uuid");
+                b.Property<DateTime?>("LeaseUntilUtc").HasColumnType("text");
+                b.Property<DateTime?>("SentUtc").HasColumnType("text");
+                b.Property<DateTime?>("FailedUtc").HasColumnType("text");
+                b.Property<string>("LastError").HasMaxLength(1024).HasColumnType("character varying(1024)");
+                b.HasKey("Id");
+                b.HasIndex("EventKey").IsUnique();
+                b.HasIndex("QuotationId");
+                b.HasIndex("SourceRequestId");
+                b.HasIndex("SourceJourneyId");
+                b.HasIndex("SentUtc", "FailedUtc", "NextAttemptUtc", "LeaseUntilUtc")
+                    .HasDatabaseName("IX_GoogleAnalyticsOutbox_DeliveryDue");
+                b.ToTable("GoogleAnalyticsOutbox");
+            });
+
             modelBuilder.Entity("Legacy.Maliev.QuotationService.Domain.Quotation", b =>
                 {
                     b.Property<int>("Id")

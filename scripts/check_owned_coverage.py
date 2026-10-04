@@ -60,13 +60,13 @@ def summarize(root: ET.Element) -> dict[str, AssemblyCoverage]:
     return assemblies
 
 
-def owned_totals(assemblies: dict[str, AssemblyCoverage]) -> tuple[int, int]:
+def owned_totals(assemblies: dict[str, AssemblyCoverage], *, raw: bool = False) -> tuple[int, int]:
     missing = [name for name in OWNED_ASSEMBLIES if name not in assemblies or assemblies[name].total == 0]
     if missing:
         raise ValueError(f"Missing owned handwritten coverage: {', '.join(missing)}")
     return (
-        sum(assemblies[name].covered for name in OWNED_ASSEMBLIES),
-        sum(assemblies[name].total for name in OWNED_ASSEMBLIES),
+        sum(assemblies[name].covered + (assemblies[name].generated_covered if raw else 0) for name in OWNED_ASSEMBLIES),
+        sum(assemblies[name].total + (assemblies[name].generated_total if raw else 0) for name in OWNED_ASSEMBLIES),
     )
 
 
@@ -78,13 +78,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("report", type=Path, help="One Cobertura XML report from the complete test suite")
     parser.add_argument("--minimum", type=float, default=80.0, help="Minimum owned handwritten line percentage")
+    parser.add_argument("--raw", action="store_true", help="Include generated lines and require each owned assembly to meet the minimum")
     args = parser.parse_args(argv)
     if not 0 <= args.minimum <= 100:
         parser.error("--minimum must be between 0 and 100")
 
     try:
         assemblies = summarize(ET.parse(args.report).getroot())
-        covered, total = owned_totals(assemblies)
+        covered, total = owned_totals(assemblies, raw=args.raw)
     except (ET.ParseError, OSError, KeyError, ValueError) as error:
         print(f"Coverage report invalid: {error}", file=sys.stderr)
         return 2
@@ -98,9 +99,13 @@ def main(argv: list[str] | None = None) -> int:
               f" | {counts.generated_covered}/{counts.generated_total} | {raw_covered}/{raw_total}")
 
     actual = percentage(covered, total)
-    print(f"Owned handwritten total: {covered}/{total} ({actual:.2f}%); minimum {args.minimum:.2f}%")
-    if actual < args.minimum:
-        print("Owned handwritten coverage is below the required threshold", file=sys.stderr)
+    mode = "raw" if args.raw else "handwritten"
+    print(f"Owned {mode} total: {covered}/{total} ({actual:.2f}%); minimum {args.minimum:.2f}%")
+    below = [name for name in OWNED_ASSEMBLIES if args.raw and percentage(
+        assemblies[name].covered + assemblies[name].generated_covered,
+        assemblies[name].total + assemblies[name].generated_total) < args.minimum]
+    if actual < args.minimum or below:
+        print(f"Owned {mode} coverage is below the required threshold" + (f": {', '.join(below)}" if below else ""), file=sys.stderr)
         return 1
     return 0
 

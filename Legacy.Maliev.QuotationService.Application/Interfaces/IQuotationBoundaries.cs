@@ -22,6 +22,14 @@ public interface IQuotationService
         DateTimeOffset? expectedModifiedDate,
         CancellationToken cancellationToken,
         int? invoiceId = null);
+    Task<QuotationDecisionPersistenceResult> ApplyDecisionAsync(
+        int id,
+        bool accepted,
+        QuotationAcceptanceOrigin? acceptanceOrigin,
+        DateTimeOffset? expectedModifiedDate,
+        CancellationToken cancellationToken,
+        int? invoiceId,
+        QuotationAnalyticsContext? analyticsContext);
     Task<UpdateResult> UpdateQuotationAsync(int id, UpsertQuotationRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken);
     Task<decimal?> GetWithholdingTaxAsync(int id, CancellationToken cancellationToken);
     Task<QuotationDocumentSnapshot?> GetDocumentSnapshotAsync(int id, CancellationToken cancellationToken);
