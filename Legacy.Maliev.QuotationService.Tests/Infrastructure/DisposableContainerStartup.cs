@@ -174,7 +174,8 @@ internal sealed class DisposableContainerPair : IAsyncDisposable
     internal IContainer Second => second.Container;
 
     internal static async Task<DisposableContainerPair> StartAsync(string owner,
-        Func<ContainerAttempt, IContainer> postgres, Func<ContainerAttempt, IContainer> redis, CancellationToken token = default)
+        Func<ContainerAttempt, IContainer> postgres, Func<ContainerAttempt, IContainer> redis, CancellationToken token = default,
+        string secondResource = "redis")
     {
         var endpoint = new Uri(await DisposableContainerStartup.LocalDockerEndpointAsync(token));
         var docker = new DockerClientBuilder().WithEndpoint(endpoint).Build();
@@ -189,7 +190,7 @@ internal sealed class DisposableContainerPair : IAsyncDisposable
         try
         {
             var result = await DisposableContainerStartup.StartPairAsync(
-                () => Create("pg", ++pgAttempt, postgres), () => Create("redis", ++redisAttempt, redis), Task.Delay, token);
+                () => Create("pg", ++pgAttempt, postgres), () => Create(secondResource, ++redisAttempt, redis), Task.Delay, token);
             return new(docker, (OwnedContainer)result.First, (OwnedContainer)result.Second);
         }
         catch { docker.Dispose(); throw; }

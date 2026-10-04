@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
@@ -267,43 +266,28 @@ public sealed class QuotationNormalIamFixture : IAsyncLifetime
     private const string Issuer = "https://quotation95-auth.invalid";
     private const string Audience = "quotation95-services";
     private readonly RSA key = RSA.Create(2048);
-    private readonly string run = Guid.NewGuid().ToString("N");
     private readonly string liveCredential = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
     private PostgreSqlContainer? postgres;
     private IContainer? redis;
-    private string Requests => new NpgsqlConnectionStringBuilder(postgres!.GetConnectionString()) { Database = "quotation95_requests", Pooling = false }.ConnectionString;
+    private Infrastructure.DisposableContainerPair? containers;
+    private string Requests => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres!.GetConnectionString())) { Database = "quotation95_requests", Pooling = false }.ConnectionString;
     public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>()
-        .UseNpgsql(new NpgsqlConnectionStringBuilder(postgres!.GetConnectionString()) { Pooling = false }.ConnectionString).Options);
+        .UseNpgsql(new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres!.GetConnectionString())) { Pooling = false }.ConnectionString).Options);
 
     public async Task InitializeAsync()
     {
-        // Pre-create fail-closed local authority check, not post-create remote cleanup.
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOCKER_HOST"))
-            || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOCKER_CONTEXT")))
-            throw new InvalidOperationException("Proof requires no ambient Docker override.");
-        var name = (await DockerReadAsync("context", "show")).Trim();
-        if (name.Length is < 1 or > 128) throw new InvalidOperationException("Invalid local Docker context.");
-        using var context = JsonDocument.Parse(await DockerReadAsync("context", "inspect", name));
-        if (context.RootElement.GetArrayLength() != 1) throw new InvalidOperationException("Ambiguous Docker context.");
-        var endpoint = context.RootElement[0].GetProperty("Endpoints").GetProperty("docker").GetProperty("Host").GetString()!;
-        if (endpoint.StartsWith("npipe:////./pipe/", StringComparison.Ordinal))
-        {
-            var pipe = endpoint["npipe:////./pipe/".Length..];
-            if (pipe.Length == 0 || pipe.Any(value => !char.IsAsciiLetterOrDigit(value) && value is not '_' and not '-'))
-                throw new InvalidOperationException("Invalid local Docker pipe.");
-            endpoint = "npipe://./pipe/" + pipe;
-        }
-        else if (endpoint != "unix:///var/run/docker.sock") throw new InvalidOperationException("Remote Docker authority refused.");
-        postgres = new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(endpoint)
-            .WithName($"quotation95-pg-{run}").WithLabel("maliev.proof.owner", "quotation95").WithLabel("maliev.proof.run", run)
-            .WithDatabase("quotation95").WithPassword(Convert.ToHexString(RandomNumberGenerator.GetBytes(24)))
-            .WithCreateParameterModifier(parameters => ConfigureOwnedStorage(parameters, "5432/tcp", "/var/lib/postgresql", 268435456)).Build();
-        redis = new ContainerBuilder("redis:7-alpine").WithDockerEndpoint(endpoint)
-            .WithName($"quotation95-redis-{run}").WithLabel("maliev.proof.owner", "quotation95").WithLabel("maliev.proof.run", run)
-            .WithPortBinding(6379, true).WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
-            .WithCreateParameterModifier(parameters => ConfigureOwnedStorage(parameters, "6379/tcp", "/data", 16777216)).Build();
-        await Task.WhenAll(postgres.StartAsync(), redis.StartAsync());
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation99-normal-iam",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels)
+                .WithDatabase("quotation95").WithPassword(Convert.ToHexString(RandomNumberGenerator.GetBytes(24)))
+                .WithCreateParameterModifier(parameters => ConfigureOwnedStorage(parameters, "5432/tcp", "/var/lib/postgresql", 268435456)).Build(),
+            attempt => new ContainerBuilder("redis:7-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels)
+                .WithPortBinding(6379, true).WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
+                .WithCreateParameterModifier(parameters => ConfigureOwnedStorage(parameters, "6379/tcp", "/data", 16777216)).Build());
+        postgres = (PostgreSqlContainer)containers.First;
+        redis = containers.Second;
+        await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("CREATE DATABASE quotation95_requests", connection);
@@ -371,25 +355,8 @@ public sealed class QuotationNormalIamFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (postgres is not null) await postgres.DisposeAsync();
-        if (redis is not null) await redis.DisposeAsync();
-        key.Dispose();
-    }
-
-    private static async Task<string> DockerReadAsync(params string[] arguments)
-    {
-        var start = new ProcessStartInfo("docker") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
-        foreach (var argument in arguments) start.ArgumentList.Add(argument);
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Docker inspection unavailable.");
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        try { await process.WaitForExitAsync(timeout.Token); }
-        catch (OperationCanceledException) { process.Kill(entireProcessTree: true); throw new InvalidOperationException("Docker inspection timed out."); }
-        var value = await output;
-        _ = await error;
-        if (process.ExitCode != 0 || value.Length > 16384) throw new InvalidOperationException("Docker inspection refused.");
-        return value;
+        try { if (containers is not null) await containers.DisposeAsync(); }
+        finally { key.Dispose(); }
     }
 
     private sealed class Factory(QuotationNormalIamFixture fixture, QuotationNormalIamBoundary boundary,
@@ -400,7 +367,7 @@ public sealed class QuotationNormalIamFixture : IAsyncLifetime
             builder.UseEnvironment(environment);
             foreach (var setting in new Dictionary<string, string?>
             {
-                ["ConnectionStrings:QuotationDbContext"] = new NpgsqlConnectionStringBuilder(fixture.postgres!.GetConnectionString()) { Pooling = false }.ConnectionString,
+                ["ConnectionStrings:QuotationDbContext"] = new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(fixture.postgres!.GetConnectionString())) { Pooling = false }.ConnectionString,
                 ["ConnectionStrings:QuotationRequestDbContext"] = fixture.Requests,
                 ["ConnectionStrings:redis"] = $"127.0.0.1:{fixture.redis!.GetMappedPublicPort(6379)}",
                 ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(fixture.key.ExportSubjectPublicKeyInfoPem())),

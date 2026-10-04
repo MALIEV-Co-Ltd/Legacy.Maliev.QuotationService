@@ -482,25 +482,32 @@ public sealed class AllowedIamTransport : HttpMessageHandler
 /// <summary>Fixture-owned keys, PostgreSQL18, Redis and ordinary configured application.</summary>
 public sealed class QualificationBridgeConsumerFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly IContainer redis = new ContainerBuilder("redis:7-alpine").WithPortBinding(6379, true)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build();
+    private Infrastructure.DisposableContainerPair? containers;
+    private PostgreSqlContainer postgres => (PostgreSqlContainer)containers!.First;
+    private IContainer redis => containers!.Second;
     private readonly RSA key = RSA.Create(2048);
     private string? workloadToken;
     public string WorkloadToken => workloadToken ??= IssueToken([new("sub", "service:legacy-quotation"), new("identity_kind", "service"),
         new("permissions", "legacy-auth.quotation-qualification.introspect")]);
-    private string RequestConnection => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "quotation76_requests" }.ConnectionString;
+    private string RequestConnection => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "quotation76_requests" }.ConnectionString;
 
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(postgres.StartAsync(), redis.StartAsync());
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation99-qualification-bridge",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels)
+                .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "5432/tcp")).Build(),
+            attempt => new ContainerBuilder("redis:7-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true)
+                .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
+                .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "6379/tcp")).Build());
+        await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("CREATE DATABASE quotation76_requests", connection);
             await command.ExecuteNonQueryAsync();
         }
-        await using var quotation = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
+        await using var quotation = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
         await quotation.Database.MigrateAsync();
         await using var requests = RequestContext();
         await requests.Database.MigrateAsync();
@@ -539,7 +546,7 @@ public sealed class QualificationBridgeConsumerFixture : IAsyncLifetime
 
     public WebApplicationFactory<Program> App(bool enabled, HttpMessageHandler? transport, AllowedIamTransport? iam = null, string? authOrigin = null) => new Factory(new Dictionary<string, string?>
     {
-        ["ConnectionStrings:QuotationDbContext"] = postgres.GetConnectionString(),
+        ["ConnectionStrings:QuotationDbContext"] = Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString()),
         ["ConnectionStrings:QuotationRequestDbContext"] = RequestConnection,
         ["ConnectionStrings:redis"] = $"{redis.Hostname}:{redis.GetMappedPublicPort(6379)}",
         ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(key.ExportSubjectPublicKeyInfoPem())),
@@ -556,8 +563,15 @@ public sealed class QualificationBridgeConsumerFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        await Task.WhenAll(postgres.DisposeAsync().AsTask(), redis.DisposeAsync().AsTask());
-        key.Dispose();
+        try { if (containers is not null) await containers.DisposeAsync(); }
+        finally { key.Dispose(); }
+    }
+
+    private static void ConfigureLoopback(Docker.DotNet.Models.CreateContainerParameters parameters, string port)
+    {
+        parameters.HostConfig ??= new Docker.DotNet.Models.HostConfig();
+        parameters.HostConfig.PortBindings ??= new Dictionary<string, IList<Docker.DotNet.Models.PortBinding>>();
+        parameters.HostConfig.PortBindings[port] = [new Docker.DotNet.Models.PortBinding { HostIP = "127.0.0.1", HostPort = "" }];
     }
 
     private sealed class Factory(Dictionary<string, string?> settings, HttpMessageHandler? transport, string workloadToken, AllowedIamTransport? iam) : WebApplicationFactory<Program>

@@ -173,17 +173,20 @@ public sealed class QuotationDraftAggregateHttpTests(DraftAggregateFixture fixtu
 
 public sealed class DraftAggregateFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly IContainer redis = new ContainerBuilder("redis:7-alpine").WithPortBinding(6379, true)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build();
+    private Infrastructure.DisposableContainerPair? containers;
+    private PostgreSqlContainer postgres => (PostgreSqlContainer)containers!.First;
+    private IContainer redis => containers!.Second;
     private readonly RSA key = RSA.Create(2048);
     private static readonly string[] Permissions = ["legacy.quotations.create", "legacy.quotations.read", "legacy.customer-quotations.read", "legacy.quotation-lines.write", "legacy.quotation-lines.read", "legacy.quotation-orders.write", "legacy.quotation-orders.read"];
-    private string Requests => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "aggregate_requests" }.ConnectionString;
-    public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
+    private string Requests => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "aggregate_requests" }.ConnectionString;
+    public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(postgres.StartAsync(), redis.StartAsync());
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation100-QuotationDraftAggregateHttpTests",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).Build(),
+            attempt => new ContainerBuilder("redis:7-alpine").WithDockerEndpoint(attempt.Endpoint).WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true).WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build());
+        await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("CREATE DATABASE aggregate_requests", connection);
@@ -207,7 +210,7 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
     }
     public async Task DisposeAsync()
     {
-        await Task.WhenAll(postgres.DisposeAsync().AsTask(), redis.DisposeAsync().AsTask());
+        if (containers is not null) await containers.DisposeAsync();
         key.Dispose();
     }
     private sealed class Factory(DraftAggregateFixture fixture, bool allowed) : WebApplicationFactory<Program>
@@ -218,7 +221,7 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
             QuotationTestWorkloadExchange.Prepare(builder);
             foreach (var setting in new Dictionary<string, string?>
             {
-                ["ConnectionStrings:QuotationDbContext"] = fixture.postgres.GetConnectionString(),
+                ["ConnectionStrings:QuotationDbContext"] = Infrastructure.DisposablePostgresConnectionPolicy.Isolate(fixture.postgres.GetConnectionString()),
                 ["ConnectionStrings:QuotationRequestDbContext"] = fixture.Requests,
                 ["ConnectionStrings:redis"] = $"{fixture.redis.Hostname}:{fixture.redis.GetMappedPublicPort(6379)}",
                 ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(fixture.key.ExportSubjectPublicKeyInfoPem())),

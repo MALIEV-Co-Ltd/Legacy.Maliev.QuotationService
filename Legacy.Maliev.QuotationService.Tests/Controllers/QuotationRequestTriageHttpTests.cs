@@ -655,7 +655,7 @@ public sealed class RequestTriageFixture : IAsyncLifetime
     private IContainer redis = null!;
     private Infrastructure.DisposableContainerPair? containers;
     private readonly RSA key = RSA.Create(2048);
-    private string RequestConnection => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "request_triage" }.ConnectionString;
+    private string RequestConnection => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "request_triage" }.ConnectionString;
     public string RedisConnection => $"{redis.Hostname}:{redis.GetMappedPublicPort(6379)}";
 
     public async Task InitializeAsync()
@@ -668,13 +668,13 @@ public sealed class RequestTriageFixture : IAsyncLifetime
                 .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build());
         postgres = (PostgreSqlContainer)containers.First;
         redis = containers.Second;
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("CREATE DATABASE request_triage", connection);
             await command.ExecuteNonQueryAsync();
         }
-        await using var quotation = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
+        await using var quotation = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
         await quotation.Database.MigrateAsync();
         await using var requests = Context();
         await requests.Database.MigrateAsync();
@@ -729,7 +729,7 @@ public sealed class RequestTriageFixture : IAsyncLifetime
 
     public WebApplicationFactory<Program> App(bool allowed = true, params IInterceptor[] interceptors) => new Factory(new Dictionary<string, string?>
     {
-        ["ConnectionStrings:QuotationDbContext"] = postgres.GetConnectionString(),
+        ["ConnectionStrings:QuotationDbContext"] = Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString()),
         ["ConnectionStrings:QuotationRequestDbContext"] = RequestConnection,
         ["ConnectionStrings:redis"] = RedisConnection,
         ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(key.ExportSubjectPublicKeyInfoPem())),

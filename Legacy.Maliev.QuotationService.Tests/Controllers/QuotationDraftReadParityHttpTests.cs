@@ -193,21 +193,28 @@ public sealed class QuotationDraftReadParityHttpTests(DraftReadFixture fixture) 
 
 public sealed class DraftReadFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly IContainer redis = new ContainerBuilder("redis:7-alpine").WithPortBinding(6379, true)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build();
+    private Infrastructure.DisposableContainerPair? containers;
+    private PostgreSqlContainer postgres => (PostgreSqlContainer)containers!.First;
+    private IContainer redis => containers!.Second;
     private readonly RSA key = RSA.Create(2048);
     private int customer = 1000000;
     public int LiveCalls;
     public string? ExpectedLiveResource;
     public string? ReceivedLiveResource;
     public int Customer() => Interlocked.Increment(ref customer);
-    private string Requests => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "draft_requests" }.ConnectionString;
-    public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
+    private string Requests => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "draft_requests" }.ConnectionString;
+    public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(postgres.StartAsync(), redis.StartAsync());
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation99-draft-read",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels)
+                .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "5432/tcp")).Build(),
+            attempt => new ContainerBuilder("redis:7-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true)
+                .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
+                .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "6379/tcp")).Build());
+        await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("CREATE DATABASE draft_requests", connection);
@@ -252,8 +259,14 @@ public sealed class DraftReadFixture : IAsyncLifetime
     }
     public async Task DisposeAsync()
     {
-        await Task.WhenAll(postgres.DisposeAsync().AsTask(), redis.DisposeAsync().AsTask());
-        key.Dispose();
+        try { if (containers is not null) await containers.DisposeAsync(); }
+        finally { key.Dispose(); }
+    }
+    private static void ConfigureLoopback(Docker.DotNet.Models.CreateContainerParameters parameters, string port)
+    {
+        parameters.HostConfig ??= new Docker.DotNet.Models.HostConfig();
+        parameters.HostConfig.PortBindings ??= new Dictionary<string, IList<Docker.DotNet.Models.PortBinding>>();
+        parameters.HostConfig.PortBindings[port] = [new Docker.DotNet.Models.PortBinding { HostIP = "127.0.0.1", HostPort = "" }];
     }
     private sealed class Factory(DraftReadFixture fixture, bool resourceScoped) : WebApplicationFactory<Program>
     {
@@ -264,7 +277,7 @@ public sealed class DraftReadFixture : IAsyncLifetime
             if (resourceScoped) builder.UseSetting("Features:ResourceScopedAuthEnabled", "true");
             foreach (var setting in new Dictionary<string, string?>
             {
-                ["ConnectionStrings:QuotationDbContext"] = fixture.postgres.GetConnectionString(),
+                ["ConnectionStrings:QuotationDbContext"] = Infrastructure.DisposablePostgresConnectionPolicy.Isolate(fixture.postgres.GetConnectionString()),
                 ["ConnectionStrings:QuotationRequestDbContext"] = fixture.Requests,
                 ["ConnectionStrings:redis"] = $"{fixture.redis.Hostname}:{fixture.redis.GetMappedPublicPort(6379)}",
                 ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(fixture.key.ExportSubjectPublicKeyInfoPem())),

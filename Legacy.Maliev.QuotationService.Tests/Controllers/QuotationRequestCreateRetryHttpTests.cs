@@ -731,22 +731,25 @@ public sealed class RequestCreateReadbackFault(RequestCreateCommitFault ack, Can
 
 public sealed class RequestCreateRetryFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly IContainer redis = new ContainerBuilder("redis:7-alpine").WithPortBinding(6379, true)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build();
+    private Infrastructure.DisposableContainerPair? containers;
+    private PostgreSqlContainer postgres => (PostgreSqlContainer)containers!.First;
+    private IContainer redis => containers!.Second;
     private readonly RSA key = RSA.Create(2048);
-    private string RequestConnection => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "request_create_retry" }.ConnectionString;
+    private string RequestConnection => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "request_create_retry" }.ConnectionString;
 
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(postgres.StartAsync(), redis.StartAsync());
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation100-QuotationRequestCreateRetryHttpTests",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).Build(),
+            attempt => new ContainerBuilder("redis:7-alpine").WithDockerEndpoint(attempt.Endpoint).WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true).WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build());
+        await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("CREATE DATABASE request_create_retry", connection);
             await command.ExecuteNonQueryAsync();
         }
-        await using var quotation = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
+        await using var quotation = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
         await quotation.Database.MigrateAsync();
         await using var requests = Context();
         await requests.Database.MigrateAsync();
@@ -761,7 +764,7 @@ public sealed class RequestCreateRetryFixture : IAsyncLifetime
 
     public WebApplicationFactory<Program> App(RequestCreateIamTransport? transport, RequestCreateStrategyDiagnostic diagnostic, params IInterceptor[] interceptors) => new Factory(new Dictionary<string, string?>
     {
-        ["ConnectionStrings:QuotationDbContext"] = postgres.GetConnectionString(),
+        ["ConnectionStrings:QuotationDbContext"] = Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString()),
         ["ConnectionStrings:QuotationRequestDbContext"] = RequestConnection,
         ["ConnectionStrings:redis"] = $"{redis.Hostname}:{redis.GetMappedPublicPort(6379)}",
         ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(key.ExportSubjectPublicKeyInfoPem())),
@@ -774,7 +777,7 @@ public sealed class RequestCreateRetryFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        await Task.WhenAll(postgres.DisposeAsync().AsTask(), redis.DisposeAsync().AsTask());
+        if (containers is not null) await containers.DisposeAsync();
         key.Dispose();
     }
 

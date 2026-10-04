@@ -481,27 +481,55 @@ public sealed class QuotationEmployeeActorHttpTests(QuotationEmployeeActorFixtur
 /// <summary>Fixture-owned disposable stores, keys and actual production application entry point.</summary>
 public sealed class QuotationEmployeeActorFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer postgres = new PostgreSqlBuilder("postgres:18-alpine").Build();
-    private readonly IContainer redis = new ContainerBuilder("redis:7-alpine").WithPortBinding(6379, true)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379)).Build();
+    private Infrastructure.DisposableContainerPair? containers;
+    private PostgreSqlContainer postgres => (PostgreSqlContainer)containers!.First;
+    private IContainer redis => containers!.Second;
     public RSA SigningKey { get; } = RSA.Create(2048);
     public RSA WrongKey { get; } = RSA.Create(2048);
-    private string RequestConnection => new NpgsqlConnectionStringBuilder(postgres.GetConnectionString()) { Database = "quotation70_requests" }.ConnectionString;
+    private string RequestConnection => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "quotation70_requests" }.ConnectionString;
 
     public async Task InitializeAsync()
     {
-        await Task.WhenAll(postgres.StartAsync(), redis.StartAsync());
-        await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
+        containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation99-employee-actor",
+            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels)
+                .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "5432/tcp")).Build(),
+            attempt => new ContainerBuilder("redis:7-alpine").WithDockerEndpoint(attempt.Endpoint)
+                .WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true)
+                .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
+                .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "6379/tcp")).Build());
+        await ObserveAsync("ready");
+        try
         {
-            await connection.OpenAsync();
-            await using var command = new NpgsqlCommand("CREATE DATABASE quotation70_requests", connection);
-            await command.ExecuteNonQueryAsync();
+            await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
+            {
+                await connection.OpenAsync();
+                await using var command = new NpgsqlCommand("CREATE DATABASE quotation70_requests", connection);
+                await command.ExecuteNonQueryAsync();
+            }
+            await ObserveAsync("second-database");
+            await using var quotations = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
+            await quotations.Database.MigrateAsync();
+            await using var requests = RequestContext();
+            await requests.Database.MigrateAsync();
+            await ObserveAsync("both-migrations");
         }
-        await using var quotations = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(postgres.GetConnectionString()).Options);
-        await quotations.Database.MigrateAsync();
-        await using var requests = RequestContext();
-        await requests.Database.MigrateAsync();
+        catch (Exception error)
+        {
+            await ObserveAsync("initialization-failed");
+            await Infrastructure.OwnedPostgresDiagnostics.PreserveFailureAsync(() =>
+            {
+                error.Data["OwnedPostgresDiagnostics"] = string.Join(Environment.NewLine, Diagnostics);
+                Console.WriteLine(string.Join(Environment.NewLine, Diagnostics));
+                return Task.FromResult(string.Empty);
+            });
+            throw;
+        }
     }
+
+    private List<string> Diagnostics { get; } = [];
+    private async Task ObserveAsync(string phase) => Diagnostics.Add(await Infrastructure.OwnedPostgresDiagnostics.ObserveAsync(
+        postgres, "quotation99-employee-actor", phase));
 
     public QuotationRequestDbContext RequestContext() => new(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(RequestConnection).Options);
 
@@ -541,7 +569,7 @@ public sealed class QuotationEmployeeActorFixture : IAsyncLifetime
     public WebApplicationFactory<Program> App(bool allowed = true, bool unavailable = false, IInterceptor? interceptor = null, bool cacheFailure = false) =>
         new ProductionFactory(new Dictionary<string, string?>
         {
-            ["ConnectionStrings:QuotationDbContext"] = postgres.GetConnectionString(),
+            ["ConnectionStrings:QuotationDbContext"] = Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString()),
             ["ConnectionStrings:QuotationRequestDbContext"] = RequestConnection,
             ["ConnectionStrings:redis"] = $"{redis.Hostname}:{redis.GetMappedPublicPort(6379)}",
             ["Jwt:PublicKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(SigningKey.ExportSubjectPublicKeyInfoPem())),
@@ -553,8 +581,15 @@ public sealed class QuotationEmployeeActorFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        await Task.WhenAll(postgres.DisposeAsync().AsTask(), redis.DisposeAsync().AsTask());
-        SigningKey.Dispose(); WrongKey.Dispose();
+        try { if (containers is not null) await containers.DisposeAsync(); }
+        finally { SigningKey.Dispose(); WrongKey.Dispose(); }
+    }
+
+    private static void ConfigureLoopback(Docker.DotNet.Models.CreateContainerParameters parameters, string port)
+    {
+        parameters.HostConfig ??= new Docker.DotNet.Models.HostConfig();
+        parameters.HostConfig.PortBindings ??= new Dictionary<string, IList<Docker.DotNet.Models.PortBinding>>();
+        parameters.HostConfig.PortBindings[port] = [new Docker.DotNet.Models.PortBinding { HostIP = "127.0.0.1", HostPort = "" }];
     }
 
     private sealed class ProductionFactory(Dictionary<string, string?> settings, bool allowed, bool unavailable, IInterceptor? interceptor, bool cacheFailure)
