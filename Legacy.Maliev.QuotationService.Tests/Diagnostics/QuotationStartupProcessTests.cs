@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Npgsql;
 
 namespace Legacy.Maliev.QuotationService.Tests.Diagnostics;
@@ -81,7 +82,12 @@ public sealed class QuotationStartupProcessTests
         if (process.ExitCode != 1)
         {
             // An unrelated setup/configuration failure is not the intended behavioral RED.
-            Assert.Contains(expectedExceptionType, stderr, StringComparison.Ordinal);
+            var type = Regex.Match(stderr, @"Unhandled exception\. (?<type>[\w.]+)").Groups["type"].Value;
+            var frames = Regex.Matches(stderr, @"^\s+at (?<method>[^\(\r\n]+)", RegexOptions.Multiline)
+                .Select(match => match.Groups["method"].Value).Take(5);
+            var boundary = $"Actual exception type={type}; methods={string.Join(", ", frames)}";
+            Assert.True(stderr.Contains(expectedExceptionType, StringComparison.Ordinal), boundary);
+            Assert.True(stderr.Contains("AddJwtAuthentication", StringComparison.Ordinal), boundary);
         }
         Assert.Equal(1, process.ExitCode);
         Assert.DoesNotContain(marker, stdout + stderr, StringComparison.Ordinal);
