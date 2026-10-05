@@ -105,7 +105,9 @@ jobs:
         run: |
           dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
             --configuration Release --no-build --no-restore \
-            -p:GITHUB_ACTIONS=false --collect 'XPlat Code Coverage' --results-directory TestResults/CoverageGate
+            -p:GITHUB_ACTIONS=false --collect 'XPlat Code Coverage' --results-directory TestResults/CoverageGate \
+            --settings Legacy.Maliev.QuotationService.Tests/coverage.runsettings \
+            --logger 'trx;LogFileName=quotation-complete-coverage.trx'
 
       - name: Enforce 80 percent owned handwritten line coverage
         shell: bash
@@ -116,3 +118,4 @@ jobs:
             exit 1
           fi
           python3 scripts/check_owned_coverage.py "${reports[0]}" --minimum 80
+          python3 scripts/check_owned_coverage.py "${reports[0]}" --minimum 80 --raw

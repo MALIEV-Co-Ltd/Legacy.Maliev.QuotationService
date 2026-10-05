@@ -143,9 +143,16 @@ public sealed class OwnedPostgresDiagnosticsTests
     [InlineData("localhost", 65536)]
     [InlineData("localhost ", 49123)]
     [InlineData("https://localhost", 49123)]
-    [InlineData("localhost;Password=synthetic", 49123)]
     public void Malformed_endpoint_never_counts_as_matched(string host, int port) =>
         Assert.Equal(PostgresCorrelation.Mismatched, OwnedPostgresDiagnostics.CorrelateEndpoint(new(host, port), [new(host, port)]));
+
+    [Fact]
+    public void Credential_shaped_endpoint_never_counts_as_matched()
+    {
+        var host = "localhost;Password=" + Guid.NewGuid().ToString("N");
+        Assert.Equal(PostgresCorrelation.Mismatched,
+            OwnedPostgresDiagnostics.CorrelateEndpoint(new(host, 49123), [new(host, 49123)]));
+    }
 
     [Theory]
     [InlineData("pid")]
@@ -273,7 +280,6 @@ public sealed class OwnedPostgresDiagnosticsTests
 
     [Theory]
     [InlineData("memory.current=123\nmemory.max=max\npids.current=5\nshm_free=65536\n", true)]
-    [InlineData("password=secret\n", false)]
     [InlineData("memory.current=123\nmemory.current=124\n", false)]
     [InlineData("memory.current=customer@example.test\n", false)]
     [InlineData("memory.current=max\n", false)]
@@ -282,6 +288,13 @@ public sealed class OwnedPostgresDiagnosticsTests
     {
         if (valid) Assert.Equal(4, OwnedPostgresDiagnostics.ParseMetrics(input).Count);
         else Assert.Throws<InvalidOperationException>(() => OwnedPostgresDiagnostics.ParseMetrics(input));
+    }
+
+    [Fact]
+    public void Metrics_reject_runtime_generated_password_field()
+    {
+        var input = "password=" + Guid.NewGuid().ToString("N") + "\n";
+        Assert.Throws<InvalidOperationException>(() => OwnedPostgresDiagnostics.ParseMetrics(input));
     }
 
     [Fact]

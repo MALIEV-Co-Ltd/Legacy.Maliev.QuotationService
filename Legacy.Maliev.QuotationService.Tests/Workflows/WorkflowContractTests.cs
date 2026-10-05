@@ -193,6 +193,24 @@ public sealed class WorkflowContractTests
         AssertMutationRejected("--collect 'XPlat Code Coverage'", "--collect 'Code Coverage'");
     }
 
+    [Fact]
+    public void BuildAndTest_RejectsRawCoverageGateRemoval() =>
+        AssertMutationRejected("--minimum 80 --raw", "--minimum 80");
+
+    [Fact]
+    public void CoverageSettings_RetainGeneratedLinesAndAutomaticProperties()
+    {
+        var settings = System.Xml.Linq.XDocument.Load(
+            FindRepositoryFile("Legacy.Maliev.QuotationService.Tests", "coverage.runsettings"));
+        var collector = Assert.Single(settings.Descendants("DataCollector"));
+        Assert.Equal("XPlat Code Coverage", collector.Attribute("friendlyName")?.Value);
+        var configuration = collector.Element("Configuration")!;
+        Assert.Equal("[Legacy.Maliev.QuotationService.*]*", configuration.Element("Include")?.Value);
+        Assert.Equal("[*.Tests]*", configuration.Element("Exclude")?.Value);
+        Assert.Equal(string.Empty, configuration.Element("ExcludeByAttribute")?.Value);
+        Assert.Equal("false", configuration.Element("SkipAutoProps")?.Value);
+    }
+
     private static void AssertMutationRejected(string original, string replacement)
     {
         Assert.Contains(original, Workflow, StringComparison.Ordinal);
@@ -239,7 +257,9 @@ internal static partial class WorkflowContractValidator
     private const string CoverageCollection = """
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore \
-          -p:GITHUB_ACTIONS=false --collect 'XPlat Code Coverage' --results-directory TestResults/CoverageGate
+          -p:GITHUB_ACTIONS=false --collect 'XPlat Code Coverage' --results-directory TestResults/CoverageGate \
+          --settings Legacy.Maliev.QuotationService.Tests/coverage.runsettings \
+          --logger 'trx;LogFileName=quotation-complete-coverage.trx'
         """;
     private const string CoverageEnforcement = """
         mapfile -t reports < <(find TestResults/CoverageGate -type f -name coverage.cobertura.xml)
@@ -248,6 +268,7 @@ internal static partial class WorkflowContractValidator
           exit 1
         fi
         python3 scripts/check_owned_coverage.py "${reports[0]}" --minimum 80
+        python3 scripts/check_owned_coverage.py "${reports[0]}" --minimum 80 --raw
         """;
 
     public static void Validate(string workflow)
