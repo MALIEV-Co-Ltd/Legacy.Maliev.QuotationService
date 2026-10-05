@@ -8,6 +8,8 @@ QuotationStartupBoundary retains its executable entry-assembly and `HostAbortedE
 
 Private console JSON has a finite allowlist, discarding arbitrary formatted text and structured state/scopes. The previous cloud formatter already constrained exception text; this change does not claim a proven pre-existing leak. GA logger calls remain unchanged: null exception, exact safe fields and one owner after durable persistence. Rendered GA JSON now exposes safe EventName/Dependency/Operation/StatusCode/AttemptCount fields directly; arbitrary structured `ExceptionType` is omitted and runtime `exceptionType` is null. Existing GA regression assertions retain the logger field contract and explicitly check this private rendered shape. No generic private HTTP observer is selected for GA or other clients in this slice, so accepted fallback/terminal/cancellation ownership remains intact. OpenTelemetry registration is unchanged; private console formatting is not a claim about remote sink ingestion.
 
+The existing outer exception middleware also emits a null-exception critical `UnhandledRequestFailure` with structured type state. Its rendered type is likewise omitted by the private formatter. The thrown-server-failure test uses `ApplicationException`, checks one critical owner with status500 and null rendered type, and checks that the completed-response observer emits nothing. Existing `InvalidOperationException` mapping to HTTP400 remains unchanged.
+
 ## Source mapping
 
 Source `a59193ae2ac030d0e1d373ce4ec50c1b35437391`, parent `8175e8f3383d31030de2321c480bf6f5bc0fbb2b`, is scoped provenance, not whole-SHA closure.

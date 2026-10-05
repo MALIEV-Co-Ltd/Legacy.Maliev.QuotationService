@@ -219,7 +219,11 @@ public sealed class QuotationPrivateObservationHttpTests(QuotationNormalIamFixtu
         using var response = await client.GetAsync("/quotation-observability-tests/throw");
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Empty(Events(output, "HandledOperationFailure"));
-        Assert.Contains(output.Records, row => row.GetProperty("exceptionType").GetString() == "System.InvalidOperationException");
+        var failure = Assert.Single(Events(output, "UnhandledRequestFailure"));
+        Assert.Equal("CRITICAL", failure.GetProperty("severity").GetString());
+        Assert.Equal(500, failure.GetProperty("StatusCode").GetInt32());
+        Assert.Equal(JsonValueKind.Null, failure.GetProperty("exceptionType").ValueKind);
+        Assert.False(failure.TryGetProperty("ExceptionType", out _));
         Assert.All(output.Records, row => Assert.DoesNotContain(Marker, row.GetRawText(), StringComparison.Ordinal));
     }
 
@@ -304,5 +308,5 @@ public sealed class QuotationPrivateObservationTestController : ControllerBase
 
     /// <summary>Throws controlled private text through the existing exception owner.</summary>
     [HttpGet("throw")]
-    public IActionResult ThrowFailure() => throw new InvalidOperationException("SYNTHETIC_PRIVATE_OBSERVATION_A591");
+    public IActionResult ThrowFailure() => throw new ApplicationException("SYNTHETIC_PRIVATE_OBSERVATION_A591");
 }
