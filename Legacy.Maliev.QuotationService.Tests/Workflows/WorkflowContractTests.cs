@@ -42,7 +42,7 @@ public sealed class WorkflowContractTests
         Assert.Contains("builder.AddStandardMiddleware(", program, StringComparison.Ordinal);
         Assert.Contains("app.UseStandardMiddleware()", program, StringComparison.Ordinal);
         Assert.DoesNotContain("app.UseExceptionHandler(", program, StringComparison.Ordinal);
-        Assert.Contains("ref: 8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3", Workflow, StringComparison.Ordinal);
+        Assert.Contains("ref: ecb05cbbd68717e415f69df2ac488c1d323b1da3", Workflow, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -104,8 +104,8 @@ public sealed class WorkflowContractTests
     public void BuildAndTest_RejectsCommentedDependencySha()
     {
         AssertMutationRejected(
-            "ref: 8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3",
-            "ref: main # 8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3");
+            "ref: ecb05cbbd68717e415f69df2ac488c1d323b1da3",
+            "ref: main # ecb05cbbd68717e415f69df2ac488c1d323b1da3");
     }
 
     [Fact]
@@ -347,7 +347,7 @@ internal static partial class WorkflowContractValidator
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["repository"] = "MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults",
-                ["ref"] = "8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3",
+                ["ref"] = "ecb05cbbd68717e415f69df2ac488c1d323b1da3",
                 ["path"] = ".dependencies/Legacy.Maliev.ServiceDefaults",
                 ["persist-credentials"] = "false",
             });
@@ -424,7 +424,7 @@ internal static partial class WorkflowContractValidator
             ("Legacy.Maliev.AuthService", authorityProducerRevision, "TestResults/.joined-auth/Legacy.Maliev.AuthService"),
             ("Legacy.Maliev.ServiceDefaults", "5c5f9479313710fa576f83d3b396442997a2fcf4", "TestResults/.joined-auth/.dependencies/Legacy.Maliev.ServiceDefaults"),
             ("Legacy.Maliev.CompatibilityContracts", "78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7", "TestResults/.joined-auth/.dependencies/Legacy.Maliev.CompatibilityContracts"),
-            ("Legacy.Maliev.ServiceDefaults", "8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3", "TestResults/.bridge-dependencies/Legacy.Maliev.ServiceDefaults"),
+            ("Legacy.Maliev.ServiceDefaults", "ecb05cbbd68717e415f69df2ac488c1d323b1da3", "TestResults/.bridge-dependencies/Legacy.Maliev.ServiceDefaults"),
             ("Legacy.Maliev.CompatibilityContracts", "78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7", "TestResults/.bridge-dependencies/Legacy.Maliev.CompatibilityContracts"),
         };
         for (var index = 0; index < checkouts.Length; index++)
