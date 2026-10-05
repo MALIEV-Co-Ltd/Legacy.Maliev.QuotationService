@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Text.Json;
+using Asp.Versioning;
 using Legacy.Maliev.QuotationService.Api.Diagnostics;
 using Legacy.Maliev.QuotationService.Tests.Controllers;
 using Maliev.Aspire.ServiceDefaults.Logging;
@@ -292,6 +293,8 @@ public sealed class QuotationPrivateObservationHttpTests(QuotationNormalIamFixtu
 
 /// <summary>Only registered by the private observation fixture; never part of the production API assembly.</summary>
 [ApiExplorerSettings(IgnoreApi = true)]
+[ApiController]
+[ApiVersionNeutral]
 [Route("quotation-observability-tests")]
 public sealed class QuotationPrivateObservationTestController : ControllerBase
 {
