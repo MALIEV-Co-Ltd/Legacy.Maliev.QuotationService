@@ -112,7 +112,7 @@ jobs:
       - name: Enforce 80 percent owned handwritten line coverage
         shell: bash
         run: |
-          mapfile -t reports < <(find TestResults/CoverageGate -type f -name coverage.cobertura.xml)
+          mapfile -t reports < <(find TestResults/CoverageGate -mindepth 2 -maxdepth 2 -type f -name coverage.cobertura.xml)
           if [[ "${#reports[@]}" -ne 1 ]]; then
             echo "Expected exactly one Cobertura report, found ${#reports[@]}." >&2
             exit 1

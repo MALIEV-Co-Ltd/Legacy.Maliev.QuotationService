@@ -198,6 +198,10 @@ public sealed class WorkflowContractTests
         AssertMutationRejected("--minimum 80 --raw", "--minimum 80");
 
     [Fact]
+    public void BuildAndTest_RejectsRecursiveTrxAttachmentCopySelection() =>
+        AssertMutationRejected("find TestResults/CoverageGate -mindepth 2 -maxdepth 2", "find TestResults/CoverageGate");
+
+    [Fact]
     public void CoverageSettings_RetainGeneratedLinesAndAutomaticProperties()
     {
         var settings = System.Xml.Linq.XDocument.Load(
@@ -262,7 +266,7 @@ internal static partial class WorkflowContractValidator
           --logger 'trx;LogFileName=quotation-complete-coverage.trx'
         """;
     private const string CoverageEnforcement = """
-        mapfile -t reports < <(find TestResults/CoverageGate -type f -name coverage.cobertura.xml)
+        mapfile -t reports < <(find TestResults/CoverageGate -mindepth 2 -maxdepth 2 -type f -name coverage.cobertura.xml)
         if [[ "${#reports[@]}" -ne 1 ]]; then
           echo "Expected exactly one Cobertura report, found ${#reports[@]}." >&2
           exit 1
