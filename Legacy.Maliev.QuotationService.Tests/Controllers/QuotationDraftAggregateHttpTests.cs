@@ -219,9 +219,12 @@ public sealed class QuotationDraftAggregateHttpTests(DraftAggregateFixture fixtu
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Child_update_and_delete_live_denial_preserve_existing_line(bool delete)
+    [InlineData(false, true, HttpStatusCode.Forbidden)]
+    [InlineData(true, true, HttpStatusCode.Forbidden)]
+    [InlineData(false, false, HttpStatusCode.Unauthorized)]
+    [InlineData(true, false, HttpStatusCode.Unauthorized)]
+    public async Task Child_update_and_delete_authentication_or_live_denial_preserve_existing_line(
+        bool delete, bool authenticated, HttpStatusCode expected)
     {
         await using var allowed = fixture.App();
         using var creator = fixture.Client(allowed);
@@ -235,12 +238,12 @@ public sealed class QuotationDraftAggregateHttpTests(DraftAggregateFixture fixtu
         await using var read = fixture.Context();
         var before = await read.OrderItems.AsNoTracking().SingleAsync(value => value.Id == line.Id);
         await using var denied = fixture.App(allowed: false);
-        using var client = fixture.Client(denied);
+        using var client = fixture.Client(denied, authenticated);
         using var request = new HttpRequestMessage(delete ? HttpMethod.Delete : HttpMethod.Put,
             $"/quotations/orderitems/{line.Id}");
         if (!delete) request.Content = JsonContent.Create(new UpsertQuotationOrderItemRequest(root.Id, 909, "denied change", 99, 10.25m));
         using var response = await client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(expected, response.StatusCode);
         var after = await read.OrderItems.AsNoTracking().SingleAsync(value => value.Id == line.Id);
         Assert.Equal(before.ModifiedDate, after.ModifiedDate);
         Assert.Equal(before.Description, after.Description);
