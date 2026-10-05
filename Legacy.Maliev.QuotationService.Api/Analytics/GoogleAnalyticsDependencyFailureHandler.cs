@@ -39,7 +39,7 @@ internal sealed class GoogleAnalyticsDependencyFailureHandler(ILogger<GoogleAnal
         {
             logger.LogError(new EventId(5101, "DependencyRequestFailure"),
                 "{EventName} Dependency={Dependency} Operation={Operation} StatusCode={StatusCode}",
-                "DependencyRequestFailure", "GoogleAnalytics", "GA4Delivery", status);
+                "DependencyRequestFailure", "GoogleAnalytics", "HttpRequest", status);
         }
         catch (Exception)
         {

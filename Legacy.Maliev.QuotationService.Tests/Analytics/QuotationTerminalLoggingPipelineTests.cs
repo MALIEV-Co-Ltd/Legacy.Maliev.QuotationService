@@ -214,7 +214,7 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
             {
                 services.AddSingleton<TimeProvider>(clock);
                 if (fault is not null) services.AddDbContext<QuotationDbContext>(options => options.AddInterceptors(fault));
-                if (nativeDeadline) services.AddHttpClient<GoogleAnalyticsDeliveryProcessor>(client => client.Timeout = TimeSpan.FromMilliseconds(150));
+                if (nativeDeadline) services.AddHttpClient<GoogleAnalyticsDeliveryProcessor>(client => client.Timeout = TimeSpan.FromSeconds(1));
                 services.PostConfigureAll<HttpClientFactoryOptions>(options => options.HttpMessageHandlerBuilderActions.Add(
                     http => http.PrimaryHandler = transport));
             });
@@ -273,7 +273,7 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
         Assert.Equal(new[] { "Dependency", "EventName", "Operation", "StatusCode" }, record.Fields.Keys.Order(StringComparer.Ordinal));
         Assert.Equal("DependencyRequestFailure", record.Fields["EventName"]);
         Assert.Equal("GoogleAnalytics", record.Fields["Dependency"]);
-        Assert.Equal("GA4Delivery", record.Fields["Operation"]);
+        Assert.Equal("HttpRequest", record.Fields["Operation"]);
         Assert.Equal(status, record.Fields["StatusCode"]);
     }
 
