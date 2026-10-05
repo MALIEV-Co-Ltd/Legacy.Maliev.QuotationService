@@ -17,8 +17,10 @@ public static class QuotationStartupBoundary
             await initializeHost();
             return 0;
         }
-        // Framework host discovery uses this control-flow exception; it is not an application failure.
-        catch (Exception exception) when (exception is not HostAbortedException)
+        // Framework hosts need the original exception for discovery and startup validation.
+        // Only this executable owns its process exit code and fatal console fallback.
+        catch (Exception exception) when (System.Reflection.Assembly.GetEntryAssembly() == typeof(QuotationStartupBoundary).Assembly
+            && exception is not HostAbortedException)
         {
             using var factory = LoggerFactory.Create(logging =>
             {
