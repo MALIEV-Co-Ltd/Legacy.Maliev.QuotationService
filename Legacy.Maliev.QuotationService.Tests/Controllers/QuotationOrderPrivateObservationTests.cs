@@ -211,6 +211,7 @@ public sealed class QuotationOrderPrivateObservationTests(QuotationNormalIamFixt
 
     private sealed class Audit(Func<int> attempts) : ILoggerProvider
     {
+        private int Attempts => attempts();
         public bool Throw;
         public ConcurrentQueue<Record> Entries { get; } = new();
         public ILogger CreateLogger(string categoryName) => new Recorder(this, categoryName);
@@ -227,7 +228,7 @@ public sealed class QuotationOrderPrivateObservationTests(QuotationNormalIamFixt
                 using var writer = new StringWriter();
                 var entry = new LogEntry<TState>(level, category, eventId, state, exception, formatter);
                 new PrivateFailureConsoleFormatter().Write(in entry, null, writer);
-                owner.Entries.Enqueue(new(level, exception, safe, writer.ToString(), owner.attempts()));
+                owner.Entries.Enqueue(new(level, exception, safe, writer.ToString(), owner.Attempts));
                 if (owner.Throw) throw new InvalidOperationException(Protected);
             }
         }
