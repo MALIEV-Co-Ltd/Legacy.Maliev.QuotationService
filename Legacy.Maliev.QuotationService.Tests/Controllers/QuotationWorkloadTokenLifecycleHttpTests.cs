@@ -31,7 +31,7 @@ public sealed class QuotationWorkloadTokenLifecycleHttpTests(QuotationNormalIamF
         var state = typeof(LegacyServiceAccessTokenProvider).Assembly.GetType(
             "Maliev.Aspire.ServiceDefaults.Diagnostics.PrivateRequestObservationState", throwOnError: true)!;
         Assert.Null(app.Services.GetService(state));
-        Assert.NotEqual(Maliev.Aspire.ServiceDefaults.Logging.PrivateFailureConsoleFormatter.FormatterName,
+        Assert.NotEqual(global::Maliev.Aspire.ServiceDefaults.Logging.PrivateFailureConsoleFormatter.FormatterName,
             app.Services.GetRequiredService<IOptions<ConsoleLoggerOptions>>().Value.FormatterName);
         client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("th");
         using var health = await client.GetAsync("/quotation/liveness");
