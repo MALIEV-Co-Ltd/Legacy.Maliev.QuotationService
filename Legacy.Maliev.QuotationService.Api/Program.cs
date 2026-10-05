@@ -8,11 +8,17 @@ using Legacy.Maliev.QuotationService.Api.Analytics;
 using Legacy.Maliev.QuotationService.Data;
 using Maliev.Aspire.ServiceDefaults;
 using Legacy.Maliev.QuotationService.Api.Diagnostics;
+using Maliev.Aspire.ServiceDefaults.Logging;
+using Microsoft.Extensions.Logging.Console;
 
 return await QuotationStartupBoundary.RunAsync(async () =>
 {
     var builder = WebApplication.CreateBuilder(args);
     builder.AddServiceDefaults();
+    builder.Logging.AddConsoleFormatter<PrivateFailureConsoleFormatter, ConsoleFormatterOptions>();
+    builder.Logging.AddConsole(options => options.FormatterName = PrivateFailureConsoleFormatter.FormatterName);
+    builder.Logging.AddFilter<ConsoleLoggerProvider>(null, LogLevel.Warning);
+    builder.AddPrivateRequestObservation("quotation");
     builder.AddDefaultApiVersioning();
     builder.AddPostgresDbContext<QuotationDbContext>(connectionName: "QuotationDbContext");
     builder.AddPostgresDbContext<QuotationRequestDbContext>(connectionName: "QuotationRequestDbContext");

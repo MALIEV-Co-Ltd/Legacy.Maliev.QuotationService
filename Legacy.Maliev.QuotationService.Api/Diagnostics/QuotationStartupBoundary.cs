@@ -1,5 +1,4 @@
-using Maliev.Aspire.ServiceDefaults.Logging;
-using Microsoft.Extensions.Logging.Console;
+using Maliev.Aspire.ServiceDefaults.Diagnostics;
 
 namespace Legacy.Maliev.QuotationService.Api.Diagnostics;
 
@@ -22,20 +21,7 @@ public static class QuotationStartupBoundary
         catch (Exception exception) when (System.Reflection.Assembly.GetEntryAssembly() == typeof(QuotationStartupBoundary).Assembly
             && exception is not HostAbortedException)
         {
-            using var factory = LoggerFactory.Create(logging =>
-            {
-                logging.SetMinimumLevel(LogLevel.Warning);
-                logging.AddConsoleFormatter<MalievCloudJsonConsoleFormatter, JsonConsoleFormatterOptions>(options =>
-                {
-                    options.UseUtcTimestamp = true;
-                    options.TimestampFormat = "O";
-                    options.IncludeScopes = false;
-                });
-                logging.AddConsole(options => options.FormatterName = MalievCloudJsonConsoleFormatter.FormatterName);
-            });
-            factory.CreateLogger("HostStartup").LogCritical(new EventId(5102, "StartupFailure"),
-                "{EventName} Operation={Operation} ExceptionType={ExceptionType}",
-                "StartupFailure", "HostInitialization", exception.GetType().Name);
+            PrivateStartupBoundary.ReportFailure(exception);
             return 1;
         }
     }
