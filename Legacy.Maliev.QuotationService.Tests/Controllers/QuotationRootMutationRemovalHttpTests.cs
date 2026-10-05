@@ -91,7 +91,7 @@ public sealed class QuotationRootMutationRemovalHttpTests(DraftAggregateFixture 
         {
             "line" => await client.PostAsJsonAsync("/quotations/orderitems", new UpsertQuotationOrderItemRequest(root.Id, 9301, "root removal line", 2, 10.25m)),
             "link" => await client.PostAsync($"/quotations/{root.Id}/orders/9302", null),
-            _ => await client.PostAsJsonAsync($"/quotations/{root.Id}/files", new { Bucket = "fixture-bucket", ObjectName = "root-removal-synthetic.stl" })
+            _ => await client.PostAsync($"/quotations/{root.Id}/files?bucket=fixture-bucket&objectName=root-removal-synthetic.stl", null)
         };
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         using var scope = app.Services.CreateScope();
