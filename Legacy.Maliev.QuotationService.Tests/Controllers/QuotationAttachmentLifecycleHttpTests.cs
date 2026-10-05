@@ -6,6 +6,9 @@ using Legacy.Maliev.QuotationService.Domain;
 using Legacy.Maliev.QuotationService.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Npgsql;
+using System.Data.Common;
 
 namespace Legacy.Maliev.QuotationService.Tests.Controllers;
 
@@ -116,11 +119,15 @@ public sealed class QuotationAttachmentLifecycleHttpTests(DraftAggregateFixture 
         {
             using var message = new HttpRequestMessage(operation switch
             {
-                "create" => HttpMethod.Post, "update" => HttpMethod.Put, "delete" => HttpMethod.Delete, _ => HttpMethod.Get
+                "create" => HttpMethod.Post,
+                "update" => HttpMethod.Put,
+                "delete" => HttpMethod.Delete,
+                _ => HttpMethod.Get
             }, operation switch
             {
                 "create" => Collection(requestFile, parent) + "?bucket=denied-bucket&objectName=denied.stl",
-                "list" => Collection(requestFile, parent), _ => $"{Detail(requestFile)}/{id}"
+                "list" => Collection(requestFile, parent),
+                _ => $"{Detail(requestFile)}/{id}"
             });
             if (operation == "update") message.Content = JsonContent.Create(new { Bucket = "denied-bucket", ObjectName = "denied.stl", RequestId = parent, QuotationId = parent });
             using var response = await client.SendAsync(message);
@@ -150,6 +157,64 @@ public sealed class QuotationAttachmentLifecycleHttpTests(DraftAggregateFixture 
         using (var invalid = await Create(client, Collection(requestFile, parent), "", "file.stl")) Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
         using (var missing = await Create(client, Collection(requestFile, int.MaxValue), "fixture-bucket", "file.stl")) Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
         using (var empty = await client.GetAsync(Collection(requestFile, parent))) Assert.Equal(HttpStatusCode.NotFound, empty.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Lost_file_commit_ack_returns_unavailable_and_caller_retry_reads_one_persisted_row(bool keyed)
+    {
+        var fault = new RequestCreateCommitFault();
+        await using var app = fixture.App(resourceScoped: true, interceptors: [fault]);
+        using var client = fixture.Client(app);
+        var parent = await Parent(client, true);
+        var key = keyed ? Guid.NewGuid().ToString("N") : null;
+        using var failed = await Create(client, Collection(true, parent), "fixture-bucket", "files/commit-ack.stl", key);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, failed.StatusCode);
+        using var problem = JsonDocument.Parse(await failed.Content.ReadAsStringAsync());
+        Assert.Equal("request_file_create_unavailable", problem.RootElement.GetProperty("code").GetString());
+        Assert.Equal(1, fault.CommitAcknowledgements);
+        await using var db = fixture.RequestContext();
+        var row = Assert.Single(await db.Files.AsNoTracking().Where(value => value.RequestId == parent).ToListAsync());
+        await using var retryApp = fixture.App(resourceScoped: true);
+        using var retryClient = fixture.Client(retryApp);
+        using var recovered = await Create(retryClient, Collection(true, parent), "fixture-bucket", "files/commit-ack.stl", key);
+        Assert.Equal(HttpStatusCode.Created, recovered.StatusCode);
+        Assert.Equal(row.Id, (await recovered.Content.ReadFromJsonAsync<QuotationRequestFileResponse>())!.Id);
+        Assert.Single(await db.Files.AsNoTracking().Where(value => value.RequestId == parent).ToListAsync());
+    }
+
+    [Fact]
+    public async Task Precommit_file_failure_rolls_back_then_retries_in_a_fresh_context()
+    {
+        var fault = new FileInsertFault();
+        var rollback = new RequestCreateRollbackObserver();
+        await using var app = fixture.App(resourceScoped: true, interceptors: [fault, rollback]);
+        using var client = fixture.Client(app);
+        var parent = await Parent(client, true);
+        using var created = await Create(client, Collection(true, parent), "fixture-bucket", "files/precommit.stl");
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Equal(2, fault.Executions);
+        Assert.Equal(2, fault.Contexts.Count);
+        Assert.Equal(1, rollback.Rollbacks);
+        await using var db = fixture.RequestContext();
+        Assert.Single(await db.Files.AsNoTracking().Where(value => value.RequestId == parent).ToListAsync());
+    }
+
+    private sealed class FileInsertFault : DbCommandInterceptor
+    {
+        public int Executions { get; private set; }
+        public HashSet<Guid> Contexts { get; } = [];
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.StartsWith("INSERT INTO \"RequestFile\"", StringComparison.Ordinal))
+            {
+                Contexts.Add(eventData.Context!.ContextId.InstanceId);
+                if (++Executions == 1) throw new NpgsqlException("Synthetic attachment command interruption.", new IOException("Synthetic interruption."));
+            }
+            return ValueTask.FromResult(result);
+        }
     }
 
     private async Task<int> Parent(HttpClient client, bool requestFile)

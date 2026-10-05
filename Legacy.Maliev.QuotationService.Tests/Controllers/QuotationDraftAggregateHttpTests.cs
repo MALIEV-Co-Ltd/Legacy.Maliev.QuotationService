@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
@@ -296,7 +297,7 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
         await using var requests = new QuotationRequestDbContext(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(Requests).Options);
         await requests.Database.MigrateAsync();
     }
-    public WebApplicationFactory<Program> App(bool allowed = true, bool resourceScoped = false, RequestCreateStrategyDiagnostic? diagnostic = null) => new Factory(this, allowed, resourceScoped, diagnostic);
+    public WebApplicationFactory<Program> App(bool allowed = true, bool resourceScoped = false, RequestCreateStrategyDiagnostic? diagnostic = null, params IInterceptor[] interceptors) => new Factory(this, allowed, resourceScoped, diagnostic, interceptors);
     public HttpClient Client(WebApplicationFactory<Program> app, bool authenticated = true)
     {
         var client = app.CreateClient();
@@ -312,7 +313,7 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
         if (containers is not null) await containers.DisposeAsync();
         key.Dispose();
     }
-    private sealed class Factory(DraftAggregateFixture fixture, bool allowed, bool resourceScoped, RequestCreateStrategyDiagnostic? diagnostic) : WebApplicationFactory<Program>
+    private sealed class Factory(DraftAggregateFixture fixture, bool allowed, bool resourceScoped, RequestCreateStrategyDiagnostic? diagnostic, IInterceptor[] interceptors) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -338,6 +339,7 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
             });
             builder.ConfigureTestServices(services =>
             {
+                if (interceptors.Length > 0) services.AddDbContext<QuotationRequestDbContext>(options => options.AddInterceptors(interceptors));
                 services.AddScoped<IIamServiceClient, IamServiceClient>();
                 services.AddHttpClient("IAMService", client => client.BaseAddress = new Uri("https://aggregate-iam.example"))
                     .ConfigurePrimaryHttpMessageHandler(() => new Transport(allowed, fixture.LiveResources));

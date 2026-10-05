@@ -40,13 +40,22 @@ public sealed class QuotationRequestFilesController(IQuotationService service, I
         var normalizedBucket = bucket.Trim();
         var normalizedObjectName = objectName.Trim();
         var fingerprint = Fingerprint(requestId, normalizedBucket, normalizedObjectName);
-        var result = await IdempotentCreates.GetOrCreateBoundNullableAsync(
-            idempotency,
-            "quotation-request-file",
-            key,
-            fingerprint,
-            () => service.CreateRequestFileAsync(requestId, normalizedBucket, normalizedObjectName, ct),
-            ct);
+        IdempotentCreates.BoundCreateResult<QuotationRequestFileResponse> result;
+        try
+        {
+            result = await IdempotentCreates.GetOrCreateBoundNullableAsync(
+                idempotency,
+                "quotation-request-file",
+                key,
+                fingerprint,
+                () => service.CreateRequestFileAsync(requestId, normalizedBucket, normalizedObjectName, ct),
+                ct);
+        }
+        catch (QuotationRequestFileCreateUnavailableException)
+        {
+            return ProblemWithCode(StatusCodes.Status503ServiceUnavailable,
+                "Request attachment creation could not be confirmed.", "request_file_create_unavailable");
+        }
         if (result.Conflict)
         {
             return ProblemWithCode(
