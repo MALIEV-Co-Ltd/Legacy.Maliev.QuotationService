@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults
-          ref: 8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3
+          ref: ecb05cbbd68717e415f69df2ac488c1d323b1da3
           path: TestResults/.bridge-dependencies/Legacy.Maliev.ServiceDefaults
           persist-credentials: false
       - name: Check out isolated Quotation Contracts
@@ -73,7 +73,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults
-          ref: 8f4f5f27b226ffe406c4c79b1903742e8c2e7dd3
+          ref: ecb05cbbd68717e415f69df2ac488c1d323b1da3
           path: .dependencies/Legacy.Maliev.ServiceDefaults
           persist-credentials: false
       - name: Check out Legacy.Maliev.CompatibilityContracts
