@@ -24,19 +24,19 @@ public sealed class QuotationWorkloadTokenLifecycleHttpTests(QuotationNormalIamF
     : IClassFixture<QuotationNormalIamFixture>
 {
     [Fact]
-    public async Task New_Defaults_input_keeps_private_observation_and_localization_unselected_in_normal_host()
+    public async Task Normal_host_selects_private_observation_without_selecting_localization()
     {
         await using var app = App(new(), new(), new FakeTimeProvider());
         using var client = app.CreateClient();
         var state = typeof(LegacyServiceAccessTokenProvider).Assembly.GetType(
             "Maliev.Aspire.ServiceDefaults.Diagnostics.PrivateRequestObservationState", throwOnError: true)!;
-        Assert.Null(app.Services.GetService(state));
-        Assert.NotEqual(global::Maliev.Aspire.ServiceDefaults.Logging.PrivateFailureConsoleFormatter.FormatterName,
+        Assert.NotNull(app.Services.GetService(state));
+        Assert.Equal(global::Maliev.Aspire.ServiceDefaults.Logging.PrivateFailureConsoleFormatter.FormatterName,
             app.Services.GetRequiredService<IOptions<ConsoleLoggerOptions>>().Value.FormatterName);
         client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("th");
         using var health = await client.GetAsync("/quotation/liveness");
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
-        Assert.False(health.Headers.Contains("X-Maliev-Health-Instance"));
+        Assert.True(health.Headers.Contains("X-Maliev-Health-Instance"));
         Assert.False(health.Headers.Contains("Set-Cookie"));
         using var diagnostic = new HttpRequestMessage(HttpMethod.Get, "/internal/diagnostics/observability");
         diagnostic.Headers.Add("X-Maliev-Diagnostic-Id", Guid.NewGuid().ToString("N"));

@@ -98,23 +98,23 @@ public sealed class QuotationStartupProcessTests
         Assert.DoesNotContain("Unhandled exception", stdout + stderr, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("   at ", stdout + stderr, StringComparison.Ordinal);
         var records = new List<JsonElement>();
-        foreach (var line in stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var line in (stdout + stderr).Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             try
             {
                 using var document = JsonDocument.Parse(line);
-                if (document.RootElement.TryGetProperty("EventId", out var id) && id.GetInt32() == 5102)
+                if (document.RootElement.TryGetProperty("eventId", out var id) && id.GetInt32() == 5102)
                     records.Add(document.RootElement.Clone());
             }
             catch (JsonException) { }
         }
         var failure = Assert.Single(records);
         Assert.Equal("CRITICAL", failure.GetProperty("severity").GetString());
-        var state = failure.GetProperty("State");
-        Assert.Equal("StartupFailure", state.GetProperty("EventName").GetString());
-        Assert.Equal("HostInitialization", state.GetProperty("Operation").GetString());
-        Assert.Equal(expectedExceptionType, state.GetProperty("ExceptionType").GetString());
-        Assert.Equal(JsonValueKind.Null, failure.GetProperty("Exception").ValueKind);
+        Assert.Equal("StartupFailure", failure.GetProperty("EventName").GetString());
+        Assert.Equal("HostInitialization", failure.GetProperty("Operation").GetString());
+        Assert.Equal("System." + expectedExceptionType, failure.GetProperty("exceptionType").GetString());
+        Assert.False(failure.TryGetProperty("State", out _));
+        Assert.False(failure.TryGetProperty("Exception", out _));
     }
 
     private static async Task<string> ReadBoundedAsync(StreamReader reader, CancellationToken cancellationToken)

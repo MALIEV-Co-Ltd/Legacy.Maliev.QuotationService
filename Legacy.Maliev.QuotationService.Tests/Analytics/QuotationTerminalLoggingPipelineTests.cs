@@ -17,8 +17,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Logging.Console;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 
 namespace Legacy.Maliev.QuotationService.Tests.Analytics;
@@ -285,11 +283,11 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
         Assert.Null(record.Exception);
         using var json = JsonDocument.Parse(record.Json);
         Assert.Equal("ERROR", json.RootElement.GetProperty("severity").GetString());
-        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("Exception").ValueKind);
-        var state = json.RootElement.GetProperty("State");
-        Assert.Equal(record.Fields.Keys.Order(StringComparer.Ordinal), state.EnumerateObject()
-            .Where(property => property.Name != "{OriginalFormat}").Select(property => property.Name).Order(StringComparer.Ordinal));
-        foreach (var pair in record.Fields) Assert.Equal(JsonSerializer.Serialize(pair.Value), state.GetProperty(pair.Key).GetRawText());
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("exceptionType").ValueKind);
+        Assert.False(json.RootElement.TryGetProperty("State", out _));
+        Assert.False(json.RootElement.TryGetProperty("ExceptionType", out _));
+        foreach (var pair in record.Fields.Where(pair => pair.Key != "ExceptionType"))
+            Assert.Equal(JsonSerializer.Serialize(pair.Value), json.RootElement.GetProperty(pair.Key).GetRawText());
         foreach (var forbidden in new[] { Protected, "quotation-27", "123.456", "opaque-27", "measurement_id", "api_secret", "google-analytics.com" })
             Assert.DoesNotContain(forbidden, record.Json, StringComparison.Ordinal);
     }
@@ -354,17 +352,10 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
                     .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
                 using var writer = new StringWriter();
                 var entry = new LogEntry<TState>(level, category, eventId, state, exception, format);
-                new MalievCloudJsonConsoleFormatter(new FormatterOptions()).Write(in entry, null, writer);
+                new PrivateFailureConsoleFormatter().Write(in entry, null, writer);
                 owner.Entries.Enqueue(new(eventId, level, exception, fields, writer.ToString(), eventId.Id == 5201 ? owner.Persisted : null));
                 if (eventId.Id == 5101 && owner.ThrowDependency) throw new InvalidOperationException(Protected);
             }
         }
-    }
-
-    private sealed class FormatterOptions : IOptionsMonitor<JsonConsoleFormatterOptions>
-    {
-        public JsonConsoleFormatterOptions CurrentValue { get; } = new() { UseUtcTimestamp = true };
-        public JsonConsoleFormatterOptions Get(string? name) => CurrentValue;
-        public IDisposable? OnChange(Action<JsonConsoleFormatterOptions, string?> listener) => null;
     }
 }
