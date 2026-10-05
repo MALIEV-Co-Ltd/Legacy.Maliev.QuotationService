@@ -30,16 +30,17 @@ public sealed class QuotationWorkloadTokenLifecycleHttpTests(QuotationNormalIamF
         await using var app = App(login, downstream, new FakeTimeProvider());
         using var bootstrap = app.CreateClient();
         var order = app.Services.GetRequiredService<IOrderDecisionClient>();
-        var authority = app.Services.GetRequiredService<QualificationAuthorityClient>();
+        using var authority = app.Services.GetRequiredService<IHttpClientFactory>().CreateClient("QualificationAuthority");
         using var iam = app.Services.GetRequiredService<IHttpClientFactory>().CreateClient("IAMService");
         var orders = Enumerable.Range(0, 4).Select(index => order.TransitionAsync(115 + index, true, "workload-deadline", CancellationToken.None)).ToArray();
-        var qualification = authority.CheckAsync("synthetic-employee", "employee-42", "legacy.quotation-requests.read", 115, CancellationToken.None);
+        var qualification = CheckAuthority(authority);
         var permission = iam.PostAsync("/iam/v1/auth/check-permission", null);
         try
         {
             await login.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.All(await Task.WhenAll(orders).WaitAsync(TimeSpan.FromSeconds(10)), result => Assert.Equal(OrderDecisionResult.Unavailable, result));
-            Assert.Equal(503, await qualification.WaitAsync(TimeSpan.FromSeconds(10)));
+            var qualificationError = await Assert.ThrowsAsync<HttpRequestException>(() => qualification.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, qualificationError.StatusCode);
             var error = await Assert.ThrowsAsync<HttpRequestException>(() => permission.WaitAsync(TimeSpan.FromSeconds(10)));
             Assert.Equal(HttpStatusCode.ServiceUnavailable, error.StatusCode);
             Assert.Equal(1, login.Requests);
@@ -96,8 +97,11 @@ public sealed class QuotationWorkloadTokenLifecycleHttpTests(QuotationNormalIamF
         var order = app.Services.GetRequiredService<IOrderDecisionClient>();
         Assert.Equal(OrderDecisionResult.Completed, await order.TransitionAsync(115, true, "cached-one", CancellationToken.None));
         using (var scope = app.Services.CreateScope())
-            Assert.Equal(200, await scope.ServiceProvider.GetRequiredService<QualificationAuthorityClient>()
-                .CheckAsync("synthetic-employee", "employee-42", "legacy.quotation-requests.read", 115, CancellationToken.None));
+        {
+            using var authority = scope.ServiceProvider.GetRequiredService<IHttpClientFactory>().CreateClient("QualificationAuthority");
+            using var response = await CheckAuthority(authority);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
         time.Advance(TimeSpan.FromSeconds(239));
         Assert.Equal(OrderDecisionResult.Completed, await order.TransitionAsync(116, true, "cached-before", CancellationToken.None));
         Assert.Equal(1, login.Requests);
@@ -161,6 +165,10 @@ public sealed class QuotationWorkloadTokenLifecycleHttpTests(QuotationNormalIamF
         Assert.Equal(2, login.Requests);
         Assert.Equal("fresh-2", Assert.Single(downstream.Bearers));
     }
+
+    private static Task<HttpResponseMessage> CheckAuthority(HttpClient client) => client.PostAsJsonAsync(
+        "/auth/v1/introspection/quotation-qualification",
+        new { employeeAccessToken = "synthetic-employee", permission = "legacy.quotation-requests.read", purpose = QualificationAuthorityAttribute.Purpose, requestId = 115 });
 
     private WebApplicationFactory<Program> App(Login login, Downstream downstream, FakeTimeProvider time, TimeSpan? timeout = null)
         => fixture.App(new()).WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
