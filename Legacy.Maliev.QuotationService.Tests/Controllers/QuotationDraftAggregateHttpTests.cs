@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -154,6 +155,99 @@ public sealed class QuotationDraftAggregateHttpTests(DraftAggregateFixture fixtu
         finally { await db.Database.ExecuteSqlRawAsync("DROP TRIGGER reject_aggregate_child ON \"OrderItem\"; DROP FUNCTION reject_aggregate_child();"); }
     }
 
+    [Fact]
+    public async Task Child_update_conflict_and_delete_preserve_parent_scalar_version()
+    {
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        using var created = await Send(client, "/quotations", Draft(), null);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var root = (await created.Content.ReadFromJsonAsync<QuotationResponse>())!;
+        await using var read = fixture.Context();
+        var parent = await read.Quotations.AsNoTracking().SingleAsync(value => value.Id == root.Id);
+        var originalVersion = parent.ModifiedDate;
+        Assert.NotNull(originalVersion);
+
+        using var inserted = await Send(client, "/quotations/orderitems",
+            new UpsertQuotationOrderItemRequest(root.Id, 907, "initial line", 2, 50.25m), null);
+        Assert.Equal(HttpStatusCode.Created, inserted.StatusCode);
+        var line = (await inserted.Content.ReadFromJsonAsync<QuotationOrderItemResponse>())!;
+        Assert.Equal(originalVersion, (await read.Quotations.AsNoTracking().SingleAsync(value => value.Id == root.Id)).ModifiedDate);
+        using var currentResponse = await client.GetAsync($"/quotations/orderitems/{line.Id}");
+        Assert.Equal(HttpStatusCode.OK, currentResponse.StatusCode);
+        var current = (await currentResponse.Content.ReadFromJsonAsync<QuotationOrderItemResponse>())!;
+        Assert.NotNull(current.ModifiedDate);
+        var expected = DateTime.SpecifyKind(current.ModifiedDate.Value, DateTimeKind.Utc)
+            .ToString("O", CultureInfo.InvariantCulture);
+        var updated = new UpsertQuotationOrderItemRequest(root.Id, 908, "updated line", 3, 20.25m);
+        using (var request = new HttpRequestMessage(HttpMethod.Put, $"/quotations/orderitems/{line.Id}"))
+        {
+            request.Headers.Add("X-Expected-Modified-Date", expected);
+            request.Content = JsonContent.Create(updated);
+            using var response = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+        var persisted = await read.OrderItems.AsNoTracking().SingleAsync(value => value.Id == line.Id);
+        Assert.Equal("updated line", persisted.Description);
+        Assert.Equal(908, persisted.OrderId);
+        Assert.Equal(3, persisted.Quantity);
+        Assert.Equal(20.25m, persisted.UnitPrice);
+        Assert.Equal(60.75m, persisted.Subtotal);
+        Assert.NotEqual(current.ModifiedDate, persisted.ModifiedDate);
+        using (var stale = new HttpRequestMessage(HttpMethod.Put, $"/quotations/orderitems/{line.Id}"))
+        {
+            stale.Headers.Add("X-Expected-Modified-Date", expected);
+            stale.Content = JsonContent.Create(updated with { Description = "stale overwrite", Quantity = 99 });
+            using var conflict = await client.SendAsync(stale);
+            Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        }
+        var unchanged = await read.OrderItems.AsNoTracking().SingleAsync(value => value.Id == line.Id);
+        Assert.Equal(persisted.ModifiedDate, unchanged.ModifiedDate);
+        Assert.Equal("updated line", unchanged.Description);
+        Assert.Equal(60.75m, unchanged.Subtotal);
+        using var deleted = await client.DeleteAsync($"/quotations/orderitems/{line.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        Assert.False(await read.OrderItems.AnyAsync(value => value.Id == line.Id));
+        using var missing = await client.GetAsync($"/quotations/orderitems/{line.Id}");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        var finalParent = await read.Quotations.AsNoTracking().SingleAsync(value => value.Id == root.Id);
+        Assert.Equal(originalVersion, finalParent.ModifiedDate);
+        Assert.Equal(parent.Total, finalParent.Total);
+        Assert.Equal(parent.Subtotal, finalParent.Subtotal);
+        Assert.Equal(parent.Accepted, finalParent.Accepted);
+        Assert.Equal(parent.InvoiceId, finalParent.InvoiceId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Child_update_and_delete_live_denial_preserve_existing_line(bool delete)
+    {
+        await using var allowed = fixture.App();
+        using var creator = fixture.Client(allowed);
+        using var rootResponse = await Send(creator, "/quotations", Draft(), null);
+        Assert.Equal(HttpStatusCode.Created, rootResponse.StatusCode);
+        var root = (await rootResponse.Content.ReadFromJsonAsync<QuotationResponse>())!;
+        using var lineResponse = await Send(creator, "/quotations/orderitems",
+            new UpsertQuotationOrderItemRequest(root.Id, 909, "protected line", 2, 10.25m), null);
+        Assert.Equal(HttpStatusCode.Created, lineResponse.StatusCode);
+        var line = (await lineResponse.Content.ReadFromJsonAsync<QuotationOrderItemResponse>())!;
+        await using var read = fixture.Context();
+        var before = await read.OrderItems.AsNoTracking().SingleAsync(value => value.Id == line.Id);
+        await using var denied = fixture.App(allowed: false);
+        using var client = fixture.Client(denied);
+        using var request = new HttpRequestMessage(delete ? HttpMethod.Delete : HttpMethod.Put,
+            $"/quotations/orderitems/{line.Id}");
+        if (!delete) request.Content = JsonContent.Create(new UpsertQuotationOrderItemRequest(root.Id, 909, "denied change", 99, 10.25m));
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var after = await read.OrderItems.AsNoTracking().SingleAsync(value => value.Id == line.Id);
+        Assert.Equal(before.ModifiedDate, after.ModifiedDate);
+        Assert.Equal(before.Description, after.Description);
+        Assert.Equal(before.Quantity, after.Quantity);
+        Assert.Equal(before.Subtotal, after.Subtotal);
+    }
+
     private static async Task<HttpResponseMessage> Send(HttpClient client, string route, object? body, string? key)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, route);
@@ -177,7 +271,7 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
     private PostgreSqlContainer postgres => (PostgreSqlContainer)containers!.First;
     private IContainer redis => containers!.Second;
     private readonly RSA key = RSA.Create(2048);
-    private static readonly string[] Permissions = ["legacy.quotations.create", "legacy.quotations.read", "legacy.customer-quotations.read", "legacy.quotation-lines.write", "legacy.quotation-lines.read", "legacy.quotation-orders.write", "legacy.quotation-orders.read"];
+    private static readonly string[] Permissions = ["legacy.quotations.create", "legacy.quotations.read", "legacy.customer-quotations.read", "legacy.quotation-lines.write", "legacy.quotation-lines.read", "legacy.quotation-lines.delete", "legacy.quotation-orders.write", "legacy.quotation-orders.read"];
     private string Requests => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "aggregate_requests" }.ConnectionString;
     public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
     public async Task InitializeAsync()
