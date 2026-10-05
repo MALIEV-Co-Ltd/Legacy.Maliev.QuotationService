@@ -11,4 +11,3 @@ An internal request option carries the original caller cancellation token to dis
 Original GoogleAnalyticsDeliveryProcessorTests.cs maps to QuotationTerminalLoggingPipelineTests.cs; production mappings are the retained processor, its GA-only handler and Program registration. The new native cases supplement the11 accepted cases and do not close fullsource27e4 or unrelated source/SDK/consumer obligations by counts alone.
 
 Hosted-first validation remains pending: Release0 warnings/errors, expected892 total cases twice, raw five owned assemblies including generated lines>=80%, format, package audit, security, coverage-gate self-tests and joined authority. Provider-pipeline review remains explicit before publication. No local SDK/Docker, deployment, real provider effect, original-source write, ledger edit, schema, DTO, route or auth grant change.
-
