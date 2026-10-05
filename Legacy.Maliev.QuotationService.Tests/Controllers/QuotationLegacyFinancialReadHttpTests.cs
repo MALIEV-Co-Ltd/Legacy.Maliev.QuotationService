@@ -109,9 +109,17 @@ public sealed class QuotationLegacyFinancialReadHttpTests(DraftAggregateFixture 
         await using var db = fixture.Context();
         var row = new Quotation
         {
-            CustomerId = 101, EmployeeId = 41, InvoiceId = invoice, CurrencyId = 764, Period = 30,
-            ExpirationDate = new DateTime(2035, 1, 1), Subtotal = 100.50m, Vat = 7.04m, Total = 107.54m,
-            WithholdingTax = 9.99m, Accepted = accepted,
+            CustomerId = 101,
+            EmployeeId = 41,
+            InvoiceId = invoice,
+            CurrencyId = 764,
+            Period = 30,
+            ExpirationDate = new DateTime(2035, 1, 1),
+            Subtotal = 100.50m,
+            Vat = 7.04m,
+            Total = 107.54m,
+            WithholdingTax = 9.99m,
+            Accepted = accepted,
             CreatedDate = DateTime.SpecifyKind(clock.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified),
             ModifiedDate = new DateTime(2019, 1, 1)
         };
