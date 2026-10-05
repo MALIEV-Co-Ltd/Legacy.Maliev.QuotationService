@@ -274,9 +274,11 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
     private PostgreSqlContainer postgres => (PostgreSqlContainer)containers!.First;
     private IContainer redis => containers!.Second;
     private readonly RSA key = RSA.Create(2048);
-    private static readonly string[] Permissions = ["legacy.quotations.create", "legacy.quotations.read", "legacy.customer-quotations.read", "legacy.quotation-lines.write", "legacy.quotation-lines.read", "legacy.quotation-lines.delete", "legacy.quotation-orders.write", "legacy.quotation-orders.read"];
+    private static readonly string[] Permissions = ["legacy.quotations.create", "legacy.quotations.read", "legacy.customer-quotations.read", "legacy.quotation-lines.write", "legacy.quotation-lines.read", "legacy.quotation-lines.delete", "legacy.quotation-orders.write", "legacy.quotation-orders.read", "legacy.quotation-files.write", "legacy.quotation-files.read", "legacy.quotation-files.delete"];
     private string Requests => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "aggregate_requests" }.ConnectionString;
     public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
+    public QuotationRequestDbContext RequestContext() => new(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(Requests).Options);
+    public System.Collections.Concurrent.ConcurrentQueue<string> LiveResources { get; } = new();
     public async Task InitializeAsync()
     {
         containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation100-QuotationDraftAggregateHttpTests",
@@ -333,11 +335,11 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
             {
                 services.AddScoped<IIamServiceClient, IamServiceClient>();
                 services.AddHttpClient("IAMService", client => client.BaseAddress = new Uri("https://aggregate-iam.example"))
-                    .ConfigurePrimaryHttpMessageHandler(() => new Transport(allowed));
+                    .ConfigurePrimaryHttpMessageHandler(() => new Transport(allowed, fixture.LiveResources));
             });
         }
     }
-    private sealed class Transport(bool allowed) : HttpMessageHandler
+    private sealed class Transport(bool allowed, System.Collections.Concurrent.ConcurrentQueue<string> resources) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -348,7 +350,14 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
             using var json = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
             Assert.Equal("employee-aggregate-fixture", json.RootElement.GetProperty("principalId").GetString());
             Assert.Contains(json.RootElement.GetProperty("permissionId").GetString(), Permissions);
-            Assert.Equal("global", json.RootElement.GetProperty("resourcePath").GetString());
+            var resource = json.RootElement.GetProperty("resourcePath").GetString();
+            resources.Enqueue(resource!);
+            if (resource != "global")
+            {
+                Assert.Contains(json.RootElement.GetProperty("permissionId").GetString(),
+                    new[] { "legacy.quotation-files.write", "legacy.quotation-files.read" });
+                Assert.Matches(@"^/quotations/[1-9][0-9]*$", resource!);
+            }
             Assert.True(json.RootElement.GetProperty("bypassCache").GetBoolean());
             return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { allowed }) };
         }
