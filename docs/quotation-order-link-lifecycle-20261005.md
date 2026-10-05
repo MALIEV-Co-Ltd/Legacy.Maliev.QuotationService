@@ -15,7 +15,9 @@ Deletion removes only the link. Link writes do not advance either parent's Modif
 this is a source behavior characterization, not aggregate financial concurrency protection.
 
 Four new actual-host cases use Production Program/DI, signed JWT, the real live IAM client
-with controlled HTTP transport, PostgreSQL 18 and Redis. Every link route is checked for
+with controlled HTTP transport, PostgreSQL 18 and Redis. A supported FakeTimeProvider
+sets exact persisted timestamps and advances a minute before updates, avoiding PostgreSQL
+microsecond-rounding ambiguity while asserting exact CreatedDate and ModifiedDate behavior. Every link route is checked for
 missing JWT and live IAM rejection with unchanged persisted metadata and parent version.
 The existing aggregate fixture adds its missing delete permission and accepts the already
 supported resource-scoped order read/write permissions in its IAM transport assertions.

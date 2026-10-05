@@ -4,6 +4,10 @@ using System.Text;
 using System.Text.Json;
 using Legacy.Maliev.QuotationService.Application.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Legacy.Maliev.QuotationService.Tests.Controllers;
 
@@ -13,7 +17,8 @@ public sealed class QuotationOrderLinkLifecycleHttpTests(DraftAggregateFixture f
     [Fact]
     public async Task Link_metadata_uses_absolute_location_query_id_update_and_complete_delete_lifecycle()
     {
-        await using var app = fixture.App(resourceScoped: true);
+        var clock = Clock();
+        await using var app = App(clock);
         using var client = fixture.Client(app);
         var parent = await Parent(client);
         var collection = $"/quotations/{parent}/orders";
@@ -44,13 +49,14 @@ public sealed class QuotationOrderLinkLifecycleHttpTests(DraftAggregateFixture f
         var updateRoute = $"/quotations/orders?id={row.Id}";
         using (var invalid = await client.PutAsync(updateRoute, new StringContent("null", Encoding.UTF8, "application/json")))
             Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        clock.Advance(TimeSpan.FromMinutes(1));
         using (var updated = await client.PutAsJsonAsync(updateRoute, new UpsertQuotationOrderLinkRequest(parent, 1102)))
             Assert.Equal(HttpStatusCode.NoContent, updated.StatusCode);
         await using var db = fixture.Context();
         var persisted = await db.OrderLinks.AsNoTracking().SingleAsync(value => value.Id == row.Id);
         Assert.Equal(1102, persisted.OrderId);
         Assert.Equal(row.CreatedDate, persisted.CreatedDate);
-        Assert.True(persisted.ModifiedDate >= row.ModifiedDate);
+        Assert.Equal(row.ModifiedDate!.Value.AddMinutes(1), persisted.ModifiedDate);
         using (var deleted = await client.DeleteAsync(location)) Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
         Assert.False(await db.OrderLinks.AnyAsync(value => value.Id == row.Id));
         Assert.True(await db.Quotations.AnyAsync(value => value.Id == parent));
@@ -65,7 +71,8 @@ public sealed class QuotationOrderLinkLifecycleHttpTests(DraftAggregateFixture f
     [Fact]
     public async Task Duplicate_order_links_and_reparenting_preserve_source_child_only_versions()
     {
-        await using var app = fixture.App(resourceScoped: true);
+        var clock = Clock();
+        await using var app = App(clock);
         using var client = fixture.Client(app);
         var parent = await Parent(client);
         var other = await Parent(client);
@@ -79,12 +86,14 @@ public sealed class QuotationOrderLinkLifecycleHttpTests(DraftAggregateFixture f
         var row = (await first.Content.ReadFromJsonAsync<QuotationOrderLinkResponse>())!;
         var duplicate = (await second.Content.ReadFromJsonAsync<QuotationOrderLinkResponse>())!;
         Assert.NotEqual(row.Id, duplicate.Id);
+        clock.Advance(TimeSpan.FromMinutes(1));
         using (var updated = await client.PutAsJsonAsync($"/quotations/orders?id={row.Id}", new UpsertQuotationOrderLinkRequest(other, 1112)))
             Assert.Equal(HttpStatusCode.NoContent, updated.StatusCode);
         var moved = await db.OrderLinks.AsNoTracking().SingleAsync(value => value.Id == row.Id);
         Assert.Equal(other, moved.QuotationId);
         Assert.Equal(1112, moved.OrderId);
         Assert.Equal(row.CreatedDate, moved.CreatedDate);
+        Assert.Equal(row.ModifiedDate!.Value.AddMinutes(1), moved.ModifiedDate);
         using (var original = await client.GetAsync($"/quotations/{parent}/orders"))
         {
             Assert.Equal(HttpStatusCode.OK, original.StatusCode);
@@ -106,7 +115,8 @@ public sealed class QuotationOrderLinkLifecycleHttpTests(DraftAggregateFixture f
     [InlineData(true)]
     public async Task Every_order_link_route_denies_missing_JWT_or_live_IAM_rejection_without_mutation(bool authenticated)
     {
-        await using var seedApp = fixture.App();
+        var clock = Clock();
+        await using var seedApp = App(clock);
         using var seedClient = fixture.Client(seedApp);
         var parent = await Parent(seedClient);
         using var created = await seedClient.PostAsync($"/quotations/{parent}/orders/1121", null);
@@ -114,7 +124,7 @@ public sealed class QuotationOrderLinkLifecycleHttpTests(DraftAggregateFixture f
         var row = (await created.Content.ReadFromJsonAsync<QuotationOrderLinkResponse>())!;
         await using var db = fixture.Context();
         var version = (await db.Quotations.AsNoTracking().SingleAsync(value => value.Id == parent)).ModifiedDate;
-        await using var app = fixture.App(allowed: false, resourceScoped: true);
+        await using var app = App(clock, allowed: false);
         using var client = fixture.Client(app, authenticated);
         var expected = authenticated ? HttpStatusCode.Forbidden : HttpStatusCode.Unauthorized;
         using (var denied = await client.PostAsync($"/quotations/{parent}/orders/1122", null)) Assert.Equal(expected, denied.StatusCode);
@@ -130,6 +140,12 @@ public sealed class QuotationOrderLinkLifecycleHttpTests(DraftAggregateFixture f
         Assert.Equal(row.ModifiedDate, unchanged.ModifiedDate);
         Assert.Equal(version, (await db.Quotations.AsNoTracking().SingleAsync(value => value.Id == parent)).ModifiedDate);
     }
+
+    private static FakeTimeProvider Clock() => new(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero));
+
+    private WebApplicationFactory<Program> App(FakeTimeProvider clock, bool allowed = true) =>
+        fixture.App(allowed: allowed, resourceScoped: true).WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services => services.AddSingleton<TimeProvider>(clock)));
 
     private static async Task<int> Parent(HttpClient client)
     {
