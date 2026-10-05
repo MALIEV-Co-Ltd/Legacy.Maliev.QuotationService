@@ -275,7 +275,7 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
     private PostgreSqlContainer postgres => (PostgreSqlContainer)containers!.First;
     private IContainer redis => containers!.Second;
     private readonly RSA key = RSA.Create(2048);
-    private static readonly string[] Permissions = ["legacy.quotations.create", "legacy.quotations.read", "legacy.customer-quotations.read", "legacy.quotation-lines.write", "legacy.quotation-lines.read", "legacy.quotation-lines.delete", "legacy.quotation-orders.write", "legacy.quotation-orders.read", "legacy.quotation-files.write", "legacy.quotation-files.read", "legacy.quotation-files.delete"];
+    private static readonly string[] Permissions = ["legacy.quotations.create", "legacy.quotations.read", "legacy.customer-quotations.read", "legacy.quotation-lines.write", "legacy.quotation-lines.read", "legacy.quotation-lines.delete", "legacy.quotation-orders.write", "legacy.quotation-orders.read", "legacy.quotation-orders.delete", "legacy.quotation-files.write", "legacy.quotation-files.read", "legacy.quotation-files.delete"];
     private string Requests => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "aggregate_requests" }.ConnectionString;
     public QuotationDbContext Context() => new(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
     public QuotationRequestDbContext RequestContext() => new(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(Requests).Options);
@@ -362,7 +362,7 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
             if (resource != "global")
             {
                 Assert.Contains(json.RootElement.GetProperty("permissionId").GetString(),
-                    new[] { "legacy.quotation-files.write", "legacy.quotation-files.read" });
+                    new[] { "legacy.quotation-files.write", "legacy.quotation-files.read", "legacy.quotation-orders.write", "legacy.quotation-orders.read" });
                 Assert.Matches(@"^/quotations/[1-9][0-9]*$", resource!);
             }
             Assert.True(json.RootElement.GetProperty("bypassCache").GetBoolean());
