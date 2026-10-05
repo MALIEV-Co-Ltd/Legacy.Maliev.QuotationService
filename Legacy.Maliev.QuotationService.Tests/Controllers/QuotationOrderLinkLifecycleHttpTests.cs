@@ -28,7 +28,7 @@ public sealed class QuotationOrderLinkLifecycleHttpTests(DraftAggregateFixture f
         var row = (await created.Content.ReadFromJsonAsync<QuotationOrderLinkResponse>())!;
         var location = Assert.IsType<Uri>(created.Headers.Location);
         Assert.True(location.IsAbsoluteUri);
-        Assert.Equal($"/quotations/orders/{row.Id}", location.AbsolutePath);
+        Assert.Equal($"/quotations/Orders/{row.Id}", location.AbsolutePath);
         using (var json = JsonDocument.Parse(await created.Content.ReadAsStringAsync()))
             Assert.Equal(new[] { "Id", "QuotationId", "OrderId", "CreatedDate", "ModifiedDate" },
                 json.RootElement.EnumerateObject().Select(property => property.Name).ToArray());
