@@ -50,6 +50,7 @@ public sealed class QuotationStartupProcessTests
             ["ConnectionStrings__QuotationDbContext"] = connection,
             ["ConnectionStrings__QuotationRequestDbContext"] = connection,
             ["ConnectionStrings__redis"] = "127.0.0.1:1",
+            ["Cache__RedisEnabled"] = "false",
             ["Jwt__Issuer"] = scenario == "missing-issuer" ? "" : "https://startup.example",
             ["Jwt__Audience"] = "startup-services",
             ["Jwt__SecurityKey"] = "",
