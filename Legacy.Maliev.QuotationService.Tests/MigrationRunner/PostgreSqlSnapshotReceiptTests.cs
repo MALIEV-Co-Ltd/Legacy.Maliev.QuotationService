@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Legacy.Maliev.QuotationService.MigrationRunner;
 using Microsoft.Extensions.Time.Testing;
+using Npgsql;
 
 namespace Legacy.Maliev.QuotationService.Tests.MigrationRunner;
 
@@ -71,10 +72,18 @@ public sealed class PostgreSqlSnapshotReceiptTests
     [Fact]
     public async Task Application_RejectsMissingSnapshotReceiptBeforeConnecting()
     {
+        var password = Guid.NewGuid().ToString("N");
         var configuration = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             ["Migration__Workload"] = "quotation",
-            ["ConnectionStrings__QuotationDbContext"] = "Host=never-connect;Port=5432;Database=Quotation;Username=x;Password=secret",
+            ["ConnectionStrings__QuotationDbContext"] = new NpgsqlConnectionStringBuilder
+            {
+                Host = "never-connect",
+                Port = 5432,
+                Database = "Quotation",
+                Username = "x",
+                Password = password,
+            }.ConnectionString,
             ["Migration__SourceSnapshotId"] = "source-20260830",
             ["Migration__CopyPlanId"] = "copy-plan-20260830",
             ["Migration__SchemaHash"] = new string('a', 64),
@@ -89,7 +98,7 @@ public sealed class PostgreSqlSnapshotReceiptTests
         Assert.Equal(2, exitCode);
         Assert.Contains("PostgreSqlSnapshotRejectedException", output.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain("never-connect", output.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("secret", output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(password, output.ToString(), StringComparison.Ordinal);
     }
 
     private static PostgreSqlSnapshotExpectation Expected() => new(

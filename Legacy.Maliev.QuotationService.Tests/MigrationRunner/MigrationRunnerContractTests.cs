@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Legacy.Maliev.QuotationService.MigrationRunner;
 using Microsoft.Extensions.Time.Testing;
+using Npgsql;
 
 namespace Legacy.Maliev.QuotationService.Tests.MigrationRunner;
 
@@ -178,9 +179,10 @@ public sealed class MigrationRunnerContractTests
     [Fact]
     public void Redaction_NeverReturnsCredentialsOrRawConnectionString()
     {
-        var secret = Connection("quotation");
-        var message = MigrationLogSanitizer.Sanitize(new InvalidOperationException($"failed {secret} Password=super-secret"));
-        Assert.DoesNotContain("super-secret", message, StringComparison.Ordinal);
+        var password = Guid.NewGuid().ToString("N");
+        var secret = Connection("quotation", password);
+        var message = MigrationLogSanitizer.Sanitize(new InvalidOperationException($"failed {secret} Password={password}"));
+        Assert.DoesNotContain(password, message, StringComparison.Ordinal);
         Assert.DoesNotContain("Password", message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Host=", message, StringComparison.OrdinalIgnoreCase);
     }
@@ -188,10 +190,15 @@ public sealed class MigrationRunnerContractTests
     [Fact]
     public async Task Application_RejectsUnknownWorkloadBeforeConnectionAndSanitizesOutput()
     {
+        var password = Guid.NewGuid().ToString("N");
         var configuration = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             ["Migration__Workload"] = "both",
-            ["ConnectionStrings__QuotationDbContext"] = "Host=never-connect;Password=must-not-leak",
+            ["ConnectionStrings__QuotationDbContext"] = new NpgsqlConnectionStringBuilder
+            {
+                Host = "never-connect",
+                Password = password,
+            }.ConnectionString,
         };
         using var output = new StringWriter();
 
@@ -199,7 +206,7 @@ public sealed class MigrationRunnerContractTests
 
         Assert.NotEqual(0, exitCode);
         Assert.DoesNotContain("never-connect", output.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("must-not-leak", output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(password, output.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -220,7 +227,14 @@ public sealed class MigrationRunnerContractTests
     private static IReadOnlyDictionary<string, string?> NameValue(string key, string value) =>
         new Dictionary<string, string?>(StringComparer.Ordinal) { [key] = value };
 
-    private static string Connection(string database) => $"Host=localhost;Port=5432;Database={database};Username=runner;Password=super-secret";
+    private static string Connection(string database, string? password = null) => new NpgsqlConnectionStringBuilder
+    {
+        Host = "localhost",
+        Port = 5432,
+        Database = database,
+        Username = "runner",
+        Password = password ?? Guid.NewGuid().ToString("N"),
+    }.ConnectionString;
 
     private static SchemaBaselineExpectation Expected(string database) => new(
         MigrationWorkload.Quotation, "source-20260829", "copy-plan-v1", "schema-sha256", "production-key", "localhost", 5432, database);
