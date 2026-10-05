@@ -831,42 +831,95 @@ public sealed class QuotationRepository(
         var normalizedBucket = bucket.Trim();
         var normalizedObjectName = objectName.Trim();
         var lockIdentity = $"{requestId}\n{normalizedBucket.Length}:{normalizedBucket}\n{normalizedObjectName.Length}:{normalizedObjectName}";
-
-        await using var transaction = await requests.Database.BeginTransactionAsync(cancellationToken);
-        await requests.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT pg_advisory_xact_lock(hashtextextended({lockIdentity}, 0))",
-            cancellationToken);
-
-        if (!await requests.Requests.AnyAsync(x => x.Id == requestId, cancellationToken))
+        var options = (DbContextOptions<QuotationRequestDbContext>)requests.GetService<IDbContextOptions>();
+        try
         {
-            return null;
+            return await requests.Database.CreateExecutionStrategy().ExecuteAsync(async token =>
+            {
+                var state = new RequestCreateAttemptState();
+                try
+                {
+                    await using var attempt = new QuotationRequestDbContext(options);
+                    return await CreateRequestFileAttemptAsync(attempt, requestId, normalizedBucket, normalizedObjectName, lockIdentity, state, token);
+                }
+                catch (Exception exception) when (state.CommitSubmitted || !state.RollbackConfirmed || state.CleanupReplacedFailure(exception))
+                {
+                    token.ThrowIfCancellationRequested();
+                    var cause = state.Failure is null || ReferenceEquals(state.Failure, exception)
+                        ? exception : new AggregateException("Attachment creation failed during cleanup.", state.Failure, exception);
+                    throw new RequestCreateAttemptUnconfirmedException(state, cause);
+                }
+            }, cancellationToken);
         }
-
-        var existing = await ProjectRequestFiles(requests.Files.AsNoTracking().Where(file =>
-                    file.RequestId == requestId
-                    && file.Bucket == normalizedBucket
-                    && file.ObjectName == normalizedObjectName)
-                .OrderBy(file => file.Id))
-            .FirstOrDefaultAsync(cancellationToken);
-        if (existing is not null)
+        catch (Exception exception) when (exception is RequestCreateAttemptUnconfirmedException || IsRequestCreateAvailabilityFailure(exception))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new QuotationRequestFileCreateUnavailableException();
+        }
+    }
+
+    private async Task<QuotationRequestFileResponse?> CreateRequestFileAttemptAsync(
+        QuotationRequestDbContext attempt, int requestId, string normalizedBucket, string normalizedObjectName,
+        string lockIdentity, RequestCreateAttemptState state, CancellationToken cancellationToken)
+    {
+        await using var transaction = await attempt.Database.BeginTransactionAsync(cancellationToken);
+        state.RollbackConfirmed = false;
+        try
+        {
+            await attempt.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({lockIdentity}, 0))",
+                cancellationToken);
+
+            if (!await attempt.Requests.AnyAsync(x => x.Id == requestId, cancellationToken))
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                state.RollbackConfirmed = true;
+                return null;
+            }
+
+            var existing = await ProjectRequestFiles(attempt.Files.AsNoTracking().Where(file =>
+                        file.RequestId == requestId
+                        && file.Bucket == normalizedBucket
+                        && file.ObjectName == normalizedObjectName)
+                    .OrderBy(file => file.Id))
+                .FirstOrDefaultAsync(cancellationToken);
+            if (existing is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                state.RollbackConfirmed = true;
+                return existing;
+            }
+
+            var now = Now();
+            var entity = new QuotationRequestFile
+            {
+                RequestId = requestId,
+                Bucket = normalizedBucket,
+                ObjectName = normalizedObjectName,
+                CreatedDate = now,
+                ModifiedDate = now,
+            };
+            attempt.Add(entity);
+            await attempt.SaveChangesAsync(cancellationToken);
+            state.CommitSubmitted = true;
             await transaction.CommitAsync(cancellationToken);
-            return existing;
+            return ToResponse(entity);
         }
-
-        var now = Now();
-        var entity = new QuotationRequestFile
+        catch (Exception original)
         {
-            RequestId = requestId,
-            Bucket = normalizedBucket,
-            ObjectName = normalizedObjectName,
-            CreatedDate = now,
-            ModifiedDate = now,
-        };
-        requests.Add(entity);
-        await requests.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return ToResponse(entity);
+            state.Failure = original;
+            if (!state.CommitSubmitted)
+            {
+                try { await transaction.RollbackAsync(cancellationToken); }
+                catch (Exception rollback)
+                {
+                    state.Failure = new AggregateException("Attachment rollback could not be confirmed.", original, rollback);
+                    throw state.Failure;
+                }
+                state.RollbackConfirmed = true;
+            }
+            throw;
+        }
     }
     public async Task<bool> DeleteRequestFileAsync(int id, CancellationToken cancellationToken) => await requests.Files.Where(x => x.Id == id).ExecuteDeleteAsync(cancellationToken) == 1;
     public Task<QuotationRequestFileResponse?> GetRequestFileAsync(int id, CancellationToken cancellationToken) => ProjectRequestFiles(requests.Files.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(cancellationToken);
