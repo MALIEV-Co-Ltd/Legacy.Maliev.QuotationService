@@ -24,7 +24,10 @@ public sealed class QuotationStartupProcessTests
         var marker = "synthetic-startup-" + Guid.NewGuid().ToString("N");
         var connection = new NpgsqlConnectionStringBuilder
         {
-            Host = "127.0.0.1", Port = 1, Database = "startup", Username = "startup",
+            Host = "127.0.0.1",
+            Port = 1,
+            Database = "startup",
+            Username = "startup",
             Password = Guid.NewGuid().ToString("N"),
         }.ConnectionString;
         var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
