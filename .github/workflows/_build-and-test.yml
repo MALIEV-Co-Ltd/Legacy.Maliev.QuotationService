@@ -119,3 +119,16 @@ jobs:
           fi
           python3 scripts/check_owned_coverage.py "${reports[0]}" --minimum 80
           python3 scripts/check_owned_coverage.py "${reports[0]}" --minimum 80 --raw
+
+      - name: Retain complete coverage evidence
+        if: always() && hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: quotation-complete-coverage-${{ github.sha }}
+          path: |
+            TestResults/CoverageGate/quotation-complete-coverage.trx
+            TestResults/CoverageGate/*/coverage.cobertura.xml
+          if-no-files-found: error
+          retention-days: 7
+          include-hidden-files: false
+          overwrite: false
