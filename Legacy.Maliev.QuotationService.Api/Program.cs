@@ -74,8 +74,10 @@ return await QuotationStartupBoundary.RunAsync(async () =>
         .ValidateOnStart();
     builder.Services.AddScoped<GoogleAnalyticsOutboxStore>();
     builder.Services.AddScoped<IGoogleAnalyticsOutboxStore>(services => services.GetRequiredService<GoogleAnalyticsOutboxStore>());
+    builder.Services.AddTransient<GoogleAnalyticsDependencyFailureHandler>();
     builder.Services.AddHttpClient<GoogleAnalyticsDeliveryProcessor>(client => client.Timeout = TimeSpan.FromSeconds(15))
-        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false });
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false })
+        .AddHttpMessageHandler<GoogleAnalyticsDependencyFailureHandler>();
     if (!string.Equals(builder.Configuration["MALIEV_OBSERVABILITY_STANDBY"], "true", StringComparison.Ordinal))
         builder.Services.AddHostedService<GoogleAnalyticsOutboxWorker>();
 
