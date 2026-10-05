@@ -34,6 +34,7 @@ internal sealed class GoogleAnalyticsDependencyFailureHandler(ILogger<GoogleAnal
 
     private void Record(HttpRequestMessage request, int status)
     {
+        if (request.Options.TryGetValue(CallerCancellation, out var caller) && caller.IsCancellationRequested) return;
         if (request.Options.TryGetValue(CallerOwnsFailure, out var owned) && owned) return;
         try
         {

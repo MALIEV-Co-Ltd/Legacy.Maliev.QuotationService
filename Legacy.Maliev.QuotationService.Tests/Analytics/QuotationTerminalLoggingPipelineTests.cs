@@ -92,13 +92,15 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Program_CallerCancellation_IsQuietForBothLoggingOwnersAndRetainsLease(bool callerLogging)
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task Program_CallerCancellation_IsQuietForBothLoggingOwnersAndRetainsLease(bool callerLogging, bool transportError)
     {
         using var cancellation = new CancellationTokenSource();
         var clock = new FakeTimeProvider(Start);
-        var transport = new Transport(-3, cancellation);
+        var transport = new Transport(transportError ? -5 : -3, cancellation);
         var audit = Audit();
         await using var app = App(transport, audit, clock, callerLogging: callerLogging);
         using var bootstrap = app.CreateClient();
@@ -305,6 +307,11 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
             Assert.Equal("www.google-analytics.com", request.RequestUri?.Host);
             if (status == -1) throw new HttpRequestException(Protected);
             if (status == -2) throw new TaskCanceledException(Protected);
+            if (status == -5)
+            {
+                caller!.Cancel();
+                throw new HttpRequestException(Protected);
+            }
             if (status == -3) caller!.Cancel();
             if (status is -3 or -4) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return new((HttpStatusCode)status) { Content = new StringContent(Protected) };
