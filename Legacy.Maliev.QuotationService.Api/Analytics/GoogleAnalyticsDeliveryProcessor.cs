@@ -10,7 +10,6 @@ public sealed class GoogleAnalyticsDeliveryProcessor(
     IOptions<GoogleAnalyticsMeasurementProtocolOptions> configuration,
     TimeProvider clock, ILogger<GoogleAnalyticsDeliveryProcessor> logger)
 {
-    private static readonly HttpRequestOptionsKey<bool> CallerFailureLogging = new("Maliev.DependencyFailureOwnedByCaller");
     private readonly GoogleAnalyticsMeasurementProtocolOptions options = configuration.Value;
 
     public async Task<int> DeliverBatchAsync(CancellationToken cancellationToken)
@@ -31,7 +30,8 @@ public sealed class GoogleAnalyticsDeliveryProcessor(
             {
                 Content = new StringContent(GoogleAnalyticsPayloadFactory.Build(row), Encoding.UTF8, "application/json"),
             };
-            request.Options.Set(CallerFailureLogging, logger.IsEnabled(LogLevel.Error));
+            request.Options.Set(GoogleAnalyticsDependencyFailureHandler.CallerOwnsFailure, logger.IsEnabled(LogLevel.Error));
+            request.Options.Set(GoogleAnalyticsDependencyFailureHandler.CallerCancellation, cancellationToken);
             using var response = await httpClient.SendAsync(request, cancellationToken);
             if (response.IsSuccessStatusCode)
             {
