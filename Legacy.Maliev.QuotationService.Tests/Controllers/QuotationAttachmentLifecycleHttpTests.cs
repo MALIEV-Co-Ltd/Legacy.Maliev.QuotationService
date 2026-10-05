@@ -3,7 +3,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Legacy.Maliev.QuotationService.Application.Models;
 using Legacy.Maliev.QuotationService.Domain;
+using Legacy.Maliev.QuotationService.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Legacy.Maliev.QuotationService.Tests.Controllers;
 
@@ -15,13 +17,18 @@ public sealed class QuotationAttachmentLifecycleHttpTests(DraftAggregateFixture 
     [InlineData(true)]
     public async Task Metadata_routes_persist_follow_absolute_locations_update_and_delete(bool requestFile)
     {
-        await using var app = fixture.App();
+        var diagnostic = new RequestCreateStrategyDiagnostic();
+        await using var app = fixture.App(resourceScoped: true, diagnostic: diagnostic);
         using var client = fixture.Client(app);
+        using (var scope = app.Services.CreateScope())
+            Assert.True(scope.ServiceProvider.GetRequiredService<QuotationRequestDbContext>().Database.CreateExecutionStrategy().RetriesOnFailure);
         var parent = await Parent(client, requestFile);
         var collection = Collection(requestFile, parent);
         using (var empty = await client.GetAsync(collection)) Assert.Equal(HttpStatusCode.NotFound, empty.StatusCode);
         using var created = await Create(client, collection, "fixture-bucket", "files/original.stl");
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.True(created.StatusCode == HttpStatusCode.Created,
+            $"Expected 201; actual={(int)created.StatusCode}; strategyRejected={diagnostic.Rejected}.");
+        Assert.False(diagnostic.Rejected);
         var location = Assert.IsType<Uri>(created.Headers.Location);
         Assert.True(location.IsAbsoluteUri);
         using var body = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
@@ -55,7 +62,7 @@ public sealed class QuotationAttachmentLifecycleHttpTests(DraftAggregateFixture 
     [Fact]
     public async Task Request_file_fingerprint_replay_conflict_and_coordinate_deduplication_use_real_stores()
     {
-        await using var app = fixture.App();
+        await using var app = fixture.App(resourceScoped: true);
         using var client = fixture.Client(app);
         var parent = await Parent(client, true);
         var other = await Parent(client, true);
@@ -96,14 +103,14 @@ public sealed class QuotationAttachmentLifecycleHttpTests(DraftAggregateFixture 
     [InlineData(true, false)]
     public async Task Every_metadata_route_denies_unauthenticated_or_live_rejected_calls_without_mutation(bool requestFile, bool authenticated)
     {
-        await using var allowed = fixture.App();
+        await using var allowed = fixture.App(resourceScoped: true);
         using var creator = fixture.Client(allowed);
         var parent = await Parent(creator, requestFile);
         using var created = await Create(creator, Collection(requestFile, parent), "fixture-bucket", "files/protected.stl");
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         using var body = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var id = body.RootElement.GetProperty("Id").GetInt32();
-        await using var denied = fixture.App(allowed: false);
+        await using var denied = fixture.App(allowed: false, resourceScoped: true);
         using var client = fixture.Client(denied, authenticated);
         foreach (var operation in new[] { "create", "detail", "list", "update", "delete" })
         {
@@ -137,7 +144,7 @@ public sealed class QuotationAttachmentLifecycleHttpTests(DraftAggregateFixture 
     [InlineData(true)]
     public async Task Invalid_coordinates_and_missing_parent_preserve_bad_request_and_not_found(bool requestFile)
     {
-        await using var app = fixture.App();
+        await using var app = fixture.App(resourceScoped: true);
         using var client = fixture.Client(app);
         var parent = await Parent(client, requestFile);
         using (var invalid = await Create(client, Collection(requestFile, parent), "", "file.stl")) Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);

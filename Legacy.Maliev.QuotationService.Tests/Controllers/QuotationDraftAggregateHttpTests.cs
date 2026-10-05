@@ -296,7 +296,7 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
         await using var requests = new QuotationRequestDbContext(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(Requests).Options);
         await requests.Database.MigrateAsync();
     }
-    public WebApplicationFactory<Program> App(bool allowed = true) => new Factory(this, allowed);
+    public WebApplicationFactory<Program> App(bool allowed = true, bool resourceScoped = false, RequestCreateStrategyDiagnostic? diagnostic = null) => new Factory(this, allowed, resourceScoped, diagnostic);
     public HttpClient Client(WebApplicationFactory<Program> app, bool authenticated = true)
     {
         var client = app.CreateClient();
@@ -312,7 +312,7 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
         if (containers is not null) await containers.DisposeAsync();
         key.Dispose();
     }
-    private sealed class Factory(DraftAggregateFixture fixture, bool allowed) : WebApplicationFactory<Program>
+    private sealed class Factory(DraftAggregateFixture fixture, bool allowed, bool resourceScoped, RequestCreateStrategyDiagnostic? diagnostic) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -328,9 +328,14 @@ public sealed class DraftAggregateFixture : IAsyncLifetime
                 ["Jwt:Audience"] = "aggregate-services",
                 ["IAM:LivePermissionChecks:Credential"] = "synthetic-aggregate-live-check",
                 ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "",
-                ["Observability:RuntimeMetricsEnabled"] = "false"
+                ["Observability:RuntimeMetricsEnabled"] = "false",
+                ["Features:ResourceScopedAuthEnabled"] = resourceScoped.ToString()
             }) builder.UseSetting(setting.Key, setting.Value);
-            builder.ConfigureLogging(logging => logging.ClearProviders());
+            builder.ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+                if (diagnostic is not null) logging.AddProvider(diagnostic);
+            });
             builder.ConfigureTestServices(services =>
             {
                 services.AddScoped<IIamServiceClient, IamServiceClient>();
