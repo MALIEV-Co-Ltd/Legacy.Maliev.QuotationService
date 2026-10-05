@@ -201,6 +201,14 @@ public sealed class WorkflowContractTests
     public void BuildAndTest_RejectsRecursiveTrxAttachmentCopySelection() =>
         AssertMutationRejected("find TestResults/CoverageGate -mindepth 2 -maxdepth 2", "find TestResults/CoverageGate");
 
+    [Theory]
+    [InlineData("retention-days: 7", "retention-days: 90")]
+    [InlineData("include-hidden-files: false", "include-hidden-files: true")]
+    [InlineData("TestResults/CoverageGate/*/coverage.cobertura.xml", "TestResults/**")]
+    [InlineData("always() && hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != ''", "success()")]
+    public void BuildAndTest_RejectsCoverageEvidenceContractMutation(string original, string replacement) =>
+        AssertMutationRejected(original, replacement);
+
     [Fact]
     public void CoverageSettings_RetainGeneratedLinesAndAutomaticProperties()
     {
@@ -321,9 +329,9 @@ internal static partial class WorkflowContractValidator
         RejectDuplicatedValidationActionsAndCommands(jobs);
 
         var steps = RequireSequence(validateJob, "steps");
-        if (steps.Children.Count != 8)
+        if (steps.Children.Count != 9)
         {
-            throw new InvalidOperationException("Validate job must contain exactly eight caller-owned steps.");
+            throw new InvalidOperationException("Validate job must contain exactly nine caller-owned steps.");
         }
 
         ValidateStep(
@@ -374,6 +382,27 @@ internal static partial class WorkflowContractValidator
         ValidateScriptStep(steps.Children[5], "Prove coverage gate failure and success behavior", CoverageProof);
         ValidateScriptStep(steps.Children[6], "Collect QuotationService coverage", CoverageCollection);
         ValidateScriptStep(steps.Children[7], "Enforce 80 percent owned handwritten line coverage", CoverageEnforcement);
+        ValidateCoverageEvidenceStep(steps.Children[8]);
+    }
+
+    private static void ValidateCoverageEvidenceStep(YamlNode node)
+    {
+        var step = RequireMapping(node, "coverage evidence step");
+        if (!step.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal)
+            .SetEquals(["name", "if", "uses", "with"]))
+            throw new InvalidOperationException("Coverage evidence step must have only its reviewed keys.");
+        RequireScalarValue(step, "name", "Retain complete coverage evidence");
+        RequireScalarValue(step, "if", "always() && hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != ''");
+        RequireScalarValue(step, "uses", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
+        var inputs = RequireMapping(step, "with");
+        if (inputs.Children.Count != 6)
+            throw new InvalidOperationException("Coverage evidence action must have exactly six reviewed inputs.");
+        RequireScalarValue(inputs, "name", "quotation-complete-coverage-${{ github.sha }}");
+        RequireScalarValue(inputs, "path", "TestResults/CoverageGate/quotation-complete-coverage.trx\nTestResults/CoverageGate/*/coverage.cobertura.xml\n");
+        RequireScalarValue(inputs, "if-no-files-found", "error");
+        RequireScalarValue(inputs, "retention-days", "7");
+        RequireScalarValue(inputs, "include-hidden-files", "false");
+        RequireScalarValue(inputs, "overwrite", "false");
     }
 
     private static void ValidateJoinedAuthorityJob(YamlMappingNode job)
