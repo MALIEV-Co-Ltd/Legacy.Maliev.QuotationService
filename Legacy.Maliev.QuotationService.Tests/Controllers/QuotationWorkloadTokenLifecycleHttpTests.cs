@@ -7,6 +7,7 @@ using Legacy.Maliev.QuotationService.Api.Authorization;
 using Legacy.Maliev.QuotationService.Application.Interfaces;
 using Legacy.Maliev.QuotationService.Application.Models;
 using Maliev.Aspire.ServiceDefaults.LegacyAuth;
+using Maliev.Aspire.ServiceDefaults.IAM;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -166,6 +167,44 @@ public sealed class QuotationWorkloadTokenLifecycleHttpTests(QuotationNormalIamF
         Assert.Equal("fresh-2", Assert.Single(downstream.Bearers));
     }
 
+    [Fact]
+    public async Task Registered_IAM_cache_is_shared_within_host_but_never_across_independent_normal_hosts()
+    {
+        var allowed = new Downstream();
+        var denied = new Downstream { PermissionAllowed = false };
+        await using var left = App(new(), allowed, new FakeTimeProvider());
+        await using var right = App(new(), denied, new FakeTimeProvider());
+        using var leftBootstrap = left.CreateClient();
+        using var rightBootstrap = right.CreateClient();
+        using (var first = left.Services.CreateScope())
+            Assert.True(await first.ServiceProvider.GetRequiredService<IIamServiceClient>()
+                .CheckPermissionAsync("source-cache-115", "legacy.quotations.read", "/quotations/115"));
+        using (var second = left.Services.CreateScope())
+            Assert.True(await second.ServiceProvider.GetRequiredService<IIamServiceClient>()
+                .CheckPermissionAsync("source-cache-115", "legacy.quotations.read", "/quotations/115"));
+        using (var isolated = right.Services.CreateScope())
+            Assert.False(await isolated.ServiceProvider.GetRequiredService<IIamServiceClient>()
+                .CheckPermissionAsync("source-cache-115", "legacy.quotations.read", "/quotations/115"));
+        Assert.False(Assert.Single(allowed.PermissionBypass));
+        Assert.False(Assert.Single(denied.PermissionBypass));
+    }
+
+    [Fact]
+    public async Task Registered_IAM_live_check_bypasses_cached_allow_and_keeps_workload_and_live_credentials()
+    {
+        var downstream = new Downstream();
+        await using var app = App(new(), downstream, new FakeTimeProvider());
+        using var bootstrap = app.CreateClient();
+        using var scope = app.Services.CreateScope();
+        var iam = scope.ServiceProvider.GetRequiredService<IIamServiceClient>();
+        Assert.True(await iam.CheckPermissionAsync("source-live-115", "legacy.quotations.update", "/quotations/115"));
+        downstream.PermissionAllowed = false;
+        Assert.False(await iam.CheckPermissionLiveAsync("source-live-115", "legacy.quotations.update", "/quotations/115"));
+        Assert.Equal(new[] { false, true }, downstream.PermissionBypass.ToArray());
+        Assert.All(downstream.Bearers, bearer => Assert.Equal("fresh-1", bearer));
+        Assert.True(downstream.LiveCredentialPresent);
+    }
+
     private static Task<HttpResponseMessage> CheckAuthority(HttpClient client) => client.PostAsJsonAsync(
         "/auth/v1/introspection/quotation-qualification",
         new { employeeAccessToken = "synthetic-employee", permission = "legacy.quotation-requests.read", purpose = QualificationAuthorityAttribute.Purpose, requestId = 115 });
@@ -227,17 +266,29 @@ public sealed class QuotationWorkloadTokenLifecycleHttpTests(QuotationNormalIamF
     private sealed class Downstream(bool rejectFirst = false) : HttpMessageHandler
     {
         public ConcurrentQueue<string?> Bearers { get; } = new();
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        public ConcurrentQueue<bool> PermissionBypass { get; } = new();
+        public bool PermissionAllowed { get; set; } = true;
+        public bool LiveCredentialPresent { get; private set; }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
             Bearers.Enqueue(request.Headers.Authorization?.Parameter);
-            if (rejectFirst && Bearers.Count == 1) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+            if (rejectFirst && Bearers.Count == 1) return new(HttpStatusCode.Unauthorized);
+            if (request.RequestUri!.AbsolutePath == "/iam/v1/auth/check-permission")
+            {
+                using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+                var bypass = body.RootElement.GetProperty("bypassCache").GetBoolean();
+                PermissionBypass.Enqueue(bypass);
+                if (bypass) LiveCredentialPresent = request.Headers.TryGetValues("X-Maliev-IAM-Live-Check-Key", out var credentials)
+                    && !string.IsNullOrWhiteSpace(Assert.Single(credentials));
+                return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { allowed = PermissionAllowed }) };
+            }
             if (request.RequestUri!.AbsolutePath == "/auth/v1/introspection/quotation-qualification")
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                return new(HttpStatusCode.OK)
                 {
                     Content = JsonContent.Create(new { allowed = true, subject = "employee-42", permission = "legacy.quotation-requests.read", purpose = QualificationAuthorityAttribute.Purpose, requestId = 115 }),
-                });
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created));
+                };
+            return new(HttpStatusCode.Created);
         }
     }
 
