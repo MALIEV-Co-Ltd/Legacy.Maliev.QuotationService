@@ -1,5 +1,6 @@
 using Legacy.Maliev.QuotationService.Application.Interfaces;
 using Legacy.Maliev.QuotationService.Application.Models;
+using Maliev.Aspire.ServiceDefaults.Diagnostics;
 using System.Net;
 
 namespace Legacy.Maliev.QuotationService.Api.Clients;
@@ -21,7 +22,7 @@ public sealed class OrderDecisionClient(HttpClient httpClient) : IOrderDecisionC
 
         try
         {
-            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            using var response = await httpClient.SendWithPrivateFailureObservationAsync(request, cancellationToken);
             return response.StatusCode switch
             {
                 HttpStatusCode.Created => OrderDecisionResult.Completed,
