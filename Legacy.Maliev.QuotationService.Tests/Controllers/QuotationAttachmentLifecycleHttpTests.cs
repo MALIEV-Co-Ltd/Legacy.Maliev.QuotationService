@@ -52,12 +52,19 @@ public sealed class QuotationAttachmentLifecycleHttpTests(DraftAggregateFixture 
         object update = requestFile
             ? new UpsertQuotationRequestFileRequest(parent, "next-bucket", "files/updated.stl")
             : new UpsertQuotationFileRequest(parent, "next-bucket", "files/updated.stl");
+        var before = await AssertRow(requestFile, id, parent, "fixture-bucket", "files/original.stl");
+        using (var invalid = await client.PutAsync(location, new StringContent("null", System.Text.Encoding.UTF8, "application/json")))
+            Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
         using (var updated = await client.PutAsJsonAsync(location, update)) Assert.Equal(HttpStatusCode.NoContent, updated.StatusCode);
-        await AssertRow(requestFile, id, parent, "next-bucket", "files/updated.stl");
+        var after = await AssertRow(requestFile, id, parent, "next-bucket", "files/updated.stl");
+        Assert.NotNull(before.Created);
+        Assert.Equal(before.Created, after.Created);
+        Assert.True(after.Modified >= before.Modified);
         using (var deleted = await client.DeleteAsync(location)) Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
         await AssertMissing(requestFile, id);
         using (var absent = await client.GetAsync(location)) Assert.Equal(HttpStatusCode.NotFound, absent.StatusCode);
         using (var absent = await client.DeleteAsync(location)) Assert.Equal(HttpStatusCode.NotFound, absent.StatusCode);
+        using (var absent = await client.PutAsJsonAsync(location, update)) Assert.Equal(HttpStatusCode.NotFound, absent.StatusCode);
         using (var absent = await client.GetAsync(collection)) Assert.Equal(HttpStatusCode.NotFound, absent.StatusCode);
         if (!requestFile) Assert.Contains($"/quotations/{parent}", fixture.LiveResources);
     }
@@ -113,6 +120,7 @@ public sealed class QuotationAttachmentLifecycleHttpTests(DraftAggregateFixture 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         using var body = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var id = body.RootElement.GetProperty("Id").GetInt32();
+        var version = await AssertRow(requestFile, id, parent, "fixture-bucket", "files/protected.stl");
         await using var denied = fixture.App(allowed: false, resourceScoped: true);
         using var client = fixture.Client(denied, authenticated);
         foreach (var operation in new[] { "create", "detail", "list", "update", "delete" })
@@ -132,7 +140,7 @@ public sealed class QuotationAttachmentLifecycleHttpTests(DraftAggregateFixture 
             if (operation == "update") message.Content = JsonContent.Create(new { Bucket = "denied-bucket", ObjectName = "denied.stl", RequestId = parent, QuotationId = parent });
             using var response = await client.SendAsync(message);
             Assert.Equal(authenticated ? HttpStatusCode.Forbidden : HttpStatusCode.Unauthorized, response.StatusCode);
-            await AssertRow(requestFile, id, parent, "fixture-bucket", "files/protected.stl");
+            Assert.Equal(version, await AssertRow(requestFile, id, parent, "fixture-bucket", "files/protected.stl"));
         }
         if (requestFile)
         {
@@ -154,9 +162,58 @@ public sealed class QuotationAttachmentLifecycleHttpTests(DraftAggregateFixture 
         await using var app = fixture.App(resourceScoped: true);
         using var client = fixture.Client(app);
         var parent = await Parent(client, requestFile);
-        using (var invalid = await Create(client, Collection(requestFile, parent), "", "file.stl")) Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        foreach (var coordinates in new[] { (Bucket: "", Object: "file.stl"), (Bucket: "fixture-bucket", Object: "") })
+        {
+            using var invalid = await Create(client, Collection(requestFile, parent), coordinates.Bucket, coordinates.Object);
+            Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        }
         using (var missing = await Create(client, Collection(requestFile, int.MaxValue), "fixture-bucket", "file.stl")) Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
         using (var empty = await client.GetAsync(Collection(requestFile, parent))) Assert.Equal(HttpStatusCode.NotFound, empty.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Multiple_files_and_reparenting_preserve_original_collection_and_timestamp_semantics(bool requestFile)
+    {
+        await using var app = fixture.App(resourceScoped: true);
+        using var client = fixture.Client(app);
+        var parent = await Parent(client, requestFile);
+        var destination = await Parent(client, requestFile);
+        var ids = new List<int>();
+        for (var index = 0; index < 4; index++)
+        {
+            using var created = await Create(client, Collection(requestFile, parent), "fixture-bucket", $"files/{index}.stl");
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            using var json = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+            ids.Add(json.RootElement.GetProperty("Id").GetInt32());
+        }
+        using (var repeated = await Create(client, Collection(requestFile, parent), "fixture-bucket", "files/0.stl"))
+        {
+            Assert.Equal(HttpStatusCode.Created, repeated.StatusCode);
+            using var json = JsonDocument.Parse(await repeated.Content.ReadAsStringAsync());
+            var repeatedId = json.RootElement.GetProperty("Id").GetInt32();
+            if (requestFile) Assert.Equal(ids[0], repeatedId);
+            else { Assert.DoesNotContain(repeatedId, ids); ids.Add(repeatedId); }
+        }
+        var before = await AssertRow(requestFile, ids[0], parent, "fixture-bucket", "files/0.stl");
+        object update = requestFile
+            ? new UpsertQuotationRequestFileRequest(destination, "next-bucket", "files/moved.stl")
+            : new UpsertQuotationFileRequest(destination, "next-bucket", "files/moved.stl");
+        using (var moved = await client.PutAsJsonAsync($"{Detail(requestFile)}/{ids[0]}", update)) Assert.Equal(HttpStatusCode.NoContent, moved.StatusCode);
+        var after = await AssertRow(requestFile, ids[0], destination, "next-bucket", "files/moved.stl");
+        Assert.Equal(before.Created, after.Created);
+        Assert.True(after.Modified >= before.Modified);
+        using (var original = await client.GetAsync(Collection(requestFile, parent)))
+        {
+            Assert.Equal(HttpStatusCode.OK, original.StatusCode);
+            using var json = JsonDocument.Parse(await original.Content.ReadAsStringAsync());
+            Assert.Equal(ids.Skip(1), json.RootElement.EnumerateArray().Select(value => value.GetProperty("Id").GetInt32()));
+        }
+        using var other = await client.GetAsync(Collection(requestFile, destination));
+        Assert.Equal(HttpStatusCode.OK, other.StatusCode);
+        using var destinationJson = JsonDocument.Parse(await other.Content.ReadAsStringAsync());
+        Assert.Equal(ids[0], Assert.Single(destinationJson.RootElement.EnumerateArray()).GetProperty("Id").GetInt32());
     }
 
     [Theory]
@@ -241,19 +298,21 @@ public sealed class QuotationAttachmentLifecycleHttpTests(DraftAggregateFixture 
         if (key is not null) message.Headers.Add("Idempotency-Key", key);
         return await client.SendAsync(message);
     }
-    private async Task AssertRow(bool requestFile, int id, int parent, string bucket, string objectName)
+    private async Task<(DateTime? Created, DateTime? Modified)> AssertRow(bool requestFile, int id, int parent, string bucket, string objectName)
     {
         if (requestFile)
         {
             await using var db = fixture.RequestContext();
             var row = await db.Files.AsNoTracking().SingleAsync(value => value.Id == id);
             Assert.Equal(parent, row.RequestId); Assert.Equal(bucket, row.Bucket); Assert.Equal(objectName, row.ObjectName);
+            return (row.CreatedDate, row.ModifiedDate);
         }
         else
         {
             await using var db = fixture.Context();
             var row = await db.Files.AsNoTracking().SingleAsync(value => value.Id == id);
             Assert.Equal(parent, row.QuotationId); Assert.Equal(bucket, row.Bucket); Assert.Equal(objectName, row.ObjectName);
+            return (row.CreatedDate, row.ModifiedDate);
         }
     }
     private async Task AssertMissing(bool requestFile, int id)
