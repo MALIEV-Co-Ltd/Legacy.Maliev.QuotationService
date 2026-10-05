@@ -13,6 +13,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Logging.Console;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 
 namespace Legacy.Maliev.QuotationService.Tests.Controllers;
@@ -21,6 +23,28 @@ namespace Legacy.Maliev.QuotationService.Tests.Controllers;
 public sealed class QuotationWorkloadTokenLifecycleHttpTests(QuotationNormalIamFixture fixture)
     : IClassFixture<QuotationNormalIamFixture>
 {
+    [Fact]
+    public async Task New_Defaults_input_keeps_private_observation_and_localization_unselected_in_normal_host()
+    {
+        await using var app = App(new(), new(), new FakeTimeProvider());
+        using var client = app.CreateClient();
+        var state = typeof(LegacyServiceAccessTokenProvider).Assembly.GetType(
+            "Maliev.Aspire.ServiceDefaults.Diagnostics.PrivateRequestObservationState", throwOnError: true)!;
+        Assert.Null(app.Services.GetService(state));
+        Assert.NotEqual(Maliev.Aspire.ServiceDefaults.Logging.PrivateFailureConsoleFormatter.FormatterName,
+            app.Services.GetRequiredService<IOptions<ConsoleLoggerOptions>>().Value.FormatterName);
+        client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("th");
+        using var health = await client.GetAsync("/quotation/liveness");
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+        Assert.False(health.Headers.Contains("X-Maliev-Health-Instance"));
+        Assert.False(health.Headers.Contains("Set-Cookie"));
+        using var diagnostic = new HttpRequestMessage(HttpMethod.Get, "/internal/diagnostics/observability");
+        diagnostic.Headers.Add("X-Maliev-Diagnostic-Id", Guid.NewGuid().ToString("N"));
+        using var response = await client.SendAsync(diagnostic);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.False(response.Headers.Contains("X-Maliev-Diagnostic-Id"));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
