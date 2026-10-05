@@ -62,7 +62,7 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
         Assert.Null(row.LeaseUntilUtc);
         Assert.Equal(records == 1, row.FailedUtc is not null);
         Assert.Equal(status == 204, row.SentUtc is not null);
-        Assert.Empty(audit.Entries.Where(entry => entry.Event.Id == 5101));
+        Assert.DoesNotContain(audit.Entries, entry => entry.Event.Id == 5101);
         var terminal = audit.Entries.Where(entry => entry.Event.Id == 5201).ToArray();
         Assert.Equal(records, terminal.Length);
         if (records == 1) AssertTerminal(Assert.Single(terminal), status, attempt);
@@ -87,7 +87,7 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
         Assert.Equal(1, transport.Calls);
         Assert.All(transport.Ownership, value => Assert.False(value));
         Assert.NotNull((await Read()).FailedUtc);
-        Assert.Empty(audit.Entries.Where(entry => entry.Event.Id == 5201));
+        Assert.DoesNotContain(audit.Entries, entry => entry.Event.Id == 5201);
         AssertDependency(Assert.Single(audit.Entries), expectedStatus);
     }
 
@@ -158,7 +158,7 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
             scope.ServiceProvider.GetRequiredService<GoogleAnalyticsDeliveryProcessor>().DeliverBatchAsync(CancellationToken.None));
         Assert.Equal(1, transport.Calls);
         Assert.Equal(1, fault.FailedUpdates);
-        Assert.Empty(audit.Entries.Where(entry => entry.Event.Id == 5201));
+        Assert.DoesNotContain(audit.Entries, entry => entry.Event.Id == 5201);
         Assert.Equal(callerLogging ? 0 : 1, audit.Entries.Count);
         var row = await Read();
         Assert.Equal(1, row.AttemptCount);
