@@ -92,7 +92,7 @@ public sealed class QuotationOrderPrivateObservationTests(QuotationNormalIamFixt
         var logs = new Audit(() => transport.Calls);
         await using var app = App(transport, logs, nativeDeadline: true);
         using var bootstrap = app.CreateClient();
-        Assert.NotNull(await app.Services.GetRequiredService<LegacyServiceAccessTokenProvider>()
+        Assert.NotNull(await app.Services.GetRequiredService<ILegacyServiceAccessTokenProvider>()
             .GetAccessTokenAsync(CancellationToken.None));
         var result = await app.Services.GetRequiredService<IOrderDecisionClient>()
             .TransitionAsync(57, true, Protected, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
