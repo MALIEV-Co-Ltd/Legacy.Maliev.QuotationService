@@ -69,6 +69,7 @@ return await QuotationStartupBoundary.RunAsync(async () =>
     })
     .AddServiceDiscovery()
     .AddLegacyServiceAuthentication()
+    .AddPrivateFailureObservation("Order")
     .AddStandardResilienceHandler();
     builder.Services.AddHostedService<ExpiredQuotationWorker>();
     builder.Services.AddOptions<GoogleAnalyticsMeasurementProtocolOptions>()
