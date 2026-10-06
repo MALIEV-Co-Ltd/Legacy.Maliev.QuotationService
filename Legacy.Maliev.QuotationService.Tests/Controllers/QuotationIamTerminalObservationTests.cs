@@ -138,9 +138,18 @@ public sealed class QuotationIamTerminalObservationTests(QuotationNormalIamFixtu
         {
             using var response = await client.PutAsJsonAsync($"/quotations/{row.Id}", new
             {
-                row.CustomerId, row.EmployeeId, row.InvoiceId, row.CurrencyId, row.Period,
-                row.ExpirationDate, row.Subtotal, row.Vat, row.Total, row.WithholdingTax,
-                Comment = "synthetic IAM denied update", row.Accepted
+                row.CustomerId,
+                row.EmployeeId,
+                row.InvoiceId,
+                row.CurrencyId,
+                row.Period,
+                row.ExpirationDate,
+                row.Subtotal,
+                row.Vat,
+                row.Total,
+                row.WithholdingTax,
+                Comment = "synthetic IAM denied update",
+                row.Accepted
             }, token);
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
             return response.IsSuccessStatusCode;
