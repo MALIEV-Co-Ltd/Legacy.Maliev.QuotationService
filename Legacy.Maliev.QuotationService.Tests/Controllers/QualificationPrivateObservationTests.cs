@@ -282,7 +282,7 @@ public sealed class QualificationPrivateObservationTests(QuotationNormalIamFixtu
             HttpContent content = Mode.StartsWith("body-", StringComparison.Ordinal) ? new BodyContent(Mode, Entered)
                 : Mode == "denial" ? new StringContent(JsonSerializer.Serialize(new { allowed = false, subject = (string?)null, permission = QuotationPermissions.RequestsRead, purpose = QualificationAuthorityAttribute.Purpose, requestId = 57 }))
                 : new StringContent("{");
-            return new((HttpStatusCode)status) { Content = content };
+            return new(Mode == "denial" ? HttpStatusCode.OK : (HttpStatusCode)status) { Content = content };
         }
     }
 
