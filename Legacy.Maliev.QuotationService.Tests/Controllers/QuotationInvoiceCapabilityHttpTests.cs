@@ -315,7 +315,7 @@ public sealed class QuotationInvoiceCapabilityHttpTests(QuotationNormalIamFixtur
         using var resume = Decision(row.Id, row.ModifiedDate.Value, "bound", operation);
         using var resumed = await client.SendAsync(resume);
         Assert.Equal(HttpStatusCode.OK, resumed.StatusCode);
-        Assert.Single(orders.Calls.Where(x => x.Order == 81));
+        Assert.Single(orders.Calls, x => x.Order == 81);
         var retries = orders.Calls.Where(x => x.Order == 82).ToArray();
         Assert.Equal(2, retries.Length);
         Assert.Equal(retries[0].Key, retries[1].Key);
@@ -364,7 +364,7 @@ public sealed class QuotationInvoiceCapabilityHttpTests(QuotationNormalIamFixtur
         using var resume = Decision(row.Id, row.ModifiedDate.Value, "bound", operation);
         using var resumed = await client.SendAsync(resume);
         Assert.Equal(HttpStatusCode.OK, resumed.StatusCode);
-        Assert.Single(orders.Calls.Where(x => x.Order == 91));
+        Assert.Single(orders.Calls, x => x.Order == 91);
     }
 
     [Fact]
@@ -434,7 +434,7 @@ public sealed class QuotationInvoiceCapabilityHttpTests(QuotationNormalIamFixtur
         var secondClaim = Guid.NewGuid();
         var acquired = await Task.WhenAll(first.ClaimAsync(authority.OperationId, firstClaim, CancellationToken.None),
             second.ClaimAsync(authority.OperationId, secondClaim, CancellationToken.None));
-        Assert.Single(acquired.Where(x => x));
+        Assert.Single(acquired, x => x);
         var old = acquired[0] ? firstClaim : secondClaim;
         clock.Advance(TimeSpan.FromMinutes(3));
         var replacement = Guid.NewGuid();
@@ -488,7 +488,7 @@ public sealed class QuotationInvoiceCapabilityHttpTests(QuotationNormalIamFixtur
         var other = sameOperation ? authority : authority with { OperationId = Guid.NewGuid() };
         var result = await Task.WhenAll(first.ApplyAsync(authority, CancellationToken.None), second.ApplyAsync(other, CancellationToken.None));
         Assert.Equal(sameOperation ? 2 : 1, result.Count(x => x.Status == QuotationDecisionPersistenceStatus.Completed));
-        if (!sameOperation) Assert.Single(result.Where(x => x.Status == QuotationDecisionPersistenceStatus.Conflict));
+        if (!sameOperation) Assert.Single(result, x => x.Status == QuotationDecisionPersistenceStatus.Conflict);
         await using var db = fixture.Context();
         Assert.Single(await db.InvoiceCompletionOperations.Where(x => x.QuotationId == row.Id).ToArrayAsync());
         Assert.Single(await db.AcceptedOutcomes.Where(x => x.QuotationId == row.Id).ToArrayAsync());

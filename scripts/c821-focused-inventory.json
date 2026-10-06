@@ -78,7 +78,7 @@
   },
   "recipient": {
     "source": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceCapabilityHttpTests.cs",
-    "normalizedSourceSha256": "1b6bb2d91e4380cc3b108e0bb51905f1b98afe2c693c4b3cac129ad400e4891f",
+    "normalizedSourceSha256": "9ad2185086c2bdb7b47f284cf225485b6141347c35bf2af8640d10a7f6182d04",
     "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationInvoiceCapabilityHttpTests",
     "methods": {
       "BoundEmployeeCompletion_ReachesExistingRepositoryWithoutInventingHistoricalOutcome": {
