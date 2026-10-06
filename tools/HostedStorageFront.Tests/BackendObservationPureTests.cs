@@ -166,9 +166,13 @@ public sealed class BackendObservationPureTests
         var lease = Lease();
         return new JsonObject
         {
-            ["com.maliev.c821.run"] = lease.GithubRunId, ["com.maliev.c821.attempt"] = lease.GithubAttempt,
-            ["com.maliev.c821.file-source"] = lease.FileSourceSha, ["com.maliev.c821.lease"] = lease.LeaseId,
-            ["com.maliev.c821.expires"] = lease.ExpiresText, ["com.maliev.c821.persistent"] = "false", ["com.maliev.c821.role"] = "storage",
+            ["com.maliev.c821.run"] = lease.GithubRunId,
+            ["com.maliev.c821.attempt"] = lease.GithubAttempt,
+            ["com.maliev.c821.file-source"] = lease.FileSourceSha,
+            ["com.maliev.c821.lease"] = lease.LeaseId,
+            ["com.maliev.c821.expires"] = lease.ExpiresText,
+            ["com.maliev.c821.persistent"] = "false",
+            ["com.maliev.c821.role"] = "storage",
         };
     }
 
@@ -177,15 +181,30 @@ public sealed class BackendObservationPureTests
         var lease = Lease();
         return new JsonObject
         {
-            ["Id"] = lease.ContainerId, ["Created"] = lease.Created, ["Image"] = lease.ImageId, ["RestartCount"] = 0,
+            ["Id"] = lease.ContainerId,
+            ["Created"] = lease.Created,
+            ["Image"] = lease.ImageId,
+            ["RestartCount"] = 0,
             ["State"] = new JsonObject { ["Running"] = true, ["Paused"] = false, ["Restarting"] = false, ["StartedAt"] = lease.Started, ["Pid"] = 123 },
             ["Config"] = new JsonObject { ["Image"] = lease.ImageReference, ["Labels"] = Labels(), ["Entrypoint"] = JsonSerializer.SerializeToNode(lease.Entrypoint), ["Cmd"] = JsonSerializer.SerializeToNode(lease.Command) },
             ["HostConfig"] = new JsonObject
             {
-                ["NetworkMode"] = lease.NetworkId, ["Privileged"] = false, ["ReadonlyRootfs"] = true,
-                ["RestartPolicy"] = new JsonObject { ["Name"] = "no" }, ["Memory"] = lease.MemoryLimitBytes, ["NanoCpus"] = lease.NanoCpus,
-                ["CapDrop"] = new JsonArray("ALL"), ["CapAdd"] = null, ["Binds"] = null, ["Devices"] = new JsonArray(), ["PortBindings"] = new JsonObject(),
-                ["PidMode"] = "", ["IpcMode"] = "private", ["CgroupnsMode"] = "private", ["AutoRemove"] = false, ["Tmpfs"] = null,
+                ["NetworkMode"] = lease.NetworkId,
+                ["Privileged"] = false,
+                ["ReadonlyRootfs"] = true,
+                ["RestartPolicy"] = new JsonObject { ["Name"] = "no" },
+                ["Memory"] = lease.MemoryLimitBytes,
+                ["NanoCpus"] = lease.NanoCpus,
+                ["CapDrop"] = new JsonArray("ALL"),
+                ["CapAdd"] = null,
+                ["Binds"] = null,
+                ["Devices"] = new JsonArray(),
+                ["PortBindings"] = new JsonObject(),
+                ["PidMode"] = "",
+                ["IpcMode"] = "private",
+                ["CgroupnsMode"] = "private",
+                ["AutoRemove"] = false,
+                ["Tmpfs"] = null,
                 ["SecurityOpt"] = new JsonArray("no-new-privileges:true"),
             },
             ["Mounts"] = new JsonArray(),
@@ -199,8 +218,14 @@ public sealed class BackendObservationPureTests
 
     private static JsonObject Network() => new()
     {
-        ["Id"] = Lease().NetworkId, ["Driver"] = "bridge", ["Internal"] = true, ["EnableIPv6"] = false, ["Scope"] = "local",
-        ["Created"] = Lease().NetworkCreated, ["Labels"] = Labels(), ["Containers"] = new JsonObject { [Lease().ContainerId] = new JsonObject() },
+        ["Id"] = Lease().NetworkId,
+        ["Driver"] = "bridge",
+        ["Internal"] = true,
+        ["EnableIPv6"] = false,
+        ["Scope"] = "local",
+        ["Created"] = Lease().NetworkCreated,
+        ["Labels"] = Labels(),
+        ["Containers"] = new JsonObject { [Lease().ContainerId] = new JsonObject() },
     };
 
     private static JsonDocument Document(JsonObject item) => JsonDocument.Parse(new JsonArray(item).ToJsonString());

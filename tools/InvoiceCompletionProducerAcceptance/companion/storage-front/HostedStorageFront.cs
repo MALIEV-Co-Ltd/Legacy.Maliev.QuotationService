@@ -72,7 +72,8 @@ public sealed class HostedStorageFront : IDisposable
             MaxResponseHeadersLength = 32,
             MaxConnectionsPerServer = 8,
             ConnectTimeout = TimeSpan.FromSeconds(5),
-        }) { Timeout = Timeout.InfiniteTimeSpan };
+        })
+        { Timeout = Timeout.InfiniteTimeSpan };
     }
 
     public async Task<string> InstallPublicBootstrapAsync(Stream ownerPipe, CancellationToken cancellationToken)

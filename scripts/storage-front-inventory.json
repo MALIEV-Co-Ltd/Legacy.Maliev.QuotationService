@@ -1,7 +1,7 @@
 {
   "InvoiceCompletionProducerAcceptance.Companion.BackendObservationPureTests": {
     "source": "tools/HostedStorageFront.Tests/BackendObservationPureTests.cs",
-    "normalizedSourceSha256": "2ad8d693e6b69583a4a57e7627e7064b93e813e00913a1a020a9a60ae0a39854",
+    "normalizedSourceSha256": "69da45f1a1f10f514886d3471d2fc681189efebbf444003d3b52c89edb386274",
     "methods": {
       "DockerNanosecondsAreBoundedToClrTickPrecision": {
         "parameters": [

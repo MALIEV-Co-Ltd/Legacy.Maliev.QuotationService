@@ -137,9 +137,12 @@ public sealed class ObservedStorageBackend(StorageBackendLease lease)
     {
         foreach (var pair in new Dictionary<string, string>
         {
-            ["com.maliev.c821.run"] = lease.GithubRunId, ["com.maliev.c821.attempt"] = lease.GithubAttempt,
-            ["com.maliev.c821.file-source"] = lease.FileSourceSha, ["com.maliev.c821.lease"] = lease.LeaseId,
-            ["com.maliev.c821.expires"] = lease.ExpiresText, ["com.maliev.c821.persistent"] = "false",
+            ["com.maliev.c821.run"] = lease.GithubRunId,
+            ["com.maliev.c821.attempt"] = lease.GithubAttempt,
+            ["com.maliev.c821.file-source"] = lease.FileSourceSha,
+            ["com.maliev.c821.lease"] = lease.LeaseId,
+            ["com.maliev.c821.expires"] = lease.ExpiresText,
+            ["com.maliev.c821.persistent"] = "false",
         })
             if (Text(labels, pair.Key) != pair.Value) throw new InvalidDataException("Actual resource ownership labels differ.");
         if (!network && Text(labels, "com.maliev.c821.role") != "storage") throw new InvalidDataException("Actual storage role differs.");
