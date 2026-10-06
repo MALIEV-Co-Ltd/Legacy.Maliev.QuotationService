@@ -1,0 +1,567 @@
+{
+  "InvoiceCompletionProducerAcceptance.Companion.BackendObservationPureTests": {
+    "source": "tools/HostedStorageFront.Tests/BackendObservationPureTests.cs",
+    "normalizedSourceSha256": "2ad8d693e6b69583a4a57e7627e7064b93e813e00913a1a020a9a60ae0a39854",
+    "methods": {
+      "DockerNanosecondsAreBoundedToClrTickPrecision": {
+        "parameters": [
+          {
+            "name": "text",
+            "type": "string"
+          },
+          {
+            "name": "ticks",
+            "type": "long"
+          }
+        ],
+        "cases": [
+          "7fbb30ccaf1f2bf9bbf7ddb4d7fdaf10862e6b89716c67a59d8223c142c6f212",
+          "6578dedd8b572c0f0be7f1bc73cd7ed893a3255b4cf11ffd5aae0114e3c5356b",
+          "4330be8c4533642072cdd16728456539ea16da7e388ca8a24b8d224e3691993c"
+        ]
+      },
+      "DockerGenerationRequiresExactUtcShape": {
+        "parameters": [
+          {
+            "name": "text",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "53b56643f3622c125cf43d6c1ec2017f6f9cd1c5007161e577ee3a4a6e39a578",
+          "0cacd46fd1303451e8bf54be1f72f02d9d1711a7d1e51d69eeafb06e962e9838",
+          "001abe9b4579afb9ed628bb73e511dc450d92dbb65ec2e36121b3a78f0b2517a"
+        ]
+      },
+      "BackendInitKernelGenerationIsReadFromField22": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "DifferentOrMissingInitGenerationIsRejected": {
+        "parameters": [
+          {
+            "name": "prefix",
+            "type": "string"
+          },
+          {
+            "name": "ticks",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "9179dd115c18fccdc33e258a80d28706676672213e6fe8b5d6d7ff66f1831b8f",
+          "2fdde1897d891736a8f4531e40e65d376f7b40025915ac96c15841879dc58b70",
+          "c3ff3d7186c62104b05946085c3558c233b85d0b513f32a03af8a93fab7386cf"
+        ]
+      },
+      "OneActualWildcardListenerReturnsItsSocketInode": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "WrongAddressStateOrInodeCannotEstablishListenerOwnership": {
+        "parameters": [
+          {
+            "name": "address",
+            "type": "string"
+          },
+          {
+            "name": "state",
+            "type": "string"
+          },
+          {
+            "name": "inode",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "dcfa96e1d32f9dd2c0a0989bb5ad0c9ff0ae79e75b14695f1dc86629de955dda",
+          "bdf652bc63fd66708eddc2bfa35157d5457aebd63e012d35b9c244e84243c819",
+          "ffd334b7de48c5fd3bfc7c7b0e101c866a603e2426f29e223dc8ba099f635caa",
+          "839a176c814500cabcab946608aadd1b7b9c69bc81b4949881371cf8739ca0c0"
+        ]
+      },
+      "DuplicateListenerIsRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ExactContainerAndNetworkSnapshotsSatisfyPureIdentityChecks": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ContainerSnapshotMismatchIsRejected": {
+        "parameters": [
+          {
+            "name": "mutation",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "fc949a4dac6b077d1c847c8706688fbbd098682139e19ff26a436691c96c89f1",
+          "a06df929a42bd4dbee61da9e26d8d2494f37dd8619149a443c97c6c15889c4cf",
+          "27f50807e3c41c5bcbdd5b169819f47488646b7a6f35e1f7b3a1b44b4d30d0d5",
+          "8e79b7dd85a286cfaddb27aa4478164bb57630a417092935ff4fcd84025de0b5",
+          "b5fc3efab88190f954f69edd514e8d2b4799d6accf825d6e733e7e0db6bc9b74",
+          "42f574d98821e8d90cdcfc8102b610aaf0a5ab47abacfbc8c0d4dce500030eef",
+          "58fd52ccac3f430f43213a7eb08c133506b4ba9ac07d61b8e7f7082660466dff",
+          "419f369e44a3efec0873919e55a80d98b7208e47c4e046eea6a8cc1b3349fe68",
+          "026c3a25d154d4bd4036503c76a1d47235b1f217e7ee0a56e49241d28a408fe3",
+          "5a7ac5a67b16697bde5754fb16591bce16ef47d4dc3f67bd5748930d92ca09b3",
+          "820a13d37dfabf1016bc0d0dda260463afcb94a234aebeff183ff0d8fedce4f3",
+          "1e437d49cfa551f42af3a8b75bf8c2f97a3eb793fc7ad5b31869c4bd6f04e8e4",
+          "c43425cfd8702373321de72e3a53bb906db460a500ae2bc402865e85590cc47a",
+          "9b21f5249f47250070514dd7a6b336da19edc337878e4c3990635e16f9d52726",
+          "d14ff14237038c92f833f89de7f59cfae68b86417ae8bedf16b80468f1667cba",
+          "677a2242a88a30784fb52cfbf4dfa6ba27c62142a2fc5b7938cc03581a888ed7",
+          "579b578bf5909ed019798d478d3fbfe673ea0749c886ab0ee239e21657a345d7",
+          "65d9f94aea094e26657302bfc9b37fbee28acea234edd421ffca724f0e250ac0",
+          "a9da5461fe9dd46dc129c2ee68df4abb822fff185c108ed3dfee93c4e9f2053a"
+        ]
+      },
+      "NetworkSnapshotMismatchIsRejected": {
+        "parameters": [
+          {
+            "name": "mutation",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "fc949a4dac6b077d1c847c8706688fbbd098682139e19ff26a436691c96c89f1",
+          "82d7057e6af7f27dcf9a3d6ce6749809823c13ecc597285281243ca961690be4",
+          "191c856794640dc4590cead9b535648674e4a1a996be8e1df776e4894f0e08a8",
+          "5df217fe4a1f75251c7e33d7929e38b60cca3524fc1e7b484c6b02e5d5e475fd",
+          "59bbc60b3a0f5ee4bc8e187d22432888ad5beb217d9b47fe60919c5737e90f0c",
+          "a06df929a42bd4dbee61da9e26d8d2494f37dd8619149a443c97c6c15889c4cf",
+          "b5fc3efab88190f954f69edd514e8d2b4799d6accf825d6e733e7e0db6bc9b74",
+          "78736ab3945d2c830808c9bd8aa72ae2022ad3166d3be9fce7513ee0d807b6a1"
+        ]
+      }
+    }
+  },
+  "InvoiceCompletionProducerAcceptance.Companion.FrontAdmissionPureTests": {
+    "source": "tools/HostedStorageFront.Tests/FrontAdmissionPureTests.cs",
+    "normalizedSourceSha256": "7676e8dce0430f3a9cb894f4df519b0185da6930c93a826e0dfb12186906c608",
+    "methods": {
+      "ExactPublicProfileRoundTripsWithoutActivatingResources": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "MissingRequiredProfileMemberIsRejected": {
+        "parameters": [
+          {
+            "name": "field",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "ed794b6496722b97a60294f9c41e4786426aef03be3d79be267b85da90ac2614",
+          "e478b028bdc821fe0b18d7682a5d310786d058b8a1cd450d18c2d1b98984ee47",
+          "46eedbe7cdf793056fe2c464354f2382b324c6c34ab97b5a2cb2c671d22c69e5"
+        ]
+      },
+      "NullRequiredProfileMemberIsRejected": {
+        "parameters": [
+          {
+            "name": "field",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "ed794b6496722b97a60294f9c41e4786426aef03be3d79be267b85da90ac2614",
+          "e478b028bdc821fe0b18d7682a5d310786d058b8a1cd450d18c2d1b98984ee47",
+          "514eaf7e258ae5e8ec0f8802eed28c2e53e30c743305d620f5c6729014af7a0a"
+        ]
+      },
+      "UnrecognizedProfileFieldIsRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "DuplicateFieldsAreRejectedRecursively": {
+        "parameters": [
+          {
+            "name": "json",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "05e735445381b8c74ab2f91667a0e6e677cb9a95cedf4f25f19b8ee6313e90fe",
+          "f49aa6247479aacb48fb7a0a4b84f31687ed4f8e02946aea5de7d89b629056e0",
+          "953c547370fb1e9cfb466f4ae60fc418a4e6001b7ae066ca441013e91993fb4c"
+        ]
+      },
+      "ProfileByteBoundIsEnforcedBeforeParsing": {
+        "parameters": [
+          {
+            "name": "count",
+            "type": "int"
+          }
+        ],
+        "cases": [
+          "d0bca111f8628137adc4c16f123496dcdd1d590d06cb5d9acd68b39fe656fb97",
+          "c3629ede2311d9bcbb88e0e365b4e21565f8445832b853263a1a56f9ffadee92"
+        ]
+      },
+      "KernelProcessNameCanContainSpacesAndClosingParentheses": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "MissingOrDeadOwnerGenerationIsRejected": {
+        "parameters": [
+          {
+            "name": "state",
+            "type": "string"
+          },
+          {
+            "name": "parent",
+            "type": "string"
+          },
+          {
+            "name": "ticks",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "5d4f4223b8f50a4a3e268cd20d59ac05558b7d7b0bb9b94eeaffd21b9f37d65a",
+          "4dcdd21975335f1136eb0e7d7af4508bee7549df24e6f605755d47d71bc9fdb3",
+          "ebd2e1412ee19565a5aaaabd61214485359a77786b87f27bd249dedd4b9dcfc3",
+          "597a745e4680d2e53e7582eaf204f4636660b2fbd0d396c3aa8699113e0fe35b",
+          "5878ee0451a510aee863c7b02969a64c9721fbb343994532cccdb8569c92c87f",
+          "2a4e33a42e1c414dae93e9ba6ebe9b2eb58e2157471150b04cc82e2b8aa16feb"
+        ]
+      },
+      "MalformedKernelObservationCannotEstablishOwnership": {
+        "parameters": [
+          {
+            "name": "stat",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "6bc0d70e923a59393ef34af675bec1231f8dca51eb889df6e6808b91dbd0f5ac",
+          "780deebf8febce6f5f380b0b51e671a5ff573979c75b8f16498c0ae78ab314aa",
+          "c37e2eec10d2e94338511c0b83328a6f828d3a17ae0b516fc23bf1ae7959b4e9"
+        ]
+      }
+    }
+  },
+  "InvoiceCompletionProducerAcceptance.Companion.HostedFrontHttpTests": {
+    "source": "tools/HostedStorageFront.Tests/HostedFrontHttpTests.cs",
+    "normalizedSourceSha256": "cad1d6d8428a6be58fcb49422c73d1ac684cd1ab2bbf5522889311189530d051",
+    "methods": {
+      "ActualSdkForwardsThreeChunksAndPreservesGenerationAndCompleteBytes": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "EmptyStatusProbeForwardsContentRangeAndAllows308WithoutLocation": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "AuthorizationOrDifferentHostFailsBeforeCallerOrBackendObservation": {
+        "parameters": [
+          {
+            "name": "differentHost",
+            "type": "bool"
+          }
+        ],
+        "cases": [
+          "456e2e3fa05ee1e2f4e529558008ce162bbd388a9dd4a923c79543a4a1dba618",
+          "1c28f2eb0958c3d15db1f0f0e7f2b8998ca2b8f67ab426a1fbb3d561fe76fad9"
+        ]
+      },
+      "ControlledCallerOrBackendObservationFailureDeniesForwarding": {
+        "parameters": [
+          {
+            "name": "backendFailure",
+            "type": "bool"
+          }
+        ],
+        "cases": [
+          "456e2e3fa05ee1e2f4e529558008ce162bbd388a9dd4a923c79543a4a1dba618",
+          "1c28f2eb0958c3d15db1f0f0e7f2b8998ca2b8f67ab426a1fbb3d561fe76fad9"
+        ]
+      },
+      "PendingPublicBootstrapReturns503WithoutBackendOrCallerObservation": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ForeignUploadSessionLocationIsRejectedWithoutFollowingIt": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "DisposalCancelsActiveObservationAndPreventsSubsequentRequests": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "DisposalCancelsPendingBootstrapObserverWithoutInstallingAuthority": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      }
+    }
+  },
+  "InvoiceCompletionProducerAcceptance.Companion.PreparedFrontPureTests": {
+    "source": "tools/HostedStorageFront.Tests/PreparedFrontPureTests.cs",
+    "normalizedSourceSha256": "81fa84112b4bd40bb0b9d2c775a0cfb80572c015ef952f776627d6e3c3013d9a",
+    "methods": {
+      "ActualClientTupleMatchesIpv4KernelInode": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "NonEstablishedSocketCannotGrantSdkAuthority": {
+        "parameters": [
+          {
+            "name": "state",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "3c78b74f5af649dc6ad8a33ca9c8de09571d3cde6702e1b97b8567dd50f4f0a0",
+          "237ad4a2a6aafa4c51ec64b9fca9abddebfdf4b36ba61769d5ecb9571fb94c31",
+          "0af358be4a3a4f1f0fa39164f9e1ac1f29b63929916a134814048a9ebb76d153"
+        ]
+      },
+      "DuplicateTupleOwnersCannotGrantSdkAuthority": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "AsyncInputByteLimitIsCheckedBeforeUnlimitedRead": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ExpiredLeaseFailsBeforeSourceRead": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "WrapperDisposalRetainsApplicationOwnedBody": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      }
+    }
+  },
+  "InvoiceCompletionProducerAcceptance.Companion.PreparedResumablePureTests": {
+    "source": "tools/HostedStorageFront.Tests/PreparedResumablePureTests.cs",
+    "normalizedSourceSha256": "aa0fb4d1305d05bf5821ca5a7fa1fb87a9ec2321f93359fca7ffea445989e6ed",
+    "methods": {
+      "SuccessfulInitiationRewritesObservedBackendSession": {
+        "parameters": [
+          {
+            "name": "status",
+            "type": "int"
+          }
+        ],
+        "cases": [
+          "87e03f90d21d9893446d8e15acabe84c99247a21e287f7e7cada06e23f3a7d13",
+          "70a54961f76119ae69296ffeaeb0dbc7da6ead064afa684aa6b55f0339bdec0a"
+        ]
+      },
+      "IncompleteChunkPreservesRangeWithoutLocation": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "EmptyStatusProbeNeedsNoLocationOrRange": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "SuccessfulSessionCannotEscapeOwnedBackend": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "OrdinaryRedirectIsRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "MalformedOrOversizedAcknowledgementIsRejected": {
+        "parameters": [
+          {
+            "name": "range",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "abcf7a5f031935317ff4dce2a2e2e70e11f7f43f33e2e72a25285a08a6e6c39d",
+          "73e4b73313fbba0bbf3f3753a52a36bce82267cd6f25adef7de9ef46a1af4d67",
+          "c8a28d2779ff6b01205d265685c283041fc776fb3fcd6e97a96e40c70e410b79"
+        ]
+      },
+      "IncompleteResponseCannotGrantAnUnexpectedLocation": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      }
+    }
+  },
+  "InvoiceCompletionProducerAcceptance.Companion.PublicBootstrapPureTests": {
+    "source": "tools/HostedStorageFront.Tests/PublicBootstrapPureTests.cs",
+    "normalizedSourceSha256": "eb5a5aa845466949f7533ea7a4358dfcd831c335e5cc886fd09f5ae2d0f5fef5",
+    "methods": {
+      "ExactRsa2048PublicBootstrapIsAcceptedWithoutProcessAuthority": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "MissingTopLevelFieldIsRejected": {
+        "parameters": [
+          {
+            "name": "field",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "6d97510016cc10b1774fb32828520da4cb32af74169379b992ef5e1f4e209842",
+          "f4c8219566aee047a9026491ea9679dd324c973a6c3b36ce604e44006b9a95e1",
+          "d5846f526d9e0cc1d0740021a655f89c9cff5cd85b2a5f08e3d242425d196628"
+        ]
+      },
+      "NullRequiredFieldIsRejected": {
+        "parameters": [
+          {
+            "name": "field",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "6d97510016cc10b1774fb32828520da4cb32af74169379b992ef5e1f4e209842",
+          "f4c8219566aee047a9026491ea9679dd324c973a6c3b36ce604e44006b9a95e1",
+          "d5846f526d9e0cc1d0740021a655f89c9cff5cd85b2a5f08e3d242425d196628"
+        ]
+      },
+      "MissingFileIdentityFieldIsRejected": {
+        "parameters": [
+          {
+            "name": "field",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "61fbee562f667d39a899bc2fd3a7726b361ce420925528d32f31cfc62fc54335",
+          "2fe3ae67938de637dd18d603e9105f7f56896620b813b7a2be3b17235e9e6ac8",
+          "c61e39bb0534e4373228d09ef89ed9e9d903afe9e8823cd403a73a8b507373ae",
+          "f2d02c151dcefdc56c277fe5d8ab9f5498293e72fd28d51e7ce57f8f4491df13",
+          "ed794b6496722b97a60294f9c41e4786426aef03be3d79be267b85da90ac2614",
+          "c334dae98edf7ff956abe8e374ab36a3da97b278f29728216b7b3058a40271cf"
+        ]
+      },
+      "DuplicateIdentityFieldIsRejected": {
+        "parameters": [
+          {
+            "name": "where",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "e1eeb775d03db55a4fa9c2fbb9b2b80e0ce99bad2baef26d8e4efbf843aa1cfa",
+          "66a844ce6e5f9b5c99604c8d1a8ddebf2b7b2c55f1e50f91207bd118b51d7db2"
+        ]
+      },
+      "PrivateOrExtraFieldsAreRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ASecondJsonMessageCannotBeBootstrapped": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "OversizedFrameIsRejectedBeforeParsing": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ExpiredOrUnboundedLeaseIsRejected": {
+        "parameters": [
+          {
+            "name": "minutes",
+            "type": "int"
+          }
+        ],
+        "cases": [
+          "d124b23c696a85177dac41a7a28c853546e55caa5b4798fb917f2c3dc1b331ce",
+          "8eefd2920366bc3e63649af9c0f30192857c178059490e64b5e5dcd3c1edba5c"
+        ]
+      },
+      "DeclaredIdentityMismatchIsRejected": {
+        "parameters": [
+          {
+            "name": "mutation",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "0a7e2894f07557aec4faa10f21d287c0cae2c224ecf1028c083501ef0f8b207d",
+          "4d74269887fcb875d82e0e9cca8bad49172338452b2e2e3a55a132c08f27d3be",
+          "02d0b4a8e7b731c029af7a68ab811dd3f36ea3dc226649416747b3869ba249c7",
+          "ebb5dea25ca5bfaca77a7fab7685a16d75b53f8da7a161caa0914a569464b128",
+          "d3834cb8590a38a8a8676d9de4f05e3bda13aa60e983aba01ab3626a6f69966f",
+          "469f0cfa2d1664d2608825855a625474d91381b44ed92aee16487ff6d26e05bb",
+          "62674c12c0358130eac1c0e15cba063b51d60f8da25b1f98d21aa9adce9253fb"
+        ]
+      },
+      "WrongRsaSizeIsRejected": {
+        "parameters": [
+          {
+            "name": "bits",
+            "type": "int"
+          }
+        ],
+        "cases": [
+          "4b4b967f0f4acd154f5ae8f29a67e3f9d034113f543004cf1672c577bbe16611",
+          "98c84f38bc1267444588cd23b1ebae4278f0b061e04d7753faf529f8e4d22a2a"
+        ]
+      },
+      "NoncanonicalBase64IsRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      }
+    }
+  }
+}
