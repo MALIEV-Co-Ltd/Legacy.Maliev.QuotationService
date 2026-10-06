@@ -82,10 +82,16 @@ public sealed class AccountingCompletionReceiptTests
     }
 
     [Theory]
-    [InlineData("\"ContractVersion\":1", "\"ContractVersion\":1,\"ContractVersion\":1")]
-    [InlineData("\"Bucket\":\"maliev.com\"", "\"Bucket\":\"maliev.com\",\"Bucket\":\"maliev.com\"")]
-    public void DuplicatePhaseOrFileFieldsAreRejected(string original, string duplicate)
+    [InlineData("phase")]
+    [InlineData("file")]
+    public void DuplicatePhaseOrFileFieldsAreRejected(string fault)
     {
+        var (original, duplicate) = fault switch
+        {
+            "phase" => ("\"ContractVersion\":1", "\"ContractVersion\":1,\"ContractVersion\":1"),
+            "file" => ("\"Bucket\":\"maliev.com\"", "\"Bucket\":\"maliev.com\",\"Bucket\":\"maliev.com\""),
+            _ => throw new InvalidOperationException(),
+        };
         using var value = JsonDocument.Parse(Baseline().ToJsonString().Replace(original, duplicate, StringComparison.Ordinal));
         Assert.Throws<InvalidDataException>(() => AccountingCompletionReceipt.Validate(value.RootElement, Operation, 7, 19, Binding, Version, 2));
     }

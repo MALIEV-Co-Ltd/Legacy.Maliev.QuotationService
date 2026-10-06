@@ -116,7 +116,7 @@
   },
   "Legacy.Maliev.QuotationService.Tests.Tools.AccountingCompletionReceiptTests": {
     "source": "tools/FinancialCompletionEvidence.Tests/AccountingCompletionReceiptTests.cs",
-    "normalizedSourceSha256": "29942f49a572c89933201a51dca7ccce1209b8062eabdb68a4a28fedf85d3484",
+    "normalizedSourceSha256": "23dc6399cbfaa4ed1f8c3b94087bef2f33cdf1a6c8cb947845a95a4f81624d5b",
     "methods": {
       "ExactRetainedNoSendPhaseMatchesVerifiedOwningReceipt": {
         "parameters": [],
@@ -162,17 +162,13 @@
       "DuplicatePhaseOrFileFieldsAreRejected": {
         "parameters": [
           {
-            "name": "original",
-            "type": "string"
-          },
-          {
-            "name": "duplicate",
+            "name": "fault",
             "type": "string"
           }
         ],
         "cases": [
-          "6099e938356e0e5422a7caefc923c25a65e61eb44ace0f11e72b06f4b6339d85",
-          "13912c15db3e9c970a9b4c5ba180f955f76a60b293fa9b9ebe4e9924f5e9df58"
+          "93b78acd8b50b644a8f39b4fa235c89f44603aea56b7a33bccfe4746c472f88f",
+          "66a844ce6e5f9b5c99604c8d1a8ddebf2b7b2c55f1e50f91207bd118b51d7db2"
         ]
       },
       "AlteredHttpReplayIsRejected": {
