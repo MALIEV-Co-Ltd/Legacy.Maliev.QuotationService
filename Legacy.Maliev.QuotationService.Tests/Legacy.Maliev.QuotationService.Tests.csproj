@@ -11,6 +11,8 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Google.Cloud.Storage.V1" Version="5.0.0" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.77.0" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.3" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.1.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
@@ -41,6 +43,9 @@
 
   <ItemGroup>
     <Compile Include="../tools/InvoiceCompletionProducerAcceptance/ProducerDatabaseBindings.cs" Link="Tools/ProducerDatabaseBindings.cs" />
+    <Compile Include="../tools/InvoiceCompletionProducerAcceptance/CompanionLauncherAdmission.cs" Link="Tools/CompanionLauncherAdmission.cs" />
+    <Compile Include="../tools/InvoiceCompletionProducerAcceptance/companion/HostedV4SignedReadVerifier.cs" Link="Tools/HostedV4SignedReadVerifier.cs" />
+    <Compile Include="../tools/QualificationOutcomeWireSource/QualificationOutcomeWire.cs" Link="Tools/QualificationOutcomeWire.cs" />
   </ItemGroup>
 
 </Project>

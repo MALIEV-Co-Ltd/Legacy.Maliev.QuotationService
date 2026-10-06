@@ -98,7 +98,20 @@ jobs:
 
       - name: Prove coverage gate failure and success behavior
         shell: bash
-        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+        run: |
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+          python3 -B -m unittest discover -s tools/InvoiceCompletionProducerAcceptance/companion -p 'test_*.py'
+
+      - name: Prove actual qualification DTO and controller serializer wire
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~QualificationOutcomeWireSourceTests' \
+            --results-directory TestResults/QualificationWire --logger 'trx;LogFileName=qualification-wire.trx'
+          python3 -B scripts/check_qualification_wire_results.py
+          dotnet tools/QualificationOutcomeWireSource/bin/Release/net10.0/QualificationOutcomeWireSource.dll "$GITHUB_WORKSPACE"
 
       - name: Collect QuotationService coverage
         shell: bash
@@ -112,6 +125,15 @@ jobs:
             --filter 'FullyQualifiedName~QuotationInvoiceCapabilityHttpTests' \
             --results-directory TestResults/C821Recipient --logger 'trx;LogFileName=c821-recipient.trx'
           python3 scripts/check_c821_focused_results.py
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~CompanionLauncherAdmissionTests' \
+            --results-directory TestResults/CompanionAdmission --logger 'trx;LogFileName=companion-admission.trx'
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~HostedV4SignedReadVerifierTests' \
+            --results-directory TestResults/CompanionSigning --logger 'trx;LogFileName=companion-signing.trx'
+          python3 -B scripts/check_companion_focused_results.py
           dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
             --configuration Release --no-build --no-restore \
             -p:GITHUB_ACTIONS=false --collect 'XPlat Code Coverage' --results-directory TestResults/CoverageGate \
@@ -137,8 +159,25 @@ jobs:
           path: |
             TestResults/C821Verifier/c821-verifier.trx
             TestResults/C821Recipient/c821-recipient.trx
+            TestResults/CompanionAdmission/companion-admission.trx
+            TestResults/CompanionSigning/companion-signing.trx
             TestResults/CoverageGate/quotation-complete-coverage.trx
             TestResults/CoverageGate/*/coverage.cobertura.xml
+          if-no-files-found: error
+          retention-days: 7
+          include-hidden-files: false
+          overwrite: false
+
+      - name: Retain actual qualification wire-source evidence
+        if: always() && hashFiles('TestResults/QualificationWire/qualification-wire.trx') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qualification-source-wire-${{ github.sha }}
+          path: |
+            TestResults/QualificationWire/qualification-wire.trx
+            TestResults/QualificationWire/qualification-wire-receipt.json
+            TestResults/QualificationWire/empty.json
+            TestResults/QualificationWire/mixed.json
           if-no-files-found: error
           retention-days: 7
           include-hidden-files: false
