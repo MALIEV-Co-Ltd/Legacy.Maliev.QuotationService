@@ -41,7 +41,8 @@ return await QuotationStartupBoundary.RunAsync(async () =>
         if (handler is SocketsHttpHandler sockets) sockets.AllowAutoRedirect = false;
         else if (handler is HttpClientHandler http) http.AllowAutoRedirect = false;
         else throw new InvalidOperationException("Qualification authority requires a redirect-disabled primary handler.");
-    }).AddServiceDiscovery().AddLegacyServiceAuthentication();
+    }).AddServiceDiscovery().AddLegacyServiceAuthentication()
+        .AddPrivateFailureObservation(QualificationAuthorityClient.ClientName);
     builder.AddStandardMiddleware(options => options.EnableRequestLogging = true);
     builder.AddStandardOpenApi(title: "Legacy MALIEV Quotation Service API", description: "Temporary .NET 10 compatibility API for quotation and quotation-request contracts.");
     // Register in this compilation so the generator attaches API and referenced DTO XML comments.

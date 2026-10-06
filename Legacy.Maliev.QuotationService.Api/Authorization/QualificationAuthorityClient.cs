@@ -1,10 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Maliev.Aspire.ServiceDefaults.Diagnostics;
 
 namespace Legacy.Maliev.QuotationService.Api.Authorization;
 
-public sealed class QualificationAuthorityClient(IHttpClientFactory factory)
+public sealed class QualificationAuthorityClient(IHttpClientFactory factory, ILogger<QualificationAuthorityClient> logger)
 {
     internal const string ClientName = "QualificationAuthority";
     private const string Purpose = QualificationAuthorityAttribute.Purpose;
@@ -16,13 +17,29 @@ public sealed class QualificationAuthorityClient(IHttpClientFactory factory)
         {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             deadline.CancelAfter(TimeSpan.FromSeconds(10));
-            var operationToken = deadline.Token;
+            return await CheckWithinDeadlineAsync(employeeAccessToken, subject, permission, requestId, cancellationToken, deadline.Token);
+        }
+        catch (InvalidOperationException) { return 503; }
+    }
+
+    // Same production operation body; internal entry point lets regression supply a genuine real
+    // linked ten-second token whose cancellation can be awaited by the controlled SDK sink.
+    internal async Task<int> CheckWithinDeadlineAsync(string employeeAccessToken, string subject, string permission,
+        int requestId, CancellationToken cancellationToken, CancellationToken operationToken)
+    {
+        var observation = new PrivateDependencyFailureObservation();
+        var phase = ObservationPhase.Headers;
+        int? responseStatus = null;
+        try
+        {
             using var client = factory.CreateClient(ClientName);
             using var request = new HttpRequestMessage(HttpMethod.Post, "/auth/v1/introspection/quotation-qualification")
             { Content = JsonContent.Create(new { employeeAccessToken, permission, purpose = Purpose, requestId }) };
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, operationToken);
+            using var response = await client.SendWithPrivateFailureObservationAsync(request, operationToken, observation);
+            responseStatus = (int)response.StatusCode;
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden) return 403;
             if (response.StatusCode != HttpStatusCode.OK || response.Content.Headers.ContentLength > 4096) return 503;
+            phase = ObservationPhase.Body;
             await using var stream = await response.Content.ReadAsStreamAsync(operationToken);
             using var bounded = new MemoryStream();
             var buffer = new byte[4097];
@@ -49,7 +66,57 @@ public sealed class QualificationAuthorityClient(IHttpClientFactory factory)
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or JsonException or InvalidOperationException ||
             exception is OperationCanceledException && !cancellationToken.IsCancellationRequested)
-        { return 503; }
+        {
+            var outcome = ClassifyLateFailure(exception, phase, operationToken);
+            if (outcome is { } observed && !observation.WasObserved) RecordLateFailure(observed, responseStatus);
+            return 503;
+        }
+    }
+
+    // The selected SDK owns terminal header HTTP/transport failures and native HttpClient timeout.
+    // The consumer owns its linked deadline and body IO after headers, without guessing native provenance.
+    private enum ObservationPhase
+    {
+        Headers,
+        Body
+    }
+    private enum LateFailureOutcome
+    {
+        QualificationHeadersDeadline,
+        QualificationBodyDeadline,
+        QualificationHeadersTransport,
+        QualificationBodyTransport
+    }
+
+    private static LateFailureOutcome? ClassifyLateFailure(Exception exception, ObservationPhase phase, CancellationToken operationToken)
+    {
+        if (exception is OperationCanceledException && operationToken.IsCancellationRequested)
+            return phase == ObservationPhase.Body ? LateFailureOutcome.QualificationBodyDeadline : LateFailureOutcome.QualificationHeadersDeadline;
+        if (phase == ObservationPhase.Body && exception is HttpRequestException or IOException or OperationCanceledException)
+            return LateFailureOutcome.QualificationBodyTransport;
+        if (phase == ObservationPhase.Headers && exception is IOException)
+            return LateFailureOutcome.QualificationHeadersTransport;
+        return null;
+    }
+
+    private void RecordLateFailure(LateFailureOutcome outcome, int? status)
+    {
+        try
+        {
+            // Code-owned enum only. No exception object, URI, tokens, subject, permission or request ID.
+            if (status is { } knownStatus)
+                logger.LogError(new EventId(5101, "DependencyRequestFailure"),
+                    "{EventName} Dependency={Dependency} Operation={Operation} StatusCode={StatusCode}",
+                    "DependencyRequestFailure", ClientName, outcome.ToString(), knownStatus);
+            else
+                logger.LogError(new EventId(5101, "DependencyRequestFailure"),
+                    "{EventName} Dependency={Dependency} Operation={Operation}",
+                    "DependencyRequestFailure", ClientName, outcome.ToString());
+        }
+        catch (Exception)
+        {
+            // Observation failure cannot replace an authority outcome or disclose its own details.
+        }
     }
 
     internal static Uri ResolveOrigin(string? configured)
