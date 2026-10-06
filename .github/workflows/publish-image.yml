@@ -30,7 +30,7 @@ jobs:
       image: ${{ vars.LEGACY_ARTIFACT_REGISTRY }}/legacy-maliev-quotation-service
       dockerfile: Legacy.Maliev.QuotationService.Api/Dockerfile
       context: .
-      legacy-service-defaults-ref: ecb05cbbd68717e415f69df2ac488c1d323b1da3
+      legacy-service-defaults-ref: f72be151917cb3962380971418c187e3df563f8d
       compatibility-contracts-ref: 78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7
       environment: legacy-production
       workload-identity-provider: ${{ vars.LEGACY_WORKLOAD_IDENTITY_PROVIDER }}

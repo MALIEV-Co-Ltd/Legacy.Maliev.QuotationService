@@ -24,7 +24,7 @@ function Invoke-Dotnet([string[]]$Arguments) {
 Assert-Pin $auth '8cdb634b3b0abdf18b9b826a0948dbfd98c66ea0'
 Assert-Pin (Join-Path $authDependencies 'Legacy.Maliev.ServiceDefaults') '5c5f9479313710fa576f83d3b396442997a2fcf4'
 Assert-Pin (Join-Path $authDependencies 'Legacy.Maliev.CompatibilityContracts') '78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7'
-Assert-Pin (Join-Path $quotationDependencies 'Legacy.Maliev.ServiceDefaults') 'ecb05cbbd68717e415f69df2ac488c1d323b1da3'
+Assert-Pin (Join-Path $quotationDependencies 'Legacy.Maliev.ServiceDefaults') 'f72be151917cb3962380971418c187e3df563f8d'
 Assert-Pin (Join-Path $quotationDependencies 'Legacy.Maliev.CompatibilityContracts') '78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7'
 
 $previousActions = [Environment]::GetEnvironmentVariable('GITHUB_ACTIONS')
