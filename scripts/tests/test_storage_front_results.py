@@ -42,6 +42,19 @@ class FrontEvidenceTests(unittest.TestCase):
     def test_exact_multi_class_report_is_accepted(self):
         self.assertEqual(2, self.validate())
 
+    def test_actual_clr_boolean_display_names_preserve_case_identity(self):
+        parameters = [{"name": "allowed", "type": "bool"}]
+        for raw, expected in (("True", True), ("False", False), ("true", True), ("false", False)):
+            with self.subTest(raw=raw):
+                self.assertEqual(gate.case_hash([expected]), gate.display_digest(
+                    "Front.Http.Socket(allowed: " + raw + ")", "Front.Http", "Socket", parameters))
+
+    def test_nonboolean_display_values_cannot_gain_boolean_authority(self):
+        parameters = [{"name": "allowed", "type": "bool"}]
+        for raw in ("1", "0", '"True"', "null"):
+            with self.subTest(raw=raw), self.assertRaises(ValueError):
+                gate.display_digest("Front.Http.Socket(allowed: " + raw + ")", "Front.Http", "Socket", parameters)
+
     def test_counter_success_does_not_hide_a_missing_case(self):
         results = self.root.find(gate.NS + "Results")
         results.remove(results[1])

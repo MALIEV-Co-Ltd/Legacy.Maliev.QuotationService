@@ -26,7 +26,7 @@ public static class PublicSigningBootstrapReader
             await output.WriteAsync(chunk.AsMemory(0, count), deadline.Token);
         }
         // EOF seals the one-time message; a second message or trailing JSON is rejected.
-        using var document = JsonDocument.Parse(output.ToArray(), new JsonDocumentOptions { MaxDepth = 4 });
+        using var document = ParseSingleFrame(output.ToArray());
         RequireProperties(document.RootElement, ["Algorithm", "PublicKey", "File"]);
         RequireProperties(document.RootElement.GetProperty("File"),
             ["Pid", "StartedUtc", "ExecutableDll", "ExecutableSha256", "RunId", "ExpiresUtc"]);
@@ -48,6 +48,16 @@ public static class PublicSigningBootstrapReader
         key.ImportSubjectPublicKeyInfo(publicBytes, out int used);
         if (used != publicBytes.Length || key.KeySize != 2048) throw new InvalidDataException("Actual File public RSA shape required.");
         return value;
+    }
+
+    private static JsonDocument ParseSingleFrame(byte[] frame)
+    {
+        try { return JsonDocument.Parse(frame, new JsonDocumentOptions { MaxDepth = 4 }); }
+        catch (JsonException)
+        {
+            // Keep the public failure contract stable and do not expose owner-pipe contents in diagnostics.
+            throw new JsonException("Exactly one bounded public bootstrap JSON object required.");
+        }
     }
 
     private static void RequireProperties(JsonElement value, string[] fields)

@@ -27,8 +27,9 @@ def display_digest(name, class_name, method, parameters):
         if not separator or key != parameter["name"]:
             raise ValueError("Wrong front named argument")
         raw = raw.strip()
-        value = json.loads(raw)
         kind = parameter["type"]
+        # Actual xUnit TRX uses CLR True/False, unlike JSON's lowercase boolean literals.
+        value = raw.lower() == "true" if kind == "bool" and raw.lower() in ("true", "false") else json.loads(raw)
         if not ((kind == "string" and type(value) is str)
                 or (kind == "bool" and type(value) is bool)
                 or (kind in ("int", "long") and type(value) is int)):

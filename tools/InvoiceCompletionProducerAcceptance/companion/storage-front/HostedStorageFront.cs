@@ -175,6 +175,8 @@ public sealed class HostedStorageFront : IDisposable
             if (response.Content.Headers.ContentEncoding.Count != 0 || response.Content.Headers.ContentLength is > MaximumBytes)
                 throw new InvalidDataException("Unexpected encoded/oversized actual backend response.");
             var resumable = ResumableResponsePolicy.Read(response, sdk, context.Request.Method, rawTarget, backend, origin, MaximumBytes);
+            // Re-admit ownership after response-policy validation, before exposing downstream headers/body.
+            await observeBackend(deadline.Token);
             if (resumable.Location is string session) context.Response.Headers.Location = session;
             if (resumable.Range is string acknowledged) context.Response.Headers["Range"] = acknowledged;
             context.Response.StatusCode = (int)response.StatusCode;
