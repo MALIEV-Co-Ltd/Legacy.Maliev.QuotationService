@@ -13,10 +13,12 @@ public sealed class QuotationDbContext(DbContextOptions<QuotationDbContext> opti
     public DbSet<QuotationFile> Files => Set<QuotationFile>();
     public DbSet<QuotationOrderLink> OrderLinks => Set<QuotationOrderLink>();
     public DbSet<QuotationAcceptedOutcome> AcceptedOutcomes => Set<QuotationAcceptedOutcome>();
+    public DbSet<QuotationInvoiceCompletionOperation> InvoiceCompletionOperations => Set<QuotationInvoiceCompletionOperation>();
     public DbSet<GoogleAnalyticsOutbox> GoogleAnalyticsOutbox => Set<GoogleAnalyticsOutbox>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        QuotationInvoiceCompletionModel.Configure(modelBuilder);
         var quotation = modelBuilder.Entity<Quotation>();
         quotation.ToTable("Quotation"); quotation.HasKey(x => x.Id); quotation.Property(x => x.Id).HasColumnName("ID").ValueGeneratedOnAdd();
         quotation.Property(x => x.CustomerId).HasColumnName("CustomerID"); quotation.Property(x => x.EmployeeId).HasColumnName("EmployeeID"); quotation.Property(x => x.InvoiceId).HasColumnName("InvoiceID"); quotation.Property(x => x.CurrencyId).HasColumnName("CurrencyID");

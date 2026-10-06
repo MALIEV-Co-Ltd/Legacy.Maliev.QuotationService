@@ -5,4 +5,5 @@
   <Project Path="Legacy.Maliev.QuotationService.Domain/Legacy.Maliev.QuotationService.Domain.csproj" />
   <Project Path="Legacy.Maliev.QuotationService.MigrationRunner/Legacy.Maliev.QuotationService.MigrationRunner.csproj" />
   <Project Path="Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj" />
+  <Project Path="tools/InvoiceCompletionProducerAcceptance/InvoiceCompletionProducerAcceptance.csproj" />
 </Solution>

@@ -12,7 +12,9 @@ public sealed class QuotationsController(
     IQuotationService service,
     IIdempotencyStore idempotency,
     IAuthorizationService authorization,
-    IQuotationDecisionWorkflow decisions) : ControllerBase
+    IQuotationDecisionWorkflow decisions,
+    QuotationInvoiceCompletionAuthority? invoiceAuthority = null,
+    IQuotationInvoiceCompletionStore? invoiceOperations = null) : ControllerBase
 {
     [HttpPost, RequirePermission(QuotationPermissions.QuotationsCreate, RequireLiveCheck = true, IsCritical = true)]
     public async Task<IActionResult> CreateQuotationAsync(UpsertQuotationRequest item, [FromHeader(Name = "Idempotency-Key")] string? key, CancellationToken cancellationToken)
@@ -93,9 +95,20 @@ public sealed class QuotationsController(
             return BadRequest();
         }
 
+        QuotationInvoiceCompletionContext? completion = null;
         if (request.EmployeeInitiated && !IsTrustedEmployeeDecisionCaller())
         {
-            return Forbid();
+            if (!request.Accepted || request.InvoiceId is not > 0 || invoiceAuthority is null)
+                return Forbid();
+            var authority = await invoiceAuthority.AuthorizeAsync(HttpContext, quotationId, request.InvoiceId.Value, expected, cancellationToken);
+            if (authority.Status != 200) return authority.Status switch
+            {
+                409 => Conflict(),
+                503 => StatusCode(503),
+                _ => Forbid(),
+            };
+            completion = authority.Authority;
+            if (completion is null) return Forbid();
         }
 
         if (request.Accepted && !ValidAnalyticsContext(request))
@@ -103,7 +116,23 @@ public sealed class QuotationsController(
             return BadRequest();
         }
 
-        var result = await decisions.DecideAsync(quotationId, request, expected, cancellationToken);
+        if (completion is not null && request.TryGetAnalyticsContext(out var analytics) && analytics is not null)
+            return BadRequest();
+        QuotationDecisionResponse result;
+        try
+        {
+            result = completion is null
+                ? await decisions.DecideAsync(quotationId, request, expected, cancellationToken)
+                : await decisions.CompleteInvoiceAsync(completion, cancellationToken);
+        }
+        catch (Exception exception) when (completion is not null
+            && (exception is IOException or InvalidDataException or FormatException or System.Data.Common.DbException or System.Text.Json.JsonException
+                or Microsoft.EntityFrameworkCore.DbUpdateException or Microsoft.EntityFrameworkCore.Storage.RetryLimitExceededException
+                || exception is OperationCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            // Storage acknowledgement may be unknown. Only owning operation readback can resolve it.
+            return StatusCode(503);
+        }
         return result.Status switch
         {
             QuotationDecisionStatus.Completed => Ok(result),
@@ -112,6 +141,45 @@ public sealed class QuotationsController(
             QuotationDecisionStatus.DependencyConflict => Conflict(result),
             _ => StatusCode(StatusCodes.Status503ServiceUnavailable, result),
         };
+    }
+
+    /// <summary>Reads the owning operation receipt under freshly verified invoice-bound employee authority.</summary>
+    [HttpGet("{quotationId:int}/invoice-completion/operations/{operationId:guid}"), RequirePermission(QuotationPermissions.QuotationsUpdate,
+        ResourcePathTemplate = "/quotations/{quotationId}", RequireLiveCheck = true, IsCritical = true)]
+    public async Task<IActionResult> GetInvoiceCompletionOperationAsync(int quotationId, Guid operationId,
+        [FromQuery] int invoiceId, [FromHeader(Name = "X-Expected-Modified-Date")] DateTimeOffset? expected,
+        CancellationToken cancellationToken)
+    {
+        Response.Headers.CacheControl = "no-store";
+        if (invoiceId <= 0 || operationId == Guid.Empty) return BadRequest();
+        if (invoiceAuthority is null || invoiceOperations is null) return Forbid();
+        var result = await invoiceAuthority.AuthorizeAsync(HttpContext, quotationId, invoiceId, expected, cancellationToken);
+        if (result.Status != 200) return result.Status switch
+        {
+            409 => Conflict(),
+            503 => StatusCode(503),
+            _ => Forbid(),
+        };
+        var authority = result.Authority;
+        if (authority is null || authority.OperationId != operationId) return Forbid();
+        try
+        {
+            var progress = await invoiceOperations.ReadAsync(operationId, cancellationToken);
+            if (progress is null) return NotFound();
+            var receipt = progress.Receipt;
+            var retained = new QuotationInvoiceCompletionContext(Guid.ParseExact(receipt.OperationId, "D"),
+                receipt.QuotationId, receipt.InvoiceId, receipt.OriginIssuer, receipt.EmployeeSubject,
+                receipt.RequesterSubject, receipt.ExecutorSubject, receipt.OriginalQuotationVersion,
+                receipt.FinancialBinding, receipt.FinancialBindingVersion);
+            return retained == authority ? Ok(receipt) : Conflict();
+        }
+        catch (Exception exception) when (exception is InvalidDataException or System.Text.Json.JsonException
+            or System.Data.Common.DbException or IOException or FormatException
+            or Microsoft.EntityFrameworkCore.DbUpdateException or Microsoft.EntityFrameworkCore.Storage.RetryLimitExceededException
+            || exception is OperationCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            return StatusCode(503);
+        }
     }
 
     private static bool ValidAnalyticsContext(QuotationDecisionRequest request)

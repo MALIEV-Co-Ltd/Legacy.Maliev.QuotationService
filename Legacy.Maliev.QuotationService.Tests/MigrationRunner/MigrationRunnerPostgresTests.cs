@@ -30,7 +30,7 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData(MigrationWorkload.Quotation, 6)]
+    [InlineData(MigrationWorkload.Quotation, 7)]
     [InlineData(MigrationWorkload.QuotationRequest, 4)]
     public async Task EmptyDatabase_MigratesOnlySelectedSchemaWithoutSeed(MigrationWorkload workload, int expectedTables)
     {
@@ -56,7 +56,7 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
 
         runner = Runner(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation, ValidReceipt(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation));
         await runner.RunAsync(CancellationToken.None);
-        Assert.Equal(6, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
+        Assert.Equal(7, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
             Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()),
             MigrationWorkload.Quotation,
             ValidReceipt(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation)).RunAsync(CancellationToken.None);
-        Assert.Equal(6, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
+        Assert.Equal(7, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
 
         await Runner(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation).RunAsync(CancellationToken.None);
 
-        Assert.Equal(6, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
+        Assert.Equal(7, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
         Assert.Equal(1, await ScalarAsync(
             Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()),
             "SELECT count(*)::int FROM pg_extension WHERE extname='pgcrypto'"));
@@ -115,7 +115,7 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
         await first.RunAsync(CancellationToken.None);
         var receipt = ValidReceipt(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation);
         await Runner(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString()), MigrationWorkload.Quotation, receipt).RunAsync(CancellationToken.None);
-        Assert.Equal(6, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
+        Assert.Equal(7, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
         Assert.Equal(0, await DataRowCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
     }
 
@@ -139,7 +139,7 @@ public sealed class MigrationRunnerPostgresTests : IAsyncLifetime
         await blocker.CloseAsync();
 
         await runner.RunAsync(CancellationToken.None);
-        Assert.Equal(6, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
+        Assert.Equal(7, await ApplicationTableCountAsync(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(quotation.GetConnectionString())));
     }
 
     [Fact]

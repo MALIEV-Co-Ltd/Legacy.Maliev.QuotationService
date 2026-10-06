@@ -205,7 +205,7 @@ public sealed class WorkflowContractTests
     [InlineData("retention-days: 7", "retention-days: 90")]
     [InlineData("include-hidden-files: false", "include-hidden-files: true")]
     [InlineData("TestResults/CoverageGate/*/coverage.cobertura.xml", "TestResults/**")]
-    [InlineData("always() && hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != ''", "success()")]
+    [InlineData("always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx') != '')", "success()")]
     public void BuildAndTest_RejectsCoverageEvidenceContractMutation(string original, string replacement) =>
         AssertMutationRejected(original, replacement);
 
@@ -267,6 +267,15 @@ internal static partial class WorkflowContractValidator
     private const string SharedValidationAction = "MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@e3a6093324a24968876782153286f52db8b29fd8";
     private const string CoverageProof = "python3 -m unittest discover -s scripts/tests -p 'test_*.py'";
     private const string CoverageCollection = """
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~QuotationInvoiceCapabilityVerifierTests' \
+          --results-directory TestResults/C821Verifier --logger 'trx;LogFileName=c821-verifier.trx'
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~QuotationInvoiceCapabilityHttpTests' \
+          --results-directory TestResults/C821Recipient --logger 'trx;LogFileName=c821-recipient.trx'
+        python3 scripts/check_c821_focused_results.py
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore \
           -p:GITHUB_ACTIONS=false --collect 'XPlat Code Coverage' --results-directory TestResults/CoverageGate \
@@ -392,13 +401,13 @@ internal static partial class WorkflowContractValidator
             .SetEquals(["name", "if", "uses", "with"]))
             throw new InvalidOperationException("Coverage evidence step must have only its reviewed keys.");
         RequireScalarValue(step, "name", "Retain complete coverage evidence");
-        RequireScalarValue(step, "if", "always() && hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != ''");
+        RequireScalarValue(step, "if", "always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx') != '')");
         RequireScalarValue(step, "uses", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
         var inputs = RequireMapping(step, "with");
         if (inputs.Children.Count != 6)
             throw new InvalidOperationException("Coverage evidence action must have exactly six reviewed inputs.");
         RequireScalarValue(inputs, "name", "quotation-complete-coverage-${{ github.sha }}");
-        RequireScalarValue(inputs, "path", "TestResults/CoverageGate/quotation-complete-coverage.trx\nTestResults/CoverageGate/*/coverage.cobertura.xml\n");
+        RequireScalarValue(inputs, "path", "TestResults/C821Verifier/c821-verifier.trx\nTestResults/C821Recipient/c821-recipient.trx\nTestResults/CoverageGate/quotation-complete-coverage.trx\nTestResults/CoverageGate/*/coverage.cobertura.xml\n");
         RequireScalarValue(inputs, "if-no-files-found", "error");
         RequireScalarValue(inputs, "retention-days", "7");
         RequireScalarValue(inputs, "include-hidden-files", "false");

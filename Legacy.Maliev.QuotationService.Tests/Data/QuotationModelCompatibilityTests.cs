@@ -21,4 +21,22 @@ public sealed class QuotationModelCompatibilityTests
         Assert.Equal("RequestFile", request.Model.FindEntityType(typeof(QuotationRequestFile))!.GetTableName());
         Assert.Null(request.Model.FindEntityType(typeof(Quotation)));
     }
+
+    [Fact]
+    public void InvoiceOperationModel_MatchesSnapshotAndRetainsIndependentRecoveryEvidence()
+    {
+        using var quotation = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql("Host=localhost;Database=model-q").Options);
+        using var request = new QuotationRequestDbContext(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql("Host=localhost;Database=model-r").Options);
+        Assert.False(quotation.Database.HasPendingModelChanges());
+        Assert.False(request.Database.HasPendingModelChanges());
+        var receipt = quotation.Model.FindEntityType(typeof(QuotationInvoiceCompletionOperation))!;
+        Assert.Equal("QuotationInvoiceCompletionOperation", receipt.GetTableName());
+        Assert.Equal(nameof(QuotationInvoiceCompletionOperation.OperationId), Assert.Single(receipt.FindPrimaryKey()!.Properties).Name);
+        Assert.Contains(receipt.GetIndexes(), index => index.IsUnique && index.Properties.Single().Name == "QuotationId");
+        Assert.Empty(receipt.GetForeignKeys());
+        Assert.Null(request.Model.FindEntityType(typeof(QuotationInvoiceCompletionOperation)));
+        Assert.Equal("text", receipt.FindProperty(nameof(QuotationInvoiceCompletionOperation.DecisionOrderVersion))!.GetColumnType());
+        Assert.Equal("text", receipt.FindProperty(nameof(QuotationInvoiceCompletionOperation.ModifiedDate))!.GetColumnType());
+        Assert.Contains("20261006080000_QuotationInvoiceCompletionOperations", quotation.Database.GetMigrations());
+    }
 }
