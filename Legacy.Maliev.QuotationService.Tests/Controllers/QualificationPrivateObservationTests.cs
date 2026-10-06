@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Legacy.Maliev.QuotationService.Api.Authorization;
 using Maliev.Aspire.ServiceDefaults.LegacyAuth;
 using Maliev.Aspire.ServiceDefaults.Logging;
@@ -210,6 +211,55 @@ public sealed class QualificationPrivateObservationTests(QuotationNormalIamFixtu
         AssertSafe(Assert.Single(logs.Entries), "HttpRequest", null);
     }
 
+    [Fact]
+    public void Privacy_oracle_allows_status_digits_in_utc_and_trace_metadata()
+    {
+        var record = OracleRecord(null);
+        Assert.Contains("504", record.Json, StringComparison.Ordinal);
+        AssertSafe(record, "QualificationHeadersTransport", null);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(200)]
+    public void Privacy_oracle_rejects_fabricated_serialized_status(int? expected)
+    {
+        var record = OracleRecord(expected);
+        var payload = JsonNode.Parse(record.Json)!.AsObject();
+        payload["StatusCode"] = 504;
+        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() =>
+            AssertSafe(record with { Json = payload.ToJsonString() }, "QualificationHeadersTransport", expected));
+    }
+
+    [Fact]
+    public void Privacy_oracle_still_rejects_actual_protected_text()
+    {
+        var record = OracleRecord(null);
+        var payload = JsonNode.Parse(record.Json)!.AsObject();
+        payload["message"] = Protected;
+        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() =>
+            AssertSafe(record with { Json = payload.ToJsonString() }, "QualificationHeadersTransport", null));
+    }
+
+    private static Record OracleRecord(int? status)
+    {
+        var fields = new Dictionary<string, object?>
+        {
+            ["EventName"] = "DependencyRequestFailure",
+            ["Dependency"] = QualificationAuthorityClient.ClientName,
+            ["Operation"] = "QualificationHeadersTransport",
+        };
+        if (status is not null) fields.Add("StatusCode", status.Value);
+        var logs = new Audit();
+        logs.CreateLogger("QualificationPrivacyOracleRegression").Log(LogLevel.Error, new EventId(5101),
+            fields, null, static (_, _) => "Application diagnostic");
+        var record = Assert.Single(logs.Entries);
+        var payload = JsonNode.Parse(record.Json)!.AsObject();
+        payload["occurredAtUtc"] = "2026-10-06T08:44:41.0504431+00:00";
+        payload["traceId"] = "00000000000000000000000000000504";
+        return record with { Json = payload.ToJsonString() };
+    }
+
     private WebApplicationFactory<Program> App(Transport transport, Audit logs, TimeSpan? nativeTimeout = null) =>
         fixture.App(new()).WithWebHostBuilder(builder =>
         {
@@ -249,7 +299,16 @@ public sealed class QualificationPrivateObservationTests(QuotationNormalIamFixtu
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("exceptionType").ValueKind);
         foreach (var pair in record.Fields)
             Assert.Equal(JsonSerializer.Serialize(pair.Value), json.RootElement.GetProperty(pair.Key).GetRawText());
-        foreach (var forbidden in new[] { Protected, "employee-private", "introspection", "Bearer", "504", "TimeoutException" })
+        var serializedStatuses = json.RootElement.EnumerateObject()
+            .Where(property => property.Name.Equals("StatusCode", StringComparison.OrdinalIgnoreCase)).ToArray();
+        Assert.Equal(status is null ? 0 : 1, serializedStatuses.Length);
+        if (status is not null)
+        {
+            var serializedStatus = Assert.Single(serializedStatuses);
+            Assert.Equal("StatusCode", serializedStatus.Name);
+            Assert.Equal(status.Value, serializedStatus.Value.GetInt32());
+        }
+        foreach (var forbidden in new[] { Protected, "employee-private", "introspection", "Bearer", "TimeoutException" })
             Assert.DoesNotContain(forbidden, record.Json, StringComparison.Ordinal);
     }
 
