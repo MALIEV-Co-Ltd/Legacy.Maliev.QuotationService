@@ -7,4 +7,6 @@
   <Project Path="Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj" />
   <Project Path="tools/InvoiceCompletionProducerAcceptance/InvoiceCompletionProducerAcceptance.csproj" />
   <Project Path="tools/QualificationOutcomeWireSource/QualificationOutcomeWireSource.csproj" />
+  <Project Path="tools/HostedStorageFrontHost/HostedStorageFrontHost.csproj" />
+  <Project Path="tools/HostedStorageFront.Tests/HostedStorageFront.Tests.csproj" />
 </Solution>

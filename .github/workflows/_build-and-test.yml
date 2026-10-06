@@ -134,6 +134,10 @@ jobs:
             --filter 'FullyQualifiedName~HostedV4SignedReadVerifierTests' \
             --results-directory TestResults/CompanionSigning --logger 'trx;LogFileName=companion-signing.trx'
           python3 -B scripts/check_companion_focused_results.py
+          dotnet test tools/HostedStorageFront.Tests/HostedStorageFront.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --results-directory TestResults/StorageFront --logger 'trx;LogFileName=storage-front.trx'
+          python3 -B scripts/check_storage_front_results.py
           dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
             --configuration Release --no-build --no-restore \
             -p:GITHUB_ACTIONS=false --collect 'XPlat Code Coverage' --results-directory TestResults/CoverageGate \
@@ -161,6 +165,7 @@ jobs:
             TestResults/C821Recipient/c821-recipient.trx
             TestResults/CompanionAdmission/companion-admission.trx
             TestResults/CompanionSigning/companion-signing.trx
+            TestResults/StorageFront/storage-front.trx
             TestResults/CoverageGate/quotation-complete-coverage.trx
             TestResults/CoverageGate/*/coverage.cobertura.xml
           if-no-files-found: error
