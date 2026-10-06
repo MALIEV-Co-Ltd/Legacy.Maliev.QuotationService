@@ -24,7 +24,8 @@ internal static class QuotationIamComposition
         })
         .RedactLoggedHeaders(["X-Maliev-IAM-Live-Check-Key"])
         .AddServiceDiscovery()
-        .AddLegacyServiceAuthentication();
+        .AddLegacyServiceAuthentication()
+        .AddPrivateFailureObservation("IAMService");
     }
 
     private static Uri ResolveOrigin(string? configured, IHostEnvironment environment)
