@@ -130,7 +130,8 @@ public sealed class HostedV4SignedReadVerifierTests
             {
                 Origin = new Uri("http://" + host + ":45001");
                 var credential = new ServiceAccountCredential(new ServiceAccountCredential.Initializer(
-                    "hosted-file-signing@example.invalid") { Key = key, HttpClientFactory = new RejectingFactory() });
+                    "hosted-file-signing@example.invalid")
+                { Key = key, HttpClientFactory = new RejectingFactory() });
                 var query = new Dictionary<string, IEnumerable<string>>
                 {
                     ["response-content-disposition"] = ["attachment; filename=invoice.pdf"],

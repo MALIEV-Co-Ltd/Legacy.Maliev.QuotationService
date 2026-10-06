@@ -108,7 +108,7 @@
   },
   "signing": {
     "source": "Legacy.Maliev.QuotationService.Tests/Tools/HostedV4SignedReadVerifierTests.cs",
-    "normalizedSourceSha256": "cf09900620f2a35c9b2eeaf76994c0a8f8f0655a511cc482ffcfe7b5ee675eb0",
+    "normalizedSourceSha256": "7486dddd25f9ceddf68ece2d77cdcef2fde43923df1c7a2d2e9852956de8138e",
     "className": "Legacy.Maliev.QuotationService.Tests.Tools.HostedV4SignedReadVerifierTests",
     "trx": "TestResults/CompanionSigning/companion-signing.trx",
     "methods": {
