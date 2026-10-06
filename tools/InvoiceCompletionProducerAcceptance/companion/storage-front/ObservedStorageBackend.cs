@@ -22,6 +22,19 @@ public sealed class ObservedStorageBackend(StorageBackendLease lease)
     /// <summary>Actual endpoint only; it is never a provider/cloud destination.</summary>
     public Uri Origin => new($"http://{lease.BridgeIp}:{lease.Port}/");
 
+    internal Uri AdmitOrigin(string runId, DateTimeOffset expiresUtc)
+    {
+        Validate(DateTimeOffset.UtcNow);
+        RequireLeaseBinding(runId, expiresUtc);
+        return Origin;
+    }
+
+    internal void RequireLeaseBinding(string runId, DateTimeOffset expiresUtc)
+    {
+        if (runId != lease.RunId || expiresUtc != lease.ExpiresUtc)
+            throw new InvalidDataException("Front and actual backend must belong to the same exact run lease.");
+    }
+
     /// <summary>Validates declaration and current hosted run before any helper or forwarding I/O.</summary>
     public void Validate(DateTimeOffset now)
     {

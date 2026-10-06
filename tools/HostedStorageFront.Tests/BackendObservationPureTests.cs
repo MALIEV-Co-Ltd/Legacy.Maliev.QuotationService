@@ -5,6 +5,25 @@ namespace InvoiceCompletionProducerAcceptance.Companion;
 
 public sealed class BackendObservationPureTests
 {
+    [Fact]
+    public void ExactFrontRunAndLeaseBindToTheBackend()
+    {
+        var lease = Lease();
+        new ObservedStorageBackend(lease).RequireLeaseBinding(lease.RunId, lease.ExpiresUtc);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DifferentFrontRunOrExpiryCannotReuseAnObservedBackend(bool differentRun)
+    {
+        var lease = Lease();
+        var backend = new ObservedStorageBackend(lease);
+        Assert.Throws<InvalidDataException>(() => backend.RequireLeaseBinding(
+            differentRun ? "c821-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" : lease.RunId,
+            differentRun ? lease.ExpiresUtc : lease.ExpiresUtc.AddSeconds(1)));
+    }
+
     [Theory]
     [InlineData("2026-10-06T00:00:00Z", 0)]
     [InlineData("2026-10-06T00:00:00.1Z", 1000000)]

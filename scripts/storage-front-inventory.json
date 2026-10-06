@@ -1,8 +1,26 @@
 {
   "InvoiceCompletionProducerAcceptance.Companion.BackendObservationPureTests": {
     "source": "tools/HostedStorageFront.Tests/BackendObservationPureTests.cs",
-    "normalizedSourceSha256": "69da45f1a1f10f514886d3471d2fc681189efebbf444003d3b52c89edb386274",
+    "normalizedSourceSha256": "fc11055a43f18e9aaa90ecba39c020adeeaf81c89ec52f9efe706f63a162abad",
     "methods": {
+      "ExactFrontRunAndLeaseBindToTheBackend": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "DifferentFrontRunOrExpiryCannotReuseAnObservedBackend": {
+        "parameters": [
+          {
+            "name": "differentRun",
+            "type": "bool"
+          }
+        ],
+        "cases": [
+          "456e2e3fa05ee1e2f4e529558008ce162bbd388a9dd4a923c79543a4a1dba618",
+          "1c28f2eb0958c3d15db1f0f0e7f2b8998ca2b8f67ab426a1fbb3d561fe76fad9"
+        ]
+      },
       "DockerNanosecondsAreBoundedToClrTickPrecision": {
         "parameters": [
           {

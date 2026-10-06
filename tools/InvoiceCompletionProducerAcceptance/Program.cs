@@ -274,44 +274,8 @@ async Task WriteReceipt(bool passed, string? failureKind)
     Console.WriteLine(passed ? "Actual producer boundary acceptance passed; opaque receipt retained." : "Actual producer boundary acceptance failed; opaque receipt retained.");
 }
 
-async Task<string> Git(string repository, params string[] arguments)
-{
-    using var process = new Process { StartInfo = new ProcessStartInfo("git") { WorkingDirectory = repository, UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true } };
-    foreach (var argument in arguments) process.StartInfo.ArgumentList.Add(argument);
-    process.Start();
-    var started = process.StartTime.ToUniversalTime();
-    var identity = process.MainModule?.FileName ?? "git";
-    var position = gitResources.Count;
-    gitResources.Add(new(process.Id, started, identity, false));
-    using var deadline = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
-    deadline.CancelAfter(TimeSpan.FromSeconds(10));
-    var output = process.StandardOutput.ReadToEndAsync(deadline.Token);
-    var errors = process.StandardError.ReadToEndAsync(deadline.Token);
-    try
-    {
-        await process.WaitForExitAsync(deadline.Token);
-        await errors;
-        if (process.ExitCode != 0) throw new InvalidOperationException("Source preflight failed.");
-        return (await output).Trim();
-    }
-    finally
-    {
-        try
-        {
-            if (!process.HasExited && process.StartTime.ToUniversalTime() == started)
-            {
-                try { process.CloseMainWindow(); } catch (InvalidOperationException) { } catch (PlatformNotSupportedException) { }
-                if (!process.HasExited) process.Kill(entireProcessTree: false);
-            }
-            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            await process.WaitForExitAsync(cleanup.Token);
-            try { await Task.WhenAll(output, errors).WaitAsync(cleanup.Token); }
-            catch (Exception) { _ = output.Exception; _ = errors.Exception; }
-        }
-        catch (Exception) { /* Exact owned resource remains recorded; successful acceptance is forbidden. */ }
-        gitResources[position] = new(process.Id, started, identity, process.HasExited);
-    }
-}
+Task<string> Git(string repository, params string[] arguments) =>
+    OwnedGitCommand.RunAsync(repository, arguments, gitResources, lifetime.Token);
 
 async Task<T> Scalar<T>(string connection, string sql, params (string Name, object Value)[] values)
 {
@@ -376,4 +340,3 @@ sealed record FixtureProfile(string RunId, DateTimeOffset ExpiresUtc, Uri AuthOr
     JsonElement InvoiceIntent, SourceInput[] Sources);
 sealed record SourceInput(string Owner, string Repository, string Commit, string Tree, int ProcessId,
     DateTimeOffset ActualStartUtc, string ExecutableDll, string DllSha256, Dictionary<string, string> DatabaseBindings, Dictionary<string, string> ServiceBindings);
-sealed record GitResource(int ProcessId, DateTime ActualStartUtc, string Executable, bool Exited);

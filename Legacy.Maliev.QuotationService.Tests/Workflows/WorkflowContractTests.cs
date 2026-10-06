@@ -321,6 +321,10 @@ internal static partial class WorkflowContractValidator
           --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
           --results-directory TestResults/StorageFront --logger 'trx;LogFileName=storage-front.trx'
         python3 -B scripts/check_storage_front_results.py
+        dotnet test tools/FinancialCompletionEvidence.Tests/FinancialCompletionEvidence.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --results-directory TestResults/FinancialCompletion --logger 'trx;LogFileName=financial-completion.trx'
+        python3 -B scripts/check_financial_completion_results.py
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore \
           -p:GITHUB_ACTIONS=false --collect 'XPlat Code Coverage' --results-directory TestResults/CoverageGate \
@@ -455,7 +459,7 @@ internal static partial class WorkflowContractValidator
         if (inputs.Children.Count != 6)
             throw new InvalidOperationException("Coverage evidence action must have exactly six reviewed inputs.");
         RequireScalarValue(inputs, "name", "quotation-complete-coverage-${{ github.sha }}");
-        RequireScalarValue(inputs, "path", "TestResults/C821Verifier/c821-verifier.trx\nTestResults/C821Recipient/c821-recipient.trx\nTestResults/CompanionAdmission/companion-admission.trx\nTestResults/CompanionSigning/companion-signing.trx\nTestResults/StorageFront/storage-front.trx\nTestResults/CoverageGate/quotation-complete-coverage.trx\nTestResults/CoverageGate/*/coverage.cobertura.xml\n");
+        RequireScalarValue(inputs, "path", "TestResults/C821Verifier/c821-verifier.trx\nTestResults/C821Recipient/c821-recipient.trx\nTestResults/CompanionAdmission/companion-admission.trx\nTestResults/CompanionSigning/companion-signing.trx\nTestResults/StorageFront/storage-front.trx\nTestResults/FinancialCompletion/financial-completion.trx\nTestResults/CoverageGate/quotation-complete-coverage.trx\nTestResults/CoverageGate/*/coverage.cobertura.xml\n");
         RequireScalarValue(inputs, "if-no-files-found", "error");
         RequireScalarValue(inputs, "retention-days", "7");
         RequireScalarValue(inputs, "include-hidden-files", "false");
