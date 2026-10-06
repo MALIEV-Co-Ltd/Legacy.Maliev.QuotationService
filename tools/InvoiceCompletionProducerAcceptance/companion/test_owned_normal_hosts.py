@@ -2,6 +2,7 @@
 from dataclasses import replace
 import subprocess
 import unittest
+from typing import get_type_hints
 from unittest.mock import MagicMock,patch
 import hosted_companion_resources as h
 import owned_normal_hosts as n
@@ -28,6 +29,9 @@ def specs():
 
 
 class NormalHostSourceControls(unittest.TestCase):
+    def test_tls_field_annotation_resolves_without_shadowing_imported_module(self):
+        self.assertEqual(get_type_hints(n.HostSpec)["tls"],n.tls.TlsIdentity | None)
+
     def test_exact_graph_and_memory_threshold(self):
         self.assertEqual(n.validate_specs(specs(),CTX,2*1024**3,4*1024**3),3*1024**3)
 

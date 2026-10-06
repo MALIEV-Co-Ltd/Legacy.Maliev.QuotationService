@@ -18,6 +18,7 @@ import threading
 
 import hosted_companion_resources as h
 import tls_listener_admission as tls
+from tls_listener_admission import TlsIdentity
 
 OWNERS = frozenset({"Auth","Accounting","Quotation","Order","IAM","Document","File","Notification"})
 
@@ -34,7 +35,7 @@ class HostSpec:
     host_port: int
     environment: dict
     heap_limit_bytes: int
-    tls: tls.TlsIdentity | None = None
+    tls: TlsIdentity | None = None
 
 
 def available_memory_bytes():
