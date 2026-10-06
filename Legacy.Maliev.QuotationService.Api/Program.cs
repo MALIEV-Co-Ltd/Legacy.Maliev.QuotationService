@@ -30,6 +30,19 @@ return await QuotationStartupBoundary.RunAsync(async () =>
             QuotationEmployeeActorPolicy.IsEmployee(context.User))));
     builder.AddLegacyAuthServiceTokenExchange();
     builder.AddQuotationIamClient();
+    builder.Services.AddScoped<QuotationInvoiceCapabilityVerifier>();
+    builder.Services.AddScoped<QuotationInvoiceCompletionAuthority>();
+    builder.Services.AddHttpClient<QuotationInvoiceFinancialAuthorityClient>(client =>
+    {
+        client.BaseAddress = QuotationInvoiceFinancialAuthorityClient.ResolveOrigin(
+            builder.Configuration["Services:Accounting:BaseUrl"] ?? builder.Configuration["Services:Accounting"], builder.Environment);
+        client.Timeout = TimeSpan.FromSeconds(10);
+    }).RemoveAllResilienceHandlers().ConfigurePrimaryHttpMessageHandler((handler, _) =>
+    {
+        if (handler is SocketsHttpHandler sockets) sockets.AllowAutoRedirect = false;
+        else if (handler is HttpClientHandler http) http.AllowAutoRedirect = false;
+        else throw new InvalidOperationException("Financial authority requires a redirect-disabled primary handler.");
+    }).AddServiceDiscovery().AddLegacyServiceAuthentication();
     builder.Services.AddOptions<QualificationAuthorityOptions>().Bind(builder.Configuration.GetSection("QualificationAuthority"));
     builder.Services.AddScoped<QualificationAuthorityClient>();
     builder.Services.AddHttpClient(QualificationAuthorityClient.ClientName, client =>
@@ -58,7 +71,9 @@ return await QuotationStartupBoundary.RunAsync(async () =>
     builder.Services.AddScoped<DistributedQuotationCache>();
     builder.Services.AddScoped<IQuotationCache>(provider => provider.GetRequiredService<DistributedQuotationCache>());
     builder.Services.AddScoped<IIdempotencyStore>(provider => provider.GetRequiredService<DistributedQuotationCache>());
-    builder.Services.AddScoped<IQuotationService, QuotationRepository>();
+    builder.Services.AddScoped<QuotationRepository>();
+    builder.Services.AddScoped<IQuotationService>(services => services.GetRequiredService<QuotationRepository>());
+    builder.Services.AddScoped<IQuotationInvoiceCompletionStore>(services => services.GetRequiredService<QuotationRepository>());
     builder.Services.AddScoped<IQuotationDecisionWorkflow, QuotationDecisionWorkflow>();
     builder.Services.AddHttpClient<IOrderDecisionClient, OrderDecisionClient>(client =>
     {

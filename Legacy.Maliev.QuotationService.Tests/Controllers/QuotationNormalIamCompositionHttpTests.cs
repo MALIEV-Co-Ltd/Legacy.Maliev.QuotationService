@@ -353,6 +353,33 @@ public sealed class QuotationNormalIamFixture : IAsyncLifetime
         [new Claim("sub", subject), new Claim("identity_kind", "service"), new Claim("permissions", "legacy.quotations.update")],
         DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(5), new SigningCredentials(new RsaSecurityKey(key), SecurityAlgorithms.RsaSha256)));
 
+    // Fixture signer only: actual Auth financial-readback issuance belongs to the cross-project joined lane.
+    internal string InvoiceCapability(int quotationId, int invoiceId, Guid operation, DateTime version, string mode = "bound", TimeProvider? clock = null)
+    {
+        var now = (clock ?? TimeProvider.System).GetUtcNow();
+        var claims = new List<Claim>
+        {
+            new("sub", "employee-42"),
+            new("jti", Guid.NewGuid().ToString("D")),
+            new("iat", now.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
+            new("azp", "service:legacy-intranet"),
+            new("executor", "service:legacy-accounting"),
+            new("scope", "legacy.quotation.invoice-complete"),
+            new("quotation_id", quotationId.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            new("operation_id", operation.ToString("D")),
+        };
+        if (mode != "unbound")
+        {
+            claims.Add(new("invoice_id", (mode == "other-invoice" ? invoiceId + 1 : invoiceId).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            claims.Add(new("quotation_version", DateTime.SpecifyKind(mode == "other-version" ? version.AddSeconds(1) : version, DateTimeKind.Utc).ToString("O")));
+            claims.Add(new("financial_binding", new string(mode == "bad-binding" ? 'a' : 'A', 64)));
+            claims.Add(new("financial_binding_version", "invoice-creation-financial-v1"));
+        }
+        return new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(Issuer,
+            "legacy-quotation:invoice-complete", claims, now.UtcDateTime, now.AddSeconds(60).UtcDateTime,
+            new SigningCredentials(new RsaSecurityKey(key), SecurityAlgorithms.RsaSha256)));
+    }
+
     public async Task DisposeAsync()
     {
         try { if (containers is not null) await containers.DisposeAsync(); }

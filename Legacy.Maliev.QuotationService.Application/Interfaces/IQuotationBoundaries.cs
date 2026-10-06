@@ -115,7 +115,10 @@ public sealed record IdempotentRequestCreateResult(
 public interface IQuotationDecisionWorkflow
 {
     Task<QuotationDecisionResponse> DecideAsync(int quotationId, QuotationDecisionRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken);
+    Task<QuotationDecisionResponse> CompleteInvoiceAsync(QuotationInvoiceCompletionContext authority, CancellationToken cancellationToken)
+        => throw new NotSupportedException("Bound invoice completion requires its durable operation store.");
 }
+
 
 public interface IOrderDecisionClient
 {

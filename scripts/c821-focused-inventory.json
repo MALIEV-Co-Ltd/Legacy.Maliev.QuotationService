@@ -1,0 +1,343 @@
+{
+  "verifier": {
+    "source": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceCapabilityVerifierTests.cs",
+    "normalizedSourceSha256": "2e0735b6641606e5ff78a1dc3ef4ae7785ba263dbaa4bb54af00d7a4684a3135",
+    "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationInvoiceCapabilityVerifierTests",
+    "methods": {
+      "InvoiceBoundAuthExtension_VerifiesExactActorFinancialOperation": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "InvalidOrOverbroadProof_FailsClosed": {
+        "parameters": [
+          {
+            "name": "scenario",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "3ba4182ad41bec6d61d16d8631b3d9e9f4c896992cf1e0e82d21eecb4043e5d3",
+          "f2a11f32754883a80d413ae97cd78f837ee261a67511e1cd934f9ca3a9a3159e",
+          "e42ef903a38bbae8473e43c34c06f5f471428112cacbf96a5fad3b18d3805022",
+          "f20b37d331180574546a803c4f653ab09fff76e7cb29dc030615d35e0af3ff69",
+          "e23bdb5761217868e51c52eb448d713cdfd2108a89523e200a5c9b199e609d51",
+          "59bf646384cee9ec87aeed1e6c310b67119a3d962fe1de1b9ea98cc78c83771c",
+          "0722ee58199be75d59b75ae00507cdfe9ac0e6d55ea30587be598d5d9283f65a",
+          "d54baeae094877c6f980092ec61e044360f7ecfac054a03b4ea5fe2d0760ca42",
+          "ff1d6748d21525d17fa7f8f8977d56bcd03b806b49286ac6c8507a4a8c1a10b4",
+          "b455b710eae7ec6d207a04fb79cfb233b957d548983a3f6f9bba2a72c1b6016f",
+          "89b34abd77e759d5b49b0cb195d425bf703964695c627bae061eb178dfc16234",
+          "e4022a9de8ae489e8281302c0fbf7e1e519d2f530d9ab56a0890d43f67ad2cc5",
+          "737ed6b9899e4cb9d7cdd6ac39647479ecb4c3b57677525be0d85474d37ae219",
+          "7d7911bbfe86641c0172cc5d6090fab2e1d0d62030b78e3dc1f30e770bafcf86",
+          "dd74cb35e70356bffac80a3f0a940d48bccb823f8ed0b534bbb2d9015a10116a",
+          "c33e8c01fae91b1e7b8c0e318ad1999dd501cf7573bf0fdff240dfe3c286278b",
+          "68bfd95f27b4307fc7ca41a549eb044363873cec16ceb6557be82a413c6c1fb3",
+          "3a71d1c1fcf27deb625312f3ea1b57ee5f377080fa925b90ca9d11ea9239a8bc",
+          "68ee61b1548899a42c3402c621cb246a871f991eb64c290ed93ab8c93b247da6",
+          "3fa693255e6e5ba82965a8304ca5e3c26e7dca24bd42d8451cf4e7159a7ff1b2",
+          "958878a0add1273e16c09e14d5dfeb37a7054c37a1905e3f4bd030a7641dab9e",
+          "7e95e33672c32d0428d8142e93ecc6821da5568475976167e4972a7d79982886",
+          "04d9e20ee96a3d72d5f88848fdaa0e64eeab63d2ca1fc8706835b83c8def06e9",
+          "cc0f01a404b59412981156ea6860542075af14ced6b88faeeae2a59e311a917c",
+          "b0ce77d1d71ac03893e9014024022d3887d5a9365b4f34dc6ce4f06d5748930c",
+          "72eafbbbc60f6b230bebf013316954b04550d7f8617ddb09bc971a8354b3e834",
+          "826d40212e4ecb597e3a0231893f7baecc996c6972d02983d2c478602150c7ce",
+          "5501a310a29a525357e4bb854798f4a6bea40fc935303989f17a8186f5bb25f5",
+          "bf07098de0b1194a4067bba1ca4dbfe56703dc09b73855a9d5e78d1689bb9a4c",
+          "84670ea363288958c02770f7af8134eca1a91623097af34558c38e755c4de18d",
+          "9c3de4f580b76b57bec01867a12b5d488ba3592af41711284f2ad6f31ba9c173",
+          "6d5a653d012f059143178f28ad284a8d5c3d172e3435266e3d4e61488f833a3e"
+        ]
+      },
+      "CapabilityCannotAuthorizeAnotherOrAmbiguousSender": {
+        "parameters": [
+          {
+            "name": "scenario",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "f27b6edfcdcda907cc9b8d02ec488d9243e0e790292bd77365dc52cc48e94691",
+          "95907d69795030553ca6a8b03e08cb2f0a963c7ebf96605885b39faba35a38a7",
+          "76391d1304770c3ae36e942e655027bdd2ebeba25c54d6fc88c6fd1aae21e1a2",
+          "942ffa277eaf2d11ea9aa793a14e413de2d3515e3ecaa25b160abb8089bd7af0",
+          "8ea899e24f3f8f8d5c6dc5d90b87628b026ac7c7b463441cdc1f926aa09e437e",
+          "39bc6e4c76bdce89392d106761c875ce851cacde59df598e0b626ee2a0cf6298"
+        ]
+      },
+      "FreshCapabilityForSameOperation_HasNewNonceAndDoesNotRetainExpiredBearer": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      }
+    }
+  },
+  "recipient": {
+    "source": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceCapabilityHttpTests.cs",
+    "normalizedSourceSha256": "1b6bb2d91e4380cc3b108e0bb51905f1b98afe2c693c4b3cac129ad400e4891f",
+    "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationInvoiceCapabilityHttpTests",
+    "methods": {
+      "BoundEmployeeCompletion_ReachesExistingRepositoryWithoutInventingHistoricalOutcome": {
+        "parameters": [
+          {
+            "name": "accepted",
+            "type": "bool?"
+          }
+        ],
+        "cases": [
+          "1d8fc6ceb1f94c6326d6d5483d258fcb2e179e9869325b245d105c2219bf69fd",
+          "456e2e3fa05ee1e2f4e529558008ce162bbd388a9dd4a923c79543a4a1dba618",
+          "1c28f2eb0958c3d15db1f0f0e7f2b8998ca2b8f67ab426a1fbb3d561fe76fad9"
+        ]
+      },
+      "InvalidBoundAuthority_RetainsBareAccountingDenialAndExactStoredJson": {
+        "parameters": [
+          {
+            "name": "mode",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "7d041513f2a6b36a6e9759660bd3c561f649255d62b096b7d676c2ee77a7cd73",
+          "148f4146f1ed16da6ccb467e173e511b5fca23e8cbbf5859b1e78b066cd20251",
+          "9ee3e5128ec0866054f8cf2d2b0f74482db480ec841a4e195ff351a1bfdd292d",
+          "30d7d5fadb6d95488f1c2862dde84a741bfdb5812049c1723984da907a8dee1b",
+          "ce5ddeb111be91a32c8d2a395d7a1d6a167434e10c86a8f0660f02e7da24a467"
+        ]
+      },
+      "LateAttachmentAndSameOperationReplay_PreserveFirstCustomerOutcomeAndOrderVersion": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ValidAuthority_CannotRelaxExistingRepositoryConflicts": {
+        "parameters": [
+          {
+            "name": "mode",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "4f4ace1555381763a1f74d635a92e3b927dc1e8aa8b5837283e455ba42bae210",
+          "3d87814527bd9b6103a6ab0ddfd6b1ee53db556d55048324b6952e25ff19f555"
+        ]
+      },
+      "FinancialDriftAfterMint_ConflictsWithoutLocalInvoiceAttachment": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "UnavailableOrMalformedFinancialReadback_FailsClosedWithoutMutation": {
+        "parameters": [
+          {
+            "name": "mode",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "f6ef77ed9c3da81fd72e6224fecd594b4bbb657c68ff31f525f5d9aaf23101a7",
+          "7950bfaf7f2bbf829559cf4cab4db4961369f40632d5cfe0c053f60e46499814",
+          "4fb64b370e04ad285cb9ceef2aea3b28b0bc3ffbc00996d9ad78202392718175",
+          "68ad86edffa34563cdb966af4acfbd518627f6c83126e17f1beb56177b4c6af4",
+          "3303cb6e3abf9576a7a76239fe6908cd8874d7561caca536c9fef609efa8f89f",
+          "b0ce77d1d71ac03893e9014024022d3887d5a9365b4f34dc6ce4f06d5748930c"
+        ]
+      },
+      "LiveEmployeeDenial_HasNoServiceClaimFallbackAndNoMutation": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "CapabilityExpiresAcrossLiveAwait_NoMutationAfterFreshServiceAllow": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "OriginalCallerCancellationAtEmployeeCheck_PropagatesWithoutMutation": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "LostDecisionAcknowledgement_ReadsExactCompletedReceipt_ThenReplaySkipsOrders": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "PartialOrderFailure_ReadbackIsPartial_ResumeSkipsCheckpointedOrders": {
+        "parameters": [
+          {
+            "name": "failure",
+            "type": "OrderDecisionResult"
+          },
+          {
+            "name": "state",
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "type": "HttpStatusCode"
+          }
+        ],
+        "cases": [
+          "7e8bb729db1184510da2b0b0b28ee1abd08c2589c689e71a527a0c648bce544d",
+          "36008c58907067cf24638469602c750f3da59f552b02e01f2b7dce834ae279f5"
+        ]
+      },
+      "CallerCancellationAfterFirstOrder_PreservesPartialReceiptAndFiniteClaimRecovery": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "SameInvoiceWithoutOwningOperation_IsNotAdoptedOrAcknowledged": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "OperationInsertFailure_RollsBackQuotationLinkAndAcceptance": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ConcurrentClaimAndExpiredOwner_AreConditionalAndCannotOverwriteNewOwner": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ChangedImmutableAdmission_CannotReplayOwningReceipt": {
+        "parameters": [
+          {
+            "name": "change",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "8b5af50e6be2454c69a7ca7f6961cc61f307da9788ecbb26fb47075adbabd7af",
+          "76391d1304770c3ae36e942e655027bdd2ebeba25c54d6fc88c6fd1aae21e1a2",
+          "0f959c80970d608296f3e975bae731ea49e0f6d0b2a3d62184a98b3c6285dc49",
+          "c898379ea6238ecad97b351de0977c6ff8b1279211ade3c6363a70b87b03c659",
+          "1c7814b63a0c9eef6a2e127918c2c30610720d11fe6111c1f497b64167a2ae34",
+          "6a91276ac650c224675bc84476e13ba512308b213d9d17879d1becc5d8211732"
+        ]
+      },
+      "ConcurrentAdmission_SameOperationConverges_DifferentOperationConflicts": {
+        "parameters": [
+          {
+            "name": "sameOperation",
+            "type": "bool"
+          }
+        ],
+        "cases": [
+          "1c28f2eb0958c3d15db1f0f0e7f2b8998ca2b8f67ab426a1fbb3d561fe76fad9",
+          "456e2e3fa05ee1e2f4e529558008ce162bbd388a9dd4a923c79543a4a1dba618"
+        ]
+      },
+      "LostCheckpointAcknowledgement_ReadbackProvesCompletionWithoutRepeatingOrderEffects": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "OwningReadback_RequiresCurrentExactBoundAuthority": {
+        "parameters": [
+          {
+            "name": "mode",
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "type": "HttpStatusCode"
+          }
+        ],
+        "cases": [
+          "d5598eed74750dcc0bd3a33195b12103c1c2ea9b96aca26a7b8b961f60374355",
+          "07598400d26c7bbb7bac91aca5a144203f7616befdd33fe01d383882795d1fee",
+          "006373161729814c2e74462cb20623dedd7a2c9ad21fdc6e130c5fe9e343ccd0",
+          "99aa188bf4cacd82a2f70e952a4d282f3f0c34401e9741eb8b1281a7ed2617e7",
+          "278f591b83b1d515fe2d7099afe921c4a777e8f4dc125552a9d0cca19b0587a1"
+        ]
+      },
+      "CapabilityWire_RequiresExactlyOneBearerPrefix_ForDecisionAndOwningGet": {
+        "parameters": [
+          {
+            "name": "readback",
+            "type": "bool"
+          },
+          {
+            "name": "doublePrefix",
+            "type": "bool"
+          }
+        ],
+        "cases": [
+          "38576924f34fcfc3c6d659cbcd3b5e39205f062496b79cfe98abbc494c76b30d",
+          "12e5f2013089bb9cd19561e998b89853deb9eb1b4e8e53dcf1bf4d75d389924b",
+          "153c9dbcc7025ecd7e50ce6d83f1995233dfc636bc869098e3a8d84288fd938a",
+          "496428035f129afe53b21f8d653caebae7c186b624d4bd69ad5e1ba52bbe4067"
+        ]
+      },
+      "OrderMembershipIsFrozenAtLinkAdmission_NewLinksDoNotExpandRecovery": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "CompletedReceiptReplay_RetainsResultAfterQuotationEditOrDeletion": {
+        "parameters": [
+          {
+            "name": "delete",
+            "type": "bool"
+          }
+        ],
+        "cases": [
+          "456e2e3fa05ee1e2f4e529558008ce162bbd388a9dd4a923c79543a4a1dba618",
+          "1c28f2eb0958c3d15db1f0f0e7f2b8998ca2b8f67ab426a1fbb3d561fe76fad9"
+        ]
+      },
+      "PartialReceipt_LaterQuotationEditOrDeletion_FencesResumeWithoutOrderCalls": {
+        "parameters": [
+          {
+            "name": "delete",
+            "type": "bool"
+          }
+        ],
+        "cases": [
+          "456e2e3fa05ee1e2f4e529558008ce162bbd388a9dd4a923c79543a4a1dba618",
+          "1c28f2eb0958c3d15db1f0f0e7f2b8998ca2b8f67ab426a1fbb3d561fe76fad9"
+        ]
+      },
+      "NormalHttpEfWriteOrRetryFailures_AreOpaque503_WithOwningRecovery": {
+        "parameters": [
+          {
+            "name": "phase",
+            "type": "string"
+          },
+          {
+            "name": "retryExhausted",
+            "type": "bool"
+          }
+        ],
+        "cases": [
+          "dc88d358485b02c9935a78f7eb582e274e859b993b994e93ad91fa461a2b85a1",
+          "e612d6ad3bd3f10ef1e27ebfe432901e63040e1233f15f552061c6c96288a9ee",
+          "0912e638749c8d6e0a386a8c5e7308a756c8f942ba9cc955d3728fd4e6422c47",
+          "f0c59452d16dfab3ed51a238a5ade54c15492a31e1868fe720a2baa073c4641b",
+          "0be1b9b4cd03c8daaa83597d8488cb8a6daf3db7589996f01f28123d3ff38428",
+          "bec5a1d254ee0e90c9de29642c5c8fedac61839d73b7aea734e21d2e3384eb00"
+        ]
+      }
+    }
+  }
+}

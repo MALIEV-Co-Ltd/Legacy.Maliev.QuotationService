@@ -104,6 +104,15 @@ jobs:
         shell: bash
         run: |
           dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~QuotationInvoiceCapabilityVerifierTests' \
+            --results-directory TestResults/C821Verifier --logger 'trx;LogFileName=c821-verifier.trx'
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~QuotationInvoiceCapabilityHttpTests' \
+            --results-directory TestResults/C821Recipient --logger 'trx;LogFileName=c821-recipient.trx'
+          python3 scripts/check_c821_focused_results.py
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
             --configuration Release --no-build --no-restore \
             -p:GITHUB_ACTIONS=false --collect 'XPlat Code Coverage' --results-directory TestResults/CoverageGate \
             --settings Legacy.Maliev.QuotationService.Tests/coverage.runsettings \
@@ -121,11 +130,13 @@ jobs:
           python3 scripts/check_owned_coverage.py "${reports[0]}" --minimum 80 --raw
 
       - name: Retain complete coverage evidence
-        if: always() && hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != ''
+        if: always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx') != '')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: quotation-complete-coverage-${{ github.sha }}
           path: |
+            TestResults/C821Verifier/c821-verifier.trx
+            TestResults/C821Recipient/c821-recipient.trx
             TestResults/CoverageGate/quotation-complete-coverage.trx
             TestResults/CoverageGate/*/coverage.cobertura.xml
           if-no-files-found: error

@@ -39,4 +39,8 @@
     <None Include="Fixtures\quotation-outcome-outbox.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../tools/InvoiceCompletionProducerAcceptance/ProducerDatabaseBindings.cs" Link="Tools/ProducerDatabaseBindings.cs" />
+  </ItemGroup>
+
 </Project>

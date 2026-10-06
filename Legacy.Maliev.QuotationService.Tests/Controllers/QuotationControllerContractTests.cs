@@ -44,8 +44,8 @@ public sealed class QuotationControllerContractTests
     public void Controllers_PreserveLegacyRoutesAndAddOutcomeAndQualificationRoutes()
     {
         var methods = Controllers.SelectMany(row => ((Type)row[0]).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)).ToArray();
-        Assert.Equal(38, methods.Length);
-        Assert.Equal(39, methods.SelectMany(method => method.GetCustomAttributes<HttpMethodAttribute>()).Count());
+        Assert.Equal(39, methods.Length);
+        Assert.Equal(40, methods.SelectMany(method => method.GetCustomAttributes<HttpMethodAttribute>()).Count());
         var qualification = methods.Where(method => method.GetCustomAttribute<QualificationAuthorityAttribute>() is not null).ToArray();
         Assert.Equal(2, qualification.Length);
         Assert.All(qualification, method =>
@@ -56,7 +56,7 @@ public sealed class QuotationControllerContractTests
             Assert.Contains(method.Name, new[] { nameof(QuotationRequestsController.GetQualificationReceiptAsync), nameof(QuotationRequestsController.UpdateQualificationStateAsync) });
         });
         var ordinary = methods.Except(qualification).ToArray();
-        Assert.Equal(36, ordinary.Length);
+        Assert.Equal(37, ordinary.Length);
         Assert.All(ordinary, method =>
         {
             Assert.Single(method.GetCustomAttributes<RequirePermissionAttribute>());
@@ -101,6 +101,23 @@ public sealed class QuotationControllerContractTests
         Assert.True(permission.RequireLiveCheck);
         Assert.True(permission.IsCritical);
         Assert.Equal("/quotations/{quotationId}", permission.ResourcePathTemplate);
+    }
+
+    [Fact]
+    public void InvoiceOperationReadback_IsCriticalWriteAuthorityWithExactRecoveryDto()
+    {
+        var action = typeof(QuotationsController).GetMethod(nameof(QuotationsController.GetInvoiceCompletionOperationAsync))!;
+        Assert.Equal("{quotationId:int}/invoice-completion/operations/{operationId:guid}",
+            Assert.Single(action.GetCustomAttributes<HttpGetAttribute>()).Template);
+        var permission = Assert.Single(action.GetCustomAttributes<RequirePermissionAttribute>());
+        Assert.Equal("legacy.quotations.update", permission.Permission);
+        Assert.True(permission.RequireLiveCheck);
+        Assert.True(permission.IsCritical);
+        Assert.Equal("/quotations/{quotationId}", permission.ResourcePathTemplate);
+        Assert.Equal(new[] { "ContractVersion", "OperationId", "QuotationId", "InvoiceId", "OriginIssuer",
+                "EmployeeSubject", "RequesterSubject", "ExecutorSubject", "OriginalQuotationVersion", "FinancialBinding",
+                "FinancialBindingVersion", "State", "DecisionOrderVersion", "CompletedOrders", "TotalOrders", "ModifiedDate" },
+            typeof(QuotationInvoiceCompletionReceipt).GetProperties().Select(property => property.Name));
     }
 
     [Fact]

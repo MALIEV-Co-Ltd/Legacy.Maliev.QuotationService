@@ -8,7 +8,7 @@ using Npgsql;
 
 namespace Legacy.Maliev.QuotationService.Data;
 
-public sealed class QuotationRepository(
+public sealed partial class QuotationRepository(
     QuotationDbContext quotations,
     QuotationRequestDbContext requests,
     IQuotationCache cache,
@@ -170,7 +170,31 @@ public sealed class QuotationRepository(
         CancellationToken cancellationToken,
         int? invoiceId,
         QuotationAnalyticsContext? analyticsContext)
+        => await ApplyDecisionCoreAsync(id, accepted, acceptanceOrigin, expectedModifiedDate,
+            cancellationToken, invoiceId, analyticsContext, null);
+
+    private async Task<QuotationDecisionPersistenceResult> ApplyDecisionCoreAsync(
+        int id, bool accepted, QuotationAcceptanceOrigin? acceptanceOrigin, DateTimeOffset? expectedModifiedDate,
+        CancellationToken cancellationToken, int? invoiceId, QuotationAnalyticsContext? analyticsContext,
+        QuotationInvoiceCompletionContext? completion)
     {
+        if (completion is not null)
+        {
+            var prior = await ReadAsync(completion.OperationId, cancellationToken);
+            if (prior is not null)
+            {
+                if (!Matches(prior.Receipt, completion)) return new(QuotationDecisionPersistenceStatus.Conflict, null);
+                // A completed immutable operation is retained evidence even after later edits/deletion.
+                if (prior.Receipt.State == "Completed")
+                    return new(QuotationDecisionPersistenceStatus.Completed, null, prior.OrderVersion);
+                var linked = await quotations.Quotations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+                // Partial continuation must still target the exact local link/version admitted by this operation.
+                return linked is not null && linked.Accepted == true && linked.InvoiceId == invoiceId
+                    && linked.ModifiedDate is DateTime modified && WireTime(modified) == prior.Receipt.ModifiedDate
+                    ? new(QuotationDecisionPersistenceStatus.Completed, ToResponse(linked), prior.OrderVersion)
+                    : new(QuotationDecisionPersistenceStatus.Conflict, null);
+            }
+        }
         if (invoiceId < 0 || invoiceId > 0 && !accepted
             || invoiceId == 0 && (!accepted || acceptanceOrigin != QuotationAcceptanceOrigin.Employee))
         {
@@ -182,6 +206,10 @@ public sealed class QuotationRepository(
         {
             return new(QuotationDecisionPersistenceStatus.NotFound, null);
         }
+
+        // A matching invoice without our operation record is not ownership/recovery evidence.
+        if (completion is not null && entity.InvoiceId is not null)
+            return new(QuotationDecisionPersistenceStatus.Conflict, null);
 
         var firstAcceptance = accepted && entity.Accepted != true && entity.AcceptedUtc is null;
         var attachInvoice = invoiceId > 0 && entity.InvoiceId is null;
@@ -266,11 +294,44 @@ public sealed class QuotationRepository(
             }
         }
 
+        if (completion is not null)
+        {
+            var orderIds = await quotations.OrderLinks.Where(x => x.QuotationId == id)
+                .Select(x => x.OrderId).Distinct().OrderBy(x => x).ToArrayAsync(cancellationToken);
+            quotations.InvoiceCompletionOperations.Add(new QuotationInvoiceCompletionOperation
+            {
+                OperationId = completion.OperationId, QuotationId = id, InvoiceId = completion.InvoiceId,
+                AuthorityJson = System.Text.Json.JsonSerializer.Serialize(completion),
+                OrderIdsJson = System.Text.Json.JsonSerializer.Serialize(orderIds),
+                DecisionOrderVersion = entity.DecisionOrderVersion ?? entity.ModifiedDate ?? entity.CreatedDate ?? DateTime.UnixEpoch,
+                ModifiedDate = entity.ModifiedDate ?? DateTime.UnixEpoch,
+            });
+        }
         try
         {
+            // EF's one SaveChanges transaction includes link, acceptance/outbox and operation admission.
             await quotations.SaveChangesAsync(cancellationToken);
             await cache.RemoveAsync(QuotationKey(id), cancellationToken);
             return new(QuotationDecisionPersistenceStatus.Completed, ToResponse(entity), entity.DecisionOrderVersion);
+        }
+        catch (DbUpdateException exception) when (completion is not null && (exception is DbUpdateConcurrencyException
+            || exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }))
+        {
+            quotations.ChangeTracker.Clear();
+            var prior = await ReadAsync(completion.OperationId, cancellationToken);
+            var linked = await quotations.Quotations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            if (prior is not null && Matches(prior.Receipt, completion))
+            {
+                if (prior.Receipt.State == "Completed")
+                    return new(QuotationDecisionPersistenceStatus.Completed, null, prior.OrderVersion);
+                if (linked is not null && linked.Accepted == true && linked.InvoiceId == invoiceId
+                    && linked.ModifiedDate is DateTime modified && WireTime(modified) == prior.Receipt.ModifiedDate)
+                    return new(QuotationDecisionPersistenceStatus.Completed, ToResponse(linked), prior.OrderVersion);
+            }
+            // A genuine competing link/version fails closed; transport/storage failures remain failures.
+            if (linked is not null && (linked.InvoiceId is not null || linked.ModifiedDate != entity.ModifiedDate))
+                return new(QuotationDecisionPersistenceStatus.Conflict, null);
+            throw;
         }
         catch (DbUpdateConcurrencyException)
         {
