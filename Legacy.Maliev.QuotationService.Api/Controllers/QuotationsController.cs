@@ -156,7 +156,9 @@ public sealed class QuotationsController(
         var result = await invoiceAuthority.AuthorizeAsync(HttpContext, quotationId, invoiceId, expected, cancellationToken);
         if (result.Status != 200) return result.Status switch
         {
-            409 => Conflict(), 503 => StatusCode(503), _ => Forbid(),
+            409 => Conflict(),
+            503 => StatusCode(503),
+            _ => Forbid(),
         };
         var authority = result.Authority;
         if (authority is null || authority.OperationId != operationId) return Forbid();

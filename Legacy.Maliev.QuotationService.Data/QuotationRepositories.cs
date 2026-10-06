@@ -300,7 +300,9 @@ public sealed partial class QuotationRepository(
                 .Select(x => x.OrderId).Distinct().OrderBy(x => x).ToArrayAsync(cancellationToken);
             quotations.InvoiceCompletionOperations.Add(new QuotationInvoiceCompletionOperation
             {
-                OperationId = completion.OperationId, QuotationId = id, InvoiceId = completion.InvoiceId,
+                OperationId = completion.OperationId,
+                QuotationId = id,
+                InvoiceId = completion.InvoiceId,
                 AuthorityJson = System.Text.Json.JsonSerializer.Serialize(completion),
                 OrderIdsJson = System.Text.Json.JsonSerializer.Serialize(orderIds),
                 DecisionOrderVersion = entity.DecisionOrderVersion ?? entity.ModifiedDate ?? entity.CreatedDate ?? DateTime.UnixEpoch,

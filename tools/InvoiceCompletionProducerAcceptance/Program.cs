@@ -86,8 +86,14 @@ try
                 DateTimeStyles.RoundtripKind, out var expiry) || expiry != fixture.ExpiresUtc
             || Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(source.ExecutableDll, lifetime.Token))) != source.DllSha256)
             throw new InvalidOperationException("Normal finite owned producer process required.");
-        var origins = new Dictionary<string, Uri> { ["Auth"] = fixture.AuthOrigin, ["Accounting"] = fixture.AccountingOrigin,
-            ["Quotation"] = fixture.QuotationOrigin, ["Order"] = fixture.OrderOrigin, ["IAM"] = fixture.IamOrigin };
+        var origins = new Dictionary<string, Uri>
+        {
+            ["Auth"] = fixture.AuthOrigin,
+            ["Accounting"] = fixture.AccountingOrigin,
+            ["Quotation"] = fixture.QuotationOrigin,
+            ["Order"] = fixture.OrderOrigin,
+            ["IAM"] = fixture.IamOrigin
+        };
         foreach (var binding in source.ServiceBindings)
             if (!binding.Key.StartsWith("Services__", StringComparison.Ordinal) || !origins.TryGetValue(binding.Value, out var expectedOrigin)
                 || environment.GetValueOrDefault(binding.Key) != expectedOrigin.AbsoluteUri)
@@ -257,8 +263,12 @@ async Task WriteReceipt(bool passed, string? failureKind)
     Directory.CreateDirectory(directory);
     await File.WriteAllTextAsync(Path.Combine(directory, "receipt.json"), JsonSerializer.Serialize(new
     {
-        Passed = passed, FailureKind = failureKind, Checks = checks, SourceInputs = profile?.Sources.Select(source => new { source.Owner, source.Commit, source.Tree }),
-        ObservedUtc = DateTimeOffset.UtcNow, GitResources = gitResources,
+        Passed = passed,
+        FailureKind = failureKind,
+        Checks = checks,
+        SourceInputs = profile?.Sources.Select(source => new { source.Owner, source.Commit, source.Tree }),
+        ObservedUtc = DateTimeOffset.UtcNow,
+        GitResources = gitResources,
         Limits = "Real boundary driver; supplied owner fixture cleanup remains with its launcher. Accounting full resume/document/notification and Intranet UI are separate. SQL stability alone does not prove zero downstream HTTP requests.",
     }, new JsonSerializerOptions { WriteIndented = true }));
     Console.WriteLine(passed ? "Actual producer boundary acceptance passed; opaque receipt retained." : "Actual producer boundary acceptance failed; opaque receipt retained.");
