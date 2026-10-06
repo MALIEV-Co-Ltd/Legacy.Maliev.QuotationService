@@ -77,7 +77,7 @@ public sealed class ObservedStorageBackend(StorageBackendLease lease)
         var tcp = Encoding.ASCII.GetString(await ExecAsync(["cat", "/proc/1/net/tcp"], 1048576, cancellationToken));
         string inode = ListeningInode(tcp, lease.Port);
         var descriptors = Encoding.ASCII.GetString(await ExecAsync(["ls", "-l", "/proc/1/fd"], 262144, cancellationToken));
-        if (!descriptors.Split('\n').Any(value => value.TrimEnd().EndsWith("-> socket:[" + inode + "]", StringComparison.Ordinal))
+        if (!descriptors.Split('\n').Any(value => value.TrimEnd().EndsWith("-> socket:[" + inode + "]", StringComparison.Ordinal)))
             throw new InvalidDataException("Actual backend listener is not owned by its immutable init process.");
         if (before != lease.KernelStartTicks || await KernelStartAsync(cancellationToken) != before)
             throw new InvalidDataException("Backend process generation changed.");
