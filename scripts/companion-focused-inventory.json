@@ -1,0 +1,188 @@
+{
+  "admission": {
+    "source": "Legacy.Maliev.QuotationService.Tests/Tools/CompanionLauncherAdmissionTests.cs",
+    "normalizedSourceSha256": "ab3e522c4d97b61a2b0e53953aa74817f6668edb829536fee501397180592838",
+    "className": "Legacy.Maliev.QuotationService.Tests.Tools.CompanionLauncherAdmissionTests",
+    "trx": "TestResults/CompanionAdmission/companion-admission.trx",
+    "methods": {
+      "TwelfthDistinctFileDatabaseIsAdmitted": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "FileAliasOfCorePhysicalDatabaseIsRejected": {
+        "parameters": [
+          {
+            "name": "host",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "b309a0134773b80571c2f1bc7e563fdcbd3786fa27e00f66ee7aff1ccd6a8a9e",
+          "e32797a2383c14a8ea73d2af70f73d9ef26dd9600828d370f1b6f375504fcfa2",
+          "caeeaa931dbc3608be6f840d1cba672c2c9067df7e23733b50a96eb80d01aac7"
+        ]
+      },
+      "FileConsumedKeySubstitutionIsRejected": {
+        "parameters": [
+          {
+            "name": "key",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "f0d7567d65018be36200a630a50be970d954bd73d981c0a294ac136f3b6bc935",
+          "b00f9cd0e1e4059747aa8959fae4948d497cd4053304d752ada05faf3545840f",
+          "249a8454ec1c3fca80f44017d424068f18615f0086352a20e0103bc4e61967cf"
+        ]
+      },
+      "FileRuntimeTargetMismatchIsRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "NotificationIntentActivationIsRejectedForNoSendProfile": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "MatchingFrameworkProductionSelectorsAreAdmitted": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ConflictingFrameworkEnvironmentSelectorIsRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "FileHostedSelectorsAreAdmittedAsProcessPrerequisitesOnly": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "FileOrdinaryEnvironmentIsRejected": {
+        "parameters": [
+          {
+            "name": "environment",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "2327272e2ede6ded13467361063c27cba8ee785ae06207461244de740f4ed8ad",
+          "53d87e39ecb7b6dca1bff77a7175f722d4a7c42580b5113ec475cd81a6a6dc83",
+          "8be3405bbbf7055df1c18a6ce6a0ef68d228e9f899036c362a158f911c90a8c2"
+        ]
+      },
+      "FileConflictingSelectorIsRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "OtherCompanionsKeepProduction": {
+        "parameters": [
+          {
+            "name": "owner",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "a7c6620a1e83e46dc2421614c5371f82c521db17db550fe26fbe6b1a749771c7",
+          "f37e935a9f839ecad13fb32cf5e8393b9fb6ad5f8a6f6d708e90da6a38eeff6a"
+        ]
+      },
+      "FileMissingSelectorIsRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      }
+    }
+  },
+  "signing": {
+    "source": "Legacy.Maliev.QuotationService.Tests/Tools/HostedV4SignedReadVerifierTests.cs",
+    "normalizedSourceSha256": "7486dddd25f9ceddf68ece2d77cdcef2fde43923df1c7a2d2e9852956de8138e",
+    "className": "Legacy.Maliev.QuotationService.Tests.Tools.HostedV4SignedReadVerifierTests",
+    "trx": "TestResults/CompanionSigning/companion-signing.trx",
+    "methods": {
+      "ActualSdkSignatureWithDispositionAndOptionalGenerationIsAccepted": {
+        "parameters": [
+          {
+            "name": "host",
+            "type": "string"
+          },
+          {
+            "name": "generation",
+            "type": "bool"
+          }
+        ],
+        "cases": [
+          "0619068f61ceab5513e94aa6709101f2e7ac7c5d9a10ee01e1b7c82c7734d638",
+          "59f9b6aa64287897efd45d006f9cd58bea1a98bc3c02bd9aecf5e911a240223c",
+          "95424d227bdcf69a5f352979b7434e702ecc7075d72d753f7b67a8bfe6c32086",
+          "057ec9cf0d078edb141e3814faa6cef3abcde4b8b9f75b8792e30c2655e11d7e"
+        ]
+      },
+      "ActualSdkSignatureCannotAuthorizeMutatedRequest": {
+        "parameters": [
+          {
+            "name": "mutation",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "645b967075b7e04dcf2484456e24e777ae602b20c0bf8b0414bd06d9aaffaed6",
+          "39f0d1a2eda0303b6dedf76ca84a5919bb9f76f04cfb88a8a069e5d97c345cb0",
+          "fcad244f182d8adb3448866694b2ec668c4bfc2975252c715559a668bd2cfad1",
+          "724ed03a1b9d889921433691615e31de31daa07de13fac85cf9041b9792f5124",
+          "b1b1eb09a770695477874d6f8612243fe207a7d42fc62ecc9cba7d1d368fe716",
+          "4f44dd99477daa49055f97355fed34bac62573ec8e480fcc09ca3437c1d5ab9d",
+          "4fb64b370e04ad285cb9ceef2aea3b28b0bc3ffbc00996d9ad78202392718175",
+          "62674c12c0358130eac1c0e15cba063b51d60f8da25b1f98d21aa9adce9253fb",
+          "5286d84c6f32e015792eafdc8b4a4a0745372d05f0178ad74749a82cc3ea5084"
+        ]
+      },
+      "ActualSignatureStillRequiresOriginMethodAndCurrentFiniteLease": {
+        "parameters": [
+          {
+            "name": "mutation",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "9a7e22984a1c6f4b91c8bfc2d3ae0b61ee51bd3681d11cb615b4683bcef860c0",
+          "1476a94ecb88a936a39035d4966b4dd72051b823af2bc0301c07ec87e06809d2",
+          "9c2cf160f1db1a4e3770905171dff78e9c368be32132af2c3072343487990e3d",
+          "f23b8eb155868f1124558f3966d37c4928e12574b100beaeddc9eb9a19615519",
+          "7d7911bbfe86641c0172cc5d6090fab2e1d0d62030b78e3dc1f30e770bafcf86",
+          "2de330c57969118ef39df75e4e195368f968e5daa7c801d8d3f0f8c2207f1a4a"
+        ]
+      },
+      "ValidSdkSignatureRejectsWrongPublicKey": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "DisposedVerifierCannotAuthorizeAValidSdkSignature": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "PublicKeyWithTrailingCarrierBytesIsRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      }
+    }
+  }
+}

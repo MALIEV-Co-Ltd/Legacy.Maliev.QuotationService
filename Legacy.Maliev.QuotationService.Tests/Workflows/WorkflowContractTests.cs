@@ -34,6 +34,27 @@ public sealed class WorkflowContractTests
     public void BuildAndTest_RejectsJoinedAuthorityGateBypass(string original, string replacement) =>
         AssertMutationRejected(original, replacement);
 
+    [Theory]
+    [InlineData("name: Prove actual qualification DTO and controller serializer wire", "name: Copied qualification serializer")]
+    [InlineData("        timeout-minutes: 2\n", "        timeout-minutes: 2\n        continue-on-error: true\n")]
+    [InlineData("FullyQualifiedName~QualificationOutcomeWireSourceTests", "FullyQualifiedName~NoWireSourceCases")]
+    [InlineData("python3 -B scripts/check_qualification_wire_results.py", "echo native evidence skipped")]
+    [InlineData("dotnet tools/QualificationOutcomeWireSource/bin/Release/net10.0/QualificationOutcomeWireSource.dll", "dotnet CopiedDtoHarness.dll")]
+    [InlineData("name: qualification-source-wire-${{ github.sha }}", "name: unbound-wire")]
+    [InlineData("            TestResults/QualificationWire/empty.json\n", "            TestResults/**\n")]
+    [InlineData("always() && hashFiles('TestResults/QualificationWire/qualification-wire.trx') != ''", "success()")]
+    public void BuildAndTest_RejectsWireSourceGateBypass(string original, string replacement) =>
+        AssertMutationRejected(original, replacement);
+
+    [Theory]
+    [InlineData("python3 -B -m unittest discover -s tools/InvoiceCompletionProducerAcceptance/companion -p 'test_*.py'", "echo companion controls skipped")]
+    [InlineData("FullyQualifiedName~HostedV4SignedReadVerifierTests", "FullyQualifiedName~NoSignerControls")]
+    [InlineData("FullyQualifiedName~CompanionLauncherAdmissionTests", "FullyQualifiedName~NoAdmissionControls")]
+    [InlineData("python3 -B scripts/check_companion_focused_results.py", "echo native companion receipt skipped")]
+    [InlineData("            TestResults/CompanionSigning/companion-signing.trx\n", "            TestResults/CompanionSigning/**\n")]
+    public void BuildAndTest_RejectsCompanionNativeGateBypass(string original, string replacement) =>
+        AssertMutationRejected(original, replacement);
+
     [Fact]
     public void ApiUsesPinnedSharedRequestFailureTracing()
     {
@@ -265,7 +286,18 @@ internal static partial class WorkflowContractValidator
 {
     private const string CheckoutAction = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
     private const string SharedValidationAction = "MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@e3a6093324a24968876782153286f52db8b29fd8";
-    private const string CoverageProof = "python3 -m unittest discover -s scripts/tests -p 'test_*.py'";
+    private const string CoverageProof = """
+        python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+        python3 -B -m unittest discover -s tools/InvoiceCompletionProducerAcceptance/companion -p 'test_*.py'
+        """;
+    private const string QualificationWireCollection = """
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~QualificationOutcomeWireSourceTests' \
+          --results-directory TestResults/QualificationWire --logger 'trx;LogFileName=qualification-wire.trx'
+        python3 -B scripts/check_qualification_wire_results.py
+        dotnet tools/QualificationOutcomeWireSource/bin/Release/net10.0/QualificationOutcomeWireSource.dll "$GITHUB_WORKSPACE"
+        """;
     private const string CoverageCollection = """
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
@@ -276,6 +308,15 @@ internal static partial class WorkflowContractValidator
           --filter 'FullyQualifiedName~QuotationInvoiceCapabilityHttpTests' \
           --results-directory TestResults/C821Recipient --logger 'trx;LogFileName=c821-recipient.trx'
         python3 scripts/check_c821_focused_results.py
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~CompanionLauncherAdmissionTests' \
+          --results-directory TestResults/CompanionAdmission --logger 'trx;LogFileName=companion-admission.trx'
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~HostedV4SignedReadVerifierTests' \
+          --results-directory TestResults/CompanionSigning --logger 'trx;LogFileName=companion-signing.trx'
+        python3 -B scripts/check_companion_focused_results.py
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore \
           -p:GITHUB_ACTIONS=false --collect 'XPlat Code Coverage' --results-directory TestResults/CoverageGate \
@@ -338,9 +379,9 @@ internal static partial class WorkflowContractValidator
         RejectDuplicatedValidationActionsAndCommands(jobs);
 
         var steps = RequireSequence(validateJob, "steps");
-        if (steps.Children.Count != 9)
+        if (steps.Children.Count != 11)
         {
-            throw new InvalidOperationException("Validate job must contain exactly nine caller-owned steps.");
+            throw new InvalidOperationException("Validate job must contain exactly eleven caller-owned steps.");
         }
 
         ValidateStep(
@@ -389,9 +430,12 @@ internal static partial class WorkflowContractValidator
                 ["use-local-maliev-dependencies"] = "true",
             });
         ValidateScriptStep(steps.Children[5], "Prove coverage gate failure and success behavior", CoverageProof);
-        ValidateScriptStep(steps.Children[6], "Collect QuotationService coverage", CoverageCollection);
-        ValidateScriptStep(steps.Children[7], "Enforce 80 percent owned handwritten line coverage", CoverageEnforcement);
-        ValidateCoverageEvidenceStep(steps.Children[8]);
+        ValidateScriptStep(steps.Children[6], "Prove actual qualification DTO and controller serializer wire",
+            QualificationWireCollection, expectedTimeout: "2");
+        ValidateScriptStep(steps.Children[7], "Collect QuotationService coverage", CoverageCollection);
+        ValidateScriptStep(steps.Children[8], "Enforce 80 percent owned handwritten line coverage", CoverageEnforcement);
+        ValidateCoverageEvidenceStep(steps.Children[9]);
+        ValidateWireEvidenceStep(steps.Children[10]);
     }
 
     private static void ValidateCoverageEvidenceStep(YamlNode node)
@@ -407,7 +451,27 @@ internal static partial class WorkflowContractValidator
         if (inputs.Children.Count != 6)
             throw new InvalidOperationException("Coverage evidence action must have exactly six reviewed inputs.");
         RequireScalarValue(inputs, "name", "quotation-complete-coverage-${{ github.sha }}");
-        RequireScalarValue(inputs, "path", "TestResults/C821Verifier/c821-verifier.trx\nTestResults/C821Recipient/c821-recipient.trx\nTestResults/CoverageGate/quotation-complete-coverage.trx\nTestResults/CoverageGate/*/coverage.cobertura.xml\n");
+        RequireScalarValue(inputs, "path", "TestResults/C821Verifier/c821-verifier.trx\nTestResults/C821Recipient/c821-recipient.trx\nTestResults/CompanionAdmission/companion-admission.trx\nTestResults/CompanionSigning/companion-signing.trx\nTestResults/CoverageGate/quotation-complete-coverage.trx\nTestResults/CoverageGate/*/coverage.cobertura.xml\n");
+        RequireScalarValue(inputs, "if-no-files-found", "error");
+        RequireScalarValue(inputs, "retention-days", "7");
+        RequireScalarValue(inputs, "include-hidden-files", "false");
+        RequireScalarValue(inputs, "overwrite", "false");
+    }
+
+    private static void ValidateWireEvidenceStep(YamlNode node)
+    {
+        var step = RequireMapping(node, "wire source evidence step");
+        if (!step.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal)
+            .SetEquals(["name", "if", "uses", "with"]))
+            throw new InvalidOperationException("Wire evidence step must have only its reviewed keys.");
+        RequireScalarValue(step, "name", "Retain actual qualification wire-source evidence");
+        RequireScalarValue(step, "if", "always() && hashFiles('TestResults/QualificationWire/qualification-wire.trx') != ''");
+        RequireScalarValue(step, "uses", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
+        var inputs = RequireMapping(step, "with");
+        if (inputs.Children.Count != 6)
+            throw new InvalidOperationException("Wire evidence action must have exactly six reviewed inputs.");
+        RequireScalarValue(inputs, "name", "qualification-source-wire-${{ github.sha }}");
+        RequireScalarValue(inputs, "path", "TestResults/QualificationWire/qualification-wire.trx\nTestResults/QualificationWire/qualification-wire-receipt.json\nTestResults/QualificationWire/empty.json\nTestResults/QualificationWire/mixed.json\n");
         RequireScalarValue(inputs, "if-no-files-found", "error");
         RequireScalarValue(inputs, "retention-days", "7");
         RequireScalarValue(inputs, "include-hidden-files", "false");
@@ -454,17 +518,20 @@ internal static partial class WorkflowContractValidator
             "./scripts/run_qualification_authority_joined.ps1 -RepositoryPath $env:GITHUB_WORKSPACE", "pwsh");
     }
 
-    private static void ValidateScriptStep(YamlNode node, string expectedName, string expectedRun, string expectedShell = "bash")
+    private static void ValidateScriptStep(YamlNode node, string expectedName, string expectedRun, string expectedShell = "bash", string? expectedTimeout = null)
     {
         var step = RequireMapping(node, "workflow script step");
         var actualKeys = step.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal);
-        if (!actualKeys.SetEquals(["name", "shell", "run"]))
+        var expectedKeys = new HashSet<string>(["name", "shell", "run"], StringComparer.Ordinal);
+        if (expectedTimeout is not null) expectedKeys.Add("timeout-minutes");
+        if (!actualKeys.SetEquals(expectedKeys))
         {
             throw new InvalidOperationException("Coverage steps must contain exactly name, shell, and run.");
         }
 
         RequireScalarValue(step, "name", expectedName);
         RequireScalarValue(step, "shell", expectedShell);
+        if (expectedTimeout is not null) RequireScalarValue(step, "timeout-minutes", expectedTimeout);
         if (!string.Equals(RequireScalar(GetRequired(step, "run")).Trim(), expectedRun.Trim(), StringComparison.Ordinal))
         {
             throw new InvalidOperationException($"Coverage step '{expectedName}' changed its reviewed command.");
@@ -556,7 +623,8 @@ internal static partial class WorkflowContractValidator
                 }
 
                 if (GetOptional(stepNode, "run") is YamlScalarNode runNode
-                    && (GetOptional(stepNode, "name") as YamlScalarNode)?.Value != "Collect QuotationService coverage")
+                    && (GetOptional(stepNode, "name") as YamlScalarNode)?.Value is not
+                        ("Collect QuotationService coverage" or "Prove actual qualification DTO and controller serializer wire"))
                 {
                     RejectDuplicatedDotNetCommand(runNode.Value ?? string.Empty);
                 }

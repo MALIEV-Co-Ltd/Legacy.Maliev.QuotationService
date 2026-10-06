@@ -1,0 +1,87 @@
+{
+  "status": "Source proposal v5; v4 blocked; no runtime/native admission or source-clear claim",
+  "environment": "HostedFinancialCompletionAcceptance",
+  "peerProposal": "D:/codex-temp/2026-10-03/legacy-code-files-20261003/outputs/file-hosted-acceptance-admission-contract-proposal-20261006.json",
+  "fileSourceSha": "74f3c2ce279b59953630c0eecb186d92de67c129",
+  "maximumAdmissionSeconds": 1800,
+  "fieldTypes": {
+    "schemaVersion": "integer exactly 1",
+    "runId": "canonical positive decimal GitHub GITHUB_RUN_ID string, distinct from c821 fixture UUID",
+    "runAttempt": "positive integer equal parsed GITHUB_RUN_ATTEMPT",
+    "fileSourceSha": "40 lowercase hexadecimal exact reviewed File build commit",
+    "issuedUtc": "ISO8601 UTC string, offset zero, not future",
+    "expiresUtc": "ISO8601 UTC string, offset zero, after issued, at most 1800 seconds and checked before every outbound operation",
+    "storageOrigin": "canonical absolute http://127.0.0.1:PORT or http://[::1]:PORT, explicit port 1..65535, no userinfo/path/query/fragment",
+    "storageEndpointIdentity": "typed identity object described below",
+    "scannerHost": "same exact literal loopback IP family as storageOrigin",
+    "scannerPort": "integer 1..65535",
+    "scannerContainerId": "64 lowercase hexadecimal exact observed container ID",
+    "scannerImageDigest": "sha256: plus 64 lowercase hexadecimal exact pinned image digest",
+    "scannerDatabaseIdentity": "typed nested identity; per-file hashes match File owner current HostedScannerDatabaseIdentity",
+    "resourceLeaseId": "canonical c821 fixture UUID run-scoped ownership value, never a secret"
+  },
+  "identityShapes": {
+    "storageEndpointIdentity.container": [
+      "kind=container",
+      "containerId",
+      "imageDigest",
+      "createdUtc",
+      "ownershipLabels",
+      "hostIp",
+      "hostPort",
+      "containerPort"
+    ],
+    "storageEndpointIdentity.process": [
+      "kind=process",
+      "pid",
+      "startedUtc",
+      "executableAbsolutePath",
+      "executableSha256",
+      "hostIp",
+      "hostPort"
+    ],
+    "scannerDatabaseIdentity": [
+      "engineVersion",
+      "loadedDatabaseVersion",
+      "databaseFilesSha256 basename-to-lowercase-SHA256 dictionary",
+      "observedUtc",
+      "readinessReceiptSha256"
+    ]
+  },
+  "independentLauncherProofs": [
+    "Inspect exact source commit/tree and clean repository plus actual built DLL SHA, PID/start/dotnet command before admitting File.",
+    "Independently inspect actual container ID/image digest/creation/ownership labels/mounts/network and exact loopback published ports; never trust copied JSON. Reject persistent or foreign mounts.",
+    "A process endpoint requires independently observed PID/start/executable identity and actual listening socket ownership. PID claims alone do not establish endpoint ownership.",
+    "Observe pinned real ClamAV engine loaded database readiness, actual benign clean and EICAR infected controls, plus unavailable-path evidence. A boolean ready field or protocol fixture is insufficient.",
+    "The daemon/database identity and signed readiness receipt must be current and bound to run, attempt, source, endpoint and exact resources.",
+    "Own finite resource handles and limits. In finally preserve evidence, gracefully stop exact owned identities, recheck start/creation before force, verify exits/absence. Fail acceptance on cleanup uncertainty.",
+    "Require actual File environment and consumed scanner/storage settings to match admission, with no ADC/provider fallback; guard all Google SDK requests and resumable Locations against origin escape."
+  ],
+  "sourceDecisions": [
+    "Accept maximum 30-minute admission; any eight-host run needing longer must issue a newly independently observed admission rather than extend expired JSON.",
+    "Accept explicit isolated HTTP loopback origin for this hosted environment only; production TLS/ADC/GCS defaults remain untouched.",
+    "Keep genuine Google SDK V4 ephemeral RSA signing and actual ClamAvFileSafetyScanner; no synthetic storage adapter or always-clean scanner."
+  ],
+  "remainingSourceGates": [
+    "Root FULL exact v5 source review and independent verification of daemon/command/lifecycle changes.",
+    "Select actual immutable scanner and storage image/binary/config/database pins.",
+    "Implement and review V4-enforcing front/backend proxy, one-time public-only bootstrap IPC and process admission.",
+    "Complete exact eight-host caller, twelve physical PostgreSQL proofs and owned network/container creation/removal.",
+    "Normal hosted builds/tests then actual SDK, scanner, signed object/generation, financial and cleanup receipt."
+  ],
+  "activationPerformed": false,
+  "nativeExecuted": false,
+  "delivery": {
+    "section": "HostedFinancialCompletionAcceptance",
+    "members": [
+      "Enabled",
+      "Admission"
+    ],
+    "format": "typed normal hierarchical configuration; environment flattening helper preserves nested fields",
+    "privateSignerMaterial": "never persisted or included; future handshake public verification key only"
+  },
+  "v4BlockersAddressedInSource": [
+    "Bound actual listener process, executable digest, exact argv and immutable configuration/database bytes; require reviewed runtime pins.",
+    "Replace post-hoc capture_output check with bounded streaming, held direct child cleanup, deadlines and pipe closure."
+  ]
+}
