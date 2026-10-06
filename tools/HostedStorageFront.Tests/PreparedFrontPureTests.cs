@@ -40,7 +40,11 @@ public sealed class PreparedFrontPureTests
         await using var source = new MemoryStream(Encoding.ASCII.GetBytes("12345"));
         await using var bounded = new BoundedLeaseReadStream(source, 4, DateTimeOffset.UtcNow.AddMinutes(1));
         byte[] buffer = new byte[1024];
-        await Assert.ThrowsAsync<InvalidDataException>(async () => await bounded.ReadAsync(buffer));
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+        {
+            int read = await bounded.ReadAsync(buffer);
+            Assert.InRange(read, 0, buffer.Length);
+        });
         Assert.Equal(5, source.Position);
     }
 
@@ -49,7 +53,12 @@ public sealed class PreparedFrontPureTests
     {
         await using var source = new MemoryStream(Encoding.ASCII.GetBytes("12345"));
         await using var bounded = new BoundedLeaseReadStream(source, 4, DateTimeOffset.UtcNow.AddSeconds(-1));
-        await Assert.ThrowsAsync<InvalidDataException>(async () => await bounded.ReadAsync(new byte[1024]));
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+        {
+            byte[] buffer = new byte[1024];
+            int read = await bounded.ReadAsync(buffer);
+            Assert.InRange(read, 0, buffer.Length);
+        });
         Assert.Equal(0, source.Position);
     }
 

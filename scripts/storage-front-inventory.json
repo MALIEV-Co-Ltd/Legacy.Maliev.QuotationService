@@ -325,7 +325,7 @@
   },
   "InvoiceCompletionProducerAcceptance.Companion.PreparedFrontPureTests": {
     "source": "tools/HostedStorageFront.Tests/PreparedFrontPureTests.cs",
-    "normalizedSourceSha256": "81fa84112b4bd40bb0b9d2c775a0cfb80572c015ef952f776627d6e3c3013d9a",
+    "normalizedSourceSha256": "ab55a89b47c7d72a5e5e503bdd730324a2de3ca83805fdaaab11e51126840824",
     "methods": {
       "ActualClientTupleMatchesIpv4KernelInode": {
         "parameters": [],

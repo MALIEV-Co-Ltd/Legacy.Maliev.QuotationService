@@ -8,7 +8,7 @@ if (args is not [var profilePath] || !OperatingSystem.IsLinux()
     throw new InvalidDataException("Dedicated normal hosted storage-front caller required.");
 using var startup = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 var profile = await FrontHostAdmission.ReadAsync(profilePath, startup.Token);
-if (typeof(Program).Assembly.Location != profile.ExecutableDll)
+if (typeof(HostedStorageFrontAssemblyMarker).Assembly.Location != profile.ExecutableDll)
     throw new InvalidDataException("Actual front assembly differs from the admitted executable.");
 var remaining = profile.ExpiresUtc - DateTimeOffset.UtcNow;
 if (remaining <= TimeSpan.Zero) throw new InvalidDataException("Front owner lease already expired.");
@@ -59,3 +59,5 @@ finally
     using var shutdown = new CancellationTokenSource(TimeSpan.FromSeconds(5));
     await app.StopAsync(shutdown.Token);
 }
+
+internal sealed class HostedStorageFrontAssemblyMarker { }
