@@ -7,7 +7,14 @@ namespace Legacy.Maliev.QuotationService.Tests.Tools;
 public sealed class CompanionLauncherAdmissionTests
 {
     private const string Run = "c821-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
-    private const string File = "Host=localhost;Port=5432;Database=c821_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_file;Username=fixture;Password=synthetic";
+    private static readonly string File = new Npgsql.NpgsqlConnectionStringBuilder
+    {
+        Host = "localhost",
+        Port = 5432,
+        Database = "c821_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_file",
+        Username = "fixture",
+        Password = Guid.NewGuid().ToString("N"),
+    }.ConnectionString;
 
     [Fact]
     public void TwelfthDistinctFileDatabaseIsAdmitted()
@@ -129,6 +136,13 @@ public sealed class CompanionLauncherAdmissionTests
     };
 
     private static Dictionary<string, string> Core() => ProducerDatabaseBindings.Roles()
-        .Select((role, index) => (role, connection: $"Host=127.0.0.1;Port=5432;Database=c821_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_core{index};Username=fixture;Password=synthetic"))
+        .Select((role, index) => (role, connection: new Npgsql.NpgsqlConnectionStringBuilder
+        {
+            Host = "127.0.0.1",
+            Port = 5432,
+            Database = $"c821_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_core{index}",
+            Username = "fixture",
+            Password = Guid.NewGuid().ToString("N"),
+        }.ConnectionString))
         .ToDictionary(value => value.role, value => value.connection, StringComparer.Ordinal);
 }

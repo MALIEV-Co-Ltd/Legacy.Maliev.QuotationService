@@ -1,7 +1,7 @@
 {
   "admission": {
     "source": "Legacy.Maliev.QuotationService.Tests/Tools/CompanionLauncherAdmissionTests.cs",
-    "normalizedSourceSha256": "1a509ce58f3f5ca6bc5b5f36c2dc640009f99d1be14f1f7b056d02add659b2fb",
+    "normalizedSourceSha256": "ab3e522c4d97b61a2b0e53953aa74817f6668edb829536fee501397180592838",
     "className": "Legacy.Maliev.QuotationService.Tests.Tools.CompanionLauncherAdmissionTests",
     "trx": "TestResults/CompanionAdmission/companion-admission.trx",
     "methods": {
