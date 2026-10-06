@@ -325,7 +325,7 @@ public sealed class JoinedFixture : IAsyncLifetime
         }
         await Pin(AuthSource, ProducerRevision);
         await Pin(Path.Combine(Root, "TestResults", ".joined-auth", ".dependencies", "Legacy.Maliev.ServiceDefaults"), "5c5f9479313710fa576f83d3b396442997a2fcf4");
-        await Pin(Path.Combine(Root, "TestResults", ".bridge-dependencies", "Legacy.Maliev.ServiceDefaults"), "ecb05cbbd68717e415f69df2ac488c1d323b1da3");
+        await Pin(Path.Combine(Root, "TestResults", ".bridge-dependencies", "Legacy.Maliev.ServiceDefaults"), "f72be151917cb3962380971418c187e3df563f8d");
         await Pin(Path.Combine(Root, "TestResults", ".joined-auth", ".dependencies", "Legacy.Maliev.CompatibilityContracts"), "78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7");
         await Pin(Path.Combine(Root, "TestResults", ".bridge-dependencies", "Legacy.Maliev.CompatibilityContracts"), "78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7");
         var authDefaults = File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(AuthDll)!, "Legacy.Maliev.ServiceDefaults.dll"));
