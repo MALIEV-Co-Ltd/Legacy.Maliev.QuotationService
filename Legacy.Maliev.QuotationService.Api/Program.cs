@@ -37,7 +37,13 @@ return await QuotationStartupBoundary.RunAsync(async () =>
         client.BaseAddress = QuotationInvoiceFinancialAuthorityClient.ResolveOrigin(
             builder.Configuration["Services:Accounting:BaseUrl"] ?? builder.Configuration["Services:Accounting"], builder.Environment);
         client.Timeout = TimeSpan.FromSeconds(10);
-    }).RemoveAllResilienceHandlers().ConfigurePrimaryHttpMessageHandler((handler, _) =>
+    }).ConfigureAdditionalHttpMessageHandlers(static (handlers, _) =>
+    {
+        for (var index = handlers.Count - 1; index >= 0; index--)
+        {
+            if (handlers[index] is Microsoft.Extensions.Http.Resilience.ResilienceHandler) handlers.RemoveAt(index);
+        }
+    }).ConfigurePrimaryHttpMessageHandler((handler, _) =>
     {
         if (handler is SocketsHttpHandler sockets) sockets.AllowAutoRedirect = false;
         else if (handler is HttpClientHandler http) http.AllowAutoRedirect = false;
