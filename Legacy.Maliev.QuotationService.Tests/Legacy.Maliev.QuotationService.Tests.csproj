@@ -46,6 +46,7 @@
     <Compile Include="../tools/InvoiceCompletionProducerAcceptance/CompanionLauncherAdmission.cs" Link="Tools/CompanionLauncherAdmission.cs" />
     <Compile Include="../tools/InvoiceCompletionProducerAcceptance/companion/HostedV4SignedReadVerifier.cs" Link="Tools/HostedV4SignedReadVerifier.cs" />
     <Compile Include="../tools/QualificationOutcomeWireSource/QualificationOutcomeWire.cs" Link="Tools/QualificationOutcomeWire.cs" />
+    <Compile Include="../tools/QualificationOutcomeWireSource/ChildStartObservation.cs" Link="Tools/ChildStartObservation.cs" />
   </ItemGroup>
 
 </Project>

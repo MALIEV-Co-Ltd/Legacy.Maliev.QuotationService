@@ -60,6 +60,7 @@ internal static class Program
             "Legacy.Maliev.QuotationService.Api/Program.cs",
             "tools/QualificationOutcomeWireSource/QualificationOutcomeWire.cs",
             "tools/QualificationOutcomeWireSource/Program.cs",
+            "tools/QualificationOutcomeWireSource/ChildStartObservation.cs",
             "Legacy.Maliev.QuotationService.Tests/Controllers/QualificationOutcomeWireSourceTests.cs",
         };
         var sources = new List<object>();
@@ -113,9 +114,10 @@ internal static class Program
         };
         foreach (var argument in new[] { "rev-parse", "--verify", revision }) process.StartInfo.ArgumentList.Add(argument);
         if (!process.Start()) throw new InvalidDataException("Source identity process did not start.");
-        var started = process.StartTime.ToUniversalTime();
+        DateTime? started = null;
         try
         {
+            started = ChildStartObservation.Capture(() => process.StartTime.ToUniversalTime(), () => process.HasExited);
             var output = process.StandardOutput.ReadToEndAsync(token);
             var error = process.StandardError.ReadToEndAsync(token);
             await process.WaitForExitAsync(token);
@@ -128,7 +130,7 @@ internal static class Program
             process.Refresh();
             if (!process.HasExited)
             {
-                if (process.StartTime.ToUniversalTime() != started)
+                if (started is null || process.StartTime.ToUniversalTime() != started.Value)
                     throw new InvalidDataException("Source identity helper ownership changed.");
                 process.Kill();
                 using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
