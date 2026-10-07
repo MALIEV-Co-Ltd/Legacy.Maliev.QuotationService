@@ -63,3 +63,8 @@ its three focused cases. It explicitly validates nullable Docker inspection fiel
 and removes blocking task access and filtered Assert.Single calls in tests.
 The failed native run 37695351754 remains retained. No warning suppression,
 coverage reduction, test removal, or resource admission change is permitted.
+
+The trusted solution build retains the parent Release configuration for references
+outside the solution through ShouldUnsetParentConfigurationAndPlatform=false.
+The original native build log must show Release output for retained dependencies;
+this does not replace their separate current financial-runtime qualification.
