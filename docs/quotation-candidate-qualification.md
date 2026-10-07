@@ -57,3 +57,9 @@ The reviewed 75-file successor also includes the source-only admission race
 correction and three deterministic PostgreSQL controls. The protected-main failure
 was observed at 7058f561; this candidate remains uncommitted and requires actual
 full hosted qualification. A transport merge does not prove the race is fixed.
+
+The compile-correction successor preserves the admission race implementation and
+its three focused cases. It explicitly validates nullable Docker inspection fields
+and removes blocking task access and filtered Assert.Single calls in tests.
+The failed native run 37695351754 remains retained. No warning suppression,
+coverage reduction, test removal, or resource admission change is permitted.
