@@ -118,4 +118,31 @@ WindowReject(crossing, WindowFailureCategory.BoundarySpan);
 WindowReject(guarded, WindowFailureCategory.GuardInterval);
 _ = guarded.FinalizeWindow(t.AddSeconds(2), t.AddSeconds(20), TimeSpan.FromMilliseconds(250));
 Check(guarded.WindowFailure == WindowFailureCategory.None);
+// The real DiagnosticListener API checks the exact Activity creation probe.
+// Merely selecting .Start/.Stop does not enable their unsuffixed creation name.
+const string activityProbe = "System.Net.Http.HttpRequestOut";
+const string sourcePrefix = "HttpHandlerDiagnosticListener/";
+string[] selectedSpecs = EventCollector.Projection.Split('\n').Where(x => x.StartsWith(sourcePrefix, StringComparison.Ordinal)).ToArray();
+string[] selectedNames = selectedSpecs.Select(x => x[sourcePrefix.Length..x.IndexOf(':')]).ToArray();
+using (var listener = new System.Diagnostics.DiagnosticListener("synthetic-probe-regression"))
+using (listener.Subscribe(new ProjectionProbeObserver(), name => selectedNames.Contains(name, StringComparer.Ordinal)))
+{
+    Check(selectedSpecs.Count(x => x == sourcePrefix + activityProbe + ":-") == 1
+        && listener.IsEnabled(activityProbe, null, null)
+        && listener.IsEnabled(activityProbe + ".Start") && listener.IsEnabled(activityProbe + ".Stop")
+        && !listener.IsEnabled(activityProbe + ".Exception"));
+}
+using (var listener = new System.Diagnostics.DiagnosticListener("synthetic-probe-omission"))
+using (listener.Subscribe(new ProjectionProbeObserver(), name => name != activityProbe && selectedNames.Contains(name, StringComparer.Ordinal)))
+{
+    Check(!listener.IsEnabled(activityProbe, null, null)
+        && listener.IsEnabled(activityProbe + ".Start") && listener.IsEnabled(activityProbe + ".Stop"));
+}
 Console.WriteLine(JsonSerializer.Serialize(new { ControlledCasesPassed = controls, HostedEventPipeWitness = false, GenuineEightHostFinancialAccepted = false }));
+
+internal sealed class ProjectionProbeObserver : IObserver<KeyValuePair<string, object?>>
+{
+    public void OnNext(KeyValuePair<string, object?> value) => throw new InvalidDataException("Probe control must not emit payloads");
+    public void OnError(Exception error) => throw new InvalidDataException("Unexpected probe control error");
+    public void OnCompleted() { }
+}

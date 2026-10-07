@@ -11,6 +11,7 @@ namespace FinancialHttpCounters;
 public sealed class EventCollector : IAsyncDisposable
 {
     public const string Projection =
+        "HttpHandlerDiagnosticListener/System.Net.Http.HttpRequestOut:-\n" +
         "HttpHandlerDiagnosticListener/System.Net.Http.HttpRequestOut.Start:-Id=*Activity.Id;Method=Request.Method.Method;Scheme=Request.RequestUri.Scheme;Host=Request.RequestUri.IdnHost;Port=Request.RequestUri.Port;Path=Request.RequestUri.AbsolutePath\n" +
         "HttpHandlerDiagnosticListener/System.Net.Http.HttpRequestOut.Stop:-Id=*Activity.Id;Status=Response.StatusCode;Task=RequestTaskStatus\n" +
         "Microsoft.AspNetCore/Microsoft.AspNetCore.Hosting.BeginRequest:-Id=httpContext.TraceIdentifier;Method=httpContext.Request.Method;Path=httpContext.Request.Path\n" +

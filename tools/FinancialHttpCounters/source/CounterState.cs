@@ -16,6 +16,7 @@ public sealed class CounterState(string owner, Uri document, Uri file)
     public int PendingCount => pending.Count;
     public int EventCount { get; private set; }
     public DateTime LastEventUtc { get; private set; }
+    private bool accountingOutgoingObserved, accountingCandidateObserved, accountingOriginRejected;
     private int windowFailure;
     public WindowFailureCategory WindowFailure => (WindowFailureCategory)Volatile.Read(ref windowFailure);
 
@@ -94,6 +95,16 @@ public sealed class CounterState(string owner, Uri document, Uri file)
         Require(int.TryParse(args["Port"], out int port) && port is > 0 and <= 65535, "Actual HTTP origin port required");
         string scheme = args["Scheme"], host = args["Host"];
         bool Origin(Uri origin) => scheme == origin.Scheme && host.Equals(origin.IdnHost, StringComparison.OrdinalIgnoreCase) && port == origin.Port;
+        if (owner == "Accounting")
+        {
+            // These private booleans observe the existing classifier's exact branches.
+            accountingOutgoingObserved = true;
+            bool documentCandidate = method == "POST" && (path.Equals("/pdfs/invoice", StringComparison.OrdinalIgnoreCase)
+                || path.Equals("/pdfs/receipt", StringComparison.OrdinalIgnoreCase));
+            bool uploadCandidate = path.Equals("/uploads", StringComparison.OrdinalIgnoreCase);
+            accountingCandidateObserved |= documentCandidate || uploadCandidate;
+            accountingOriginRejected |= (documentCandidate && !Origin(document)) || (uploadCandidate && !Origin(file));
+        }
         if (owner == "Accounting" && Origin(document))
         {
             if (method == "POST" && path.Equals("/pdfs/invoice", StringComparison.OrdinalIgnoreCase)) return "AccountingInvoiceRenderPost";
@@ -132,6 +143,18 @@ public sealed class CounterState(string owner, Uri document, Uri file)
         }
         return result;
     }
+
+    internal AccountingEffectObservation ObserveAccountingEffects(DateTime from, DateTime until)
+    {
+        // Called only after the actual reader has drained. No payload or mutable state escapes.
+        var effects = completed.Where(x => x.Label is "AccountingInvoiceRenderPost" or "AccountingReceiptRenderPost"
+            or "AccountingFileUploadPost" or "AccountingOtherUploadBoundaryMethod").ToArray();
+        return new(accountingOutgoingObserved, accountingCandidateObserved, accountingOriginRejected,
+            effects.Length > 0, effects.Any(x => !(x.StartUtc > from && x.StopUtc <= until)));
+    }
+
+    internal sealed record AccountingEffectObservation(bool OutgoingObserved, bool OperationalCandidateObserved,
+        bool OperationalOriginRejected, bool ClassifiedEffectObserved, bool ClassifiedEffectOutsideWindow);
 
     private void RequirePrerequisites(bool condition, string message)
     {

@@ -154,6 +154,14 @@ static async Task<bool> ExerciseAsync(string dotnet, string host, bool injectSet
                 first["AccountingFileUploadPost"].Started == 1,
                 first["AccountingOtherUploadBoundaryMethod"].Started == 1,
                 second.Values.All(x => x.Started == 0));
+            // Qualitative comparisons only; no private count or trace value leaves the parent.
+            NativeDiagnostics.EffectMagnitude(first["AccountingInvoiceRenderPost"].Started < 1,
+                first["AccountingInvoiceRenderPost"].Started > 1,
+                first["AccountingFileUploadPost"].Started < 1,
+                first["AccountingFileUploadPost"].Started > 1,
+                first["AccountingOtherUploadBoundaryMethod"].Started < 1,
+                first["AccountingOtherUploadBoundaryMethod"].Started > 1,
+                collector.State.ObserveAccountingEffects(before, completion));
             throw;
         }
         NativeDiagnostics.RequirePredicate(collector.Drained && collector.Lost == 0 && (await ProcessAdmission.KernelAsync(witness.Pid, budget.Token)).Ticks == processPin.KernelStartTicks
@@ -228,6 +236,32 @@ internal static class NativeDiagnostics
                 FileUploadEqualsOne = fileUploadEqualsOne,
                 OtherUploadMethodEqualsOne = otherUploadMethodEqualsOne,
                 ReplayAllZero = replayAllZero
+            }));
+        }
+        catch (Exception) { EmissionFailed = true; }
+    }
+
+    internal static void EffectMagnitude(bool invoiceBelowOne, bool invoiceAboveOne,
+        bool uploadBelowOne, bool uploadAboveOne, bool otherUploadBelowOne, bool otherUploadAboveOne,
+        CounterState.AccountingEffectObservation observed)
+    {
+        // Fixed failure-only comparisons from the same finalized summaries.
+        try
+        {
+            Console.Error.WriteLine(JsonSerializer.Serialize(new
+            {
+                NativeEffectMagnitude = true,
+                InvoiceBelowOne = invoiceBelowOne,
+                InvoiceAboveOne = invoiceAboveOne,
+                UploadBelowOne = uploadBelowOne,
+                UploadAboveOne = uploadAboveOne,
+                OtherUploadBelowOne = otherUploadBelowOne,
+                OtherUploadAboveOne = otherUploadAboveOne,
+                OutgoingObserved = observed.OutgoingObserved,
+                OperationalCandidateObserved = observed.OperationalCandidateObserved,
+                OperationalOriginRejected = observed.OperationalOriginRejected,
+                ClassifiedEffectObserved = observed.ClassifiedEffectObserved,
+                ClassifiedEffectOutsideWindow = observed.ClassifiedEffectOutsideWindow
             }));
         }
         catch (Exception) { EmissionFailed = true; }
