@@ -13,7 +13,7 @@ mkdir -p TestResults/CandidateNative
 solution=Legacy.Maliev.QuotationService.slnx
 # Build first, warnings and errors both fail. Never use prior main binaries.
 dotnet restore "$solution" --disable-parallel 2>&1 | tee TestResults/CandidateNative/restore.log
-dotnet build "$solution" -c Release --no-restore --disable-build-servers -m:1 -p:UseSharedCompilation=false -warnaserror 2>&1 | tee TestResults/CandidateNative/build.log
+dotnet build "$solution" -c Release --no-restore --disable-build-servers -m:1 -p:UseSharedCompilation=false -p:ShouldUnsetParentConfigurationAndPlatform=false -warnaserror 2>&1 | tee TestResults/CandidateNative/build.log
 mkdir -p TestResults/CandidateNative/Suite
 projects=(
   Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj
