@@ -73,4 +73,19 @@ Reject(() => CounterState.DecodeArguments(new object[]
 }));
 var nullProjection = CounterState.DecodeArguments(new object[] { new Dictionary<string, object> { ["Key"] = "Status", ["Value"] = null! } });
 Check(nullProjection["Status"] == "");
+// The two permitted self-describing bridge schemas have allocated runtime IDs.
+Check(EventCollector.RequireBridgeSchema("NewDiagnosticListener", ["SourceName"]));
+Check(!EventCollector.RequireBridgeSchema("Event", ["SourceName", "EventName", "Arguments"]));
+Reject(() => EventCollector.RequireBridgeSchema("EventSourceMessage", ["message"]));
+Reject(() => EventCollector.RequireBridgeSchema("Message", ["Message"]));
+Reject(() => EventCollector.RequireBridgeSchema("Version", ["Major", "Minor", "Patch"]));
+Reject(() => EventCollector.RequireBridgeSchema("EventJson", ["SourceName", "EventName", "ArgmentsJson"]));
+Reject(() => EventCollector.RequireBridgeSchema("Activity1Start", ["SourceName", "EventName", "Arguments"]));
+Reject(() => EventCollector.RequireBridgeSchema("", ["SourceName", "EventName", "Arguments"]));
+Reject(() => EventCollector.RequireBridgeSchema("event", ["SourceName", "EventName", "Arguments"]));
+Reject(() => EventCollector.RequireBridgeSchema("Event", ["EventName", "SourceName", "Arguments"]));
+Reject(() => EventCollector.RequireBridgeSchema("Event", ["SourceName", "EventName"]));
+Reject(() => EventCollector.RequireBridgeSchema("Event", ["SourceName", "EventName", "Arguments", "PrivateExtra"]));
+Reject(() => EventCollector.RequireBridgeSchema("Event", ["SourceName", "SourceName", "Arguments"]));
+Reject(() => EventCollector.RequireBridgeSchema("NewDiagnosticListener", ["SourceName", "PrivateExtra"]));
 Console.WriteLine(JsonSerializer.Serialize(new { ControlledCasesPassed = controls, HostedEventPipeWitness = false, GenuineEightHostFinancialAccepted = false }));

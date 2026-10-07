@@ -69,15 +69,15 @@ public sealed class EventCollector : IAsyncDisposable
                         if (entry.ProviderName == "System.Runtime" && entry.EventName == "EventCounters")
                         { State.Heartbeat(); stage = ReaderFaultCategory.ParserRead; return; }
                         if (entry.ProviderName != "Microsoft-Diagnostics-DiagnosticSource") { stage = ReaderFaultCategory.ParserRead; return; }
-                        if ((int)entry.ID == 10)
+                        // Self-describing EventPipe IDs are allocated by NameInfo,
+                        // not the DiagnosticSource methods' Event attributes.
+                        stage = entry.EventName == "NewDiagnosticListener"
+                            ? ReaderFaultCategory.ListenerSchema : ReaderFaultCategory.BridgeSchema;
+                        bool listener = RequireBridgeSchema(entry.EventName, entry.PayloadNames);
+                        if (listener)
                         {
-                            stage = ReaderFaultCategory.ListenerSchema;
-                            CounterState.Require(entry.PayloadNames.SequenceEqual(new[] { "SourceName" }), "Listener metadata schema changed");
                             State.Listener((string)entry.PayloadValue(0)); stage = ReaderFaultCategory.ParserRead; return;
                         }
-                        stage = ReaderFaultCategory.BridgeSchema;
-                        CounterState.Require((int)entry.ID == 2 && entry.PayloadNames.SequenceEqual(new[] { "SourceName", "EventName", "Arguments" }),
-                            "DiagnosticSource bridge schema changed");
                         stage = ReaderFaultCategory.ProjectionArguments;
                         var arguments = CounterState.DecodeArguments(entry.PayloadValue(2));
                         stage = ReaderFaultCategory.CounterState;
@@ -104,6 +104,15 @@ public sealed class EventCollector : IAsyncDisposable
                 throw;
             }
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    }
+
+    public static bool RequireBridgeSchema(string eventName, string[] payloadNames)
+    {
+        bool listener = eventName == "NewDiagnosticListener";
+        CounterState.Require(listener || eventName == "Event", "Unexpected DiagnosticSource bridge event");
+        string[] expected = listener ? ["SourceName"] : ["SourceName", "EventName", "Arguments"];
+        CounterState.Require(payloadNames.SequenceEqual(expected), "DiagnosticSource bridge schema changed");
+        return listener;
     }
 
     public void CheckReader()
