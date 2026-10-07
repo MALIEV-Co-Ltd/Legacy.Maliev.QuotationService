@@ -454,7 +454,7 @@ internal static partial class WorkflowContractValidator
             throw new InvalidOperationException("Coverage evidence step must have only its reviewed keys.");
         RequireScalarValue(step, "name", "Retain complete coverage evidence");
         RequireScalarValue(step, "if", "always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx') != '')");
-        RequireScalarValue(step, "uses", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
+        RequireScalarValue(step, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
         var inputs = RequireMapping(step, "with");
         if (inputs.Children.Count != 6)
             throw new InvalidOperationException("Coverage evidence action must have exactly six reviewed inputs.");
@@ -474,7 +474,7 @@ internal static partial class WorkflowContractValidator
             throw new InvalidOperationException("Wire evidence step must have only its reviewed keys.");
         RequireScalarValue(step, "name", "Retain actual qualification wire-source evidence");
         RequireScalarValue(step, "if", "always() && hashFiles('TestResults/QualificationWire/qualification-wire.trx') != ''");
-        RequireScalarValue(step, "uses", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
+        RequireScalarValue(step, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
         var inputs = RequireMapping(step, "with");
         if (inputs.Children.Count != 6)
             throw new InvalidOperationException("Wire evidence action must have exactly six reviewed inputs.");
