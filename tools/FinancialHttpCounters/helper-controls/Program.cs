@@ -139,16 +139,21 @@ static async Task<int> Execute(string[] args)
         // Private root path/PIDs/errors stay in memory. Only finite typed evidence is retained publicly.
         var receipt = new
         {
-            Case = mode, Outcome = "Passed", ActualVerifySourceAsyncInvoked = true,
+            Case = mode,
+            Outcome = "Passed",
+            ActualVerifySourceAsyncInvoked = true,
             ActualSyntheticGitBirths = births.Count(x => x.Kind == "git"),
             ExactOriginalChildrenExited = exactOriginalChildrenExited,
             RetainedOriginalTasksObserved = retainedTasksObserved,
-            RecoveredHeldHandlesClosed = handlesClosed, StickyRefusalAndNoNewBirth = stickyRefusal,
+            RecoveredHeldHandlesClosed = handlesClosed,
+            StickyRefusalAndNoNewBirth = stickyRefusal,
             ExactOwnedPipeIdentitiesAbsent = exactOwnedPipesAbsent,
             ExactSyntheticWriterPidfdExitObserved = descendantExited,
             NaturalParentExitObserved = descendantExited,
-            CausalOverflowObserved = mode == "overflow", FiniteTimeoutObserved = mode == "timeout",
-            ElapsedMilliseconds = clock.ElapsedMilliseconds, FinancialAdmissionAccepted = false
+            CausalOverflowObserved = mode == "overflow",
+            FiniteTimeoutObserved = mode == "timeout",
+            ElapsedMilliseconds = clock.ElapsedMilliseconds,
+            FinancialAdmissionAccepted = false
         };
         verifiedReceipt = receipt;
     }
