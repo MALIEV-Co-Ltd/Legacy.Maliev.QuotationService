@@ -1,0 +1,407 @@
+name: Financial HTTP counter codec qualification
+
+# Assigned draft PR128 is bound in both marked locations.
+# Every unrelated PR is refused. This workflow never claims the real financial run.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'tools/FinancialHttpCounters/**'
+      - '.github/workflows/financial-http-counter-qualification.yml'
+permissions:
+  contents: read
+concurrency:
+  group: financial-http-counter-codec-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+jobs:
+  codec-qualification:
+    # ASSIGNED_PR_NUMBER_GUARD: actual draft PR128.
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 128 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'codex/financial-http-counters-20261007'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      # ASSIGNED_PR_NUMBER_INPUT: actual draft PR128, matching the guard above.
+      EXPECTED_PR_NUMBER: '128'
+      EXPECTED_SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
+      DOTNET_CLI_UI_LANGUAGE: en
+      DOTNET_CLI_USE_MSBUILD_SERVER: '0'
+      DOTNET_GCHeapHardLimit: '20000000'
+    steps:
+      - name: Check out exact guarded source head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.x
+      - name: Locked audit build and actual synthetic codec witness
+        shell: bash
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          umask 077
+          timeout --signal=TERM --kill-after=5s 710s python3 -B - <<'PY'
+          import copy, ctypes, hashlib, json, os, pathlib, re, selectors, shutil, signal, subprocess, sys, tempfile, time
+          
+          # NuGet JSON v1 schema checked against primary ListPackageJsonRenderer/GetReportParameters:
+          # https://github.com/NuGet/NuGet.Client/blob/fa1508b1123e9d1d86a39cd702f969d3db242884/src/NuGet.Core/NuGet.CommandLine.XPlat/ListPackage/ListPackageJsonRenderer.cs
+          # Empty top-level arrays and omitted transitive arrays are the documented clean vulnerable report.
+          SOURCE_INVENTORY = [{'path': 'controls/FinancialHttpCounters.Controls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'controls/Program.cs', 'rawSha256': 'e5495033f7122b1145b55042d0a4d05610113600b2d7e49b415d4c0879024a2f'}, {'path': 'descriptor-provenance.json', 'rawSha256': '475008becd77ae3555fcf6ddad4bc18406bdf563441c74af4d7fdb9511778da3'}, {'path': 'native-controls/AdmissionNativeControls.cs', 'rawSha256': '216f970cacce5e521bedfbc0d54e3a627efbcb24c36d9d69f8cba92dacc93aec'}, {'path': 'native-controls/FinancialHttpCounters.NativeControls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'native-controls/Program.cs', 'rawSha256': '16021457a129c8823cd55c4efc259a91b6c8369fe77198a837d0155e71531682'}, {'path': 'README.md', 'rawSha256': '4d3820d800d257c97a4c87aeef595930e5a8ba9f2768c7a6d3546034871625aa'}, {'path': 'source/CounterState.cs', 'rawSha256': 'f47257546fa7cc1df99f023068a10446f12890d5a404ba227901612a13faa158'}, {'path': 'source/DescriptorBoundFrontFile.cs', 'rawSha256': '79e6c218c9776888e86cf7fc92ed3f16b8e26058b91df86ab5e2166441e9b185'}, {'path': 'source/DescriptorBoundOutput.cs', 'rawSha256': 'b6c1d45b958db1362c784b64154fdd552711639d5fb5f065a273dd4f9fe974ac'}, {'path': 'source/EventCollector.cs', 'rawSha256': 'feecc76366cdb2c892b649b2eb396bcd6e2e02556b2f050b3a404d27bc71fbfb'}, {'path': 'source/FinancialHttpCounters.csproj', 'rawSha256': '5254ec772153643963d71a2b03d76b8dcc230f9a4a69978d5c7bc6367a8423f9'}, {'path': 'source/ProcessAdmission.cs', 'rawSha256': '53473f8d9497b37d4efafde158b8712eab06fde8a8832c6679652b41fddb374c'}, {'path': 'source/Program.cs', 'rawSha256': '44c4ec1680c232a841869267e6c22fcc8b5ab186c3f48e6fc990576179d95f34'}, {'path': 'source-provenance.json', 'rawSha256': '5e66670d9469696a85d14bb74b5e89a2080fa19d59f94662aa708f54a49a4a62'}, {'path': 'witness-host/FinancialHttpCounters.WitnessHost.csproj', 'rawSha256': '25e9385fa7053264d6b20be455942ad1548a587fc006e017350d193d6a1a36b4'}, {'path': 'witness-host/Program.cs', 'rawSha256': 'be6dddd2461f1077ff0832859bd8c63bd28ed6ef2d995fc5054556481ddd775e'}]
+          PROJECTS = (
+              'source/FinancialHttpCounters.csproj',
+              'controls/FinancialHttpCounters.Controls.csproj',
+              'native-controls/FinancialHttpCounters.NativeControls.csproj',
+              'witness-host/FinancialHttpCounters.WitnessHost.csproj',
+          )
+          LOCKS = tuple(str(pathlib.PurePosixPath(p).parent / 'packages.lock.json') for p in PROJECTS)
+          
+          class Refused(Exception): pass
+          
+          def require(condition):
+              if not condition: raise Refused()
+          
+          def pairs(items):
+              result = {}
+              for key, value in items:
+                  require(key not in result); result[key] = value
+              return result
+          
+          def parse(raw, maximum=1024 * 1024):
+              require(type(raw) is bytes and 0 < len(raw) <= maximum)
+              return json.loads(raw.decode('utf-8'), object_pairs_hook=pairs,
+                                parse_constant=lambda _: (_ for _ in ()).throw(Refused()))
+          
+          def clean_audit(raw, expected_project):
+              value = parse(raw)
+              require(type(value) is dict and set(value) in (
+                  {'version', 'parameters', 'sources', 'projects'},
+                  {'version', 'parameters', 'sources', 'projects', 'problems'}))
+              require(type(value['version']) is int and value['version'] == 1)
+              require(value['parameters'] == '--vulnerable --include-transitive')
+              require(value['sources'] == ['https://api.nuget.org/v3/index.json'])
+              require(type(value.get('problems', [])) is list and value.get('problems', []) == [])
+              require(type(value['projects']) is list and len(value['projects']) == 1)
+              project = value['projects'][0]
+              require(type(project) is dict and set(project) == {'path', 'frameworks'} and project['path'] == expected_project)
+              require(type(project['frameworks']) is list and len(project['frameworks']) == 1)
+              frame = project['frameworks'][0]
+              require(type(frame) is dict and set(frame) in (
+                  {'framework', 'topLevelPackages'}, {'framework', 'topLevelPackages', 'transitivePackages'}))
+              require(frame['framework'] == 'net10.0')
+              # --vulnerable reports only vulnerable packages. Any entry refuses acceptance,
+              # including an entry with missing/empty/malformed vulnerability details.
+              require(type(frame['topLevelPackages']) is list and frame['topLevelPackages'] == [])
+              require(type(frame.get('transitivePackages', [])) is list and frame.get('transitivePackages', []) == [])
+          
+          def parser_controls():
+              positive = {'version': 1, 'parameters': '--vulnerable --include-transitive',
+                          'sources': ['https://api.nuget.org/v3/index.json'], 'projects': [
+                              {'path': '/owned/project.csproj', 'frameworks': [{'framework': 'net10.0', 'topLevelPackages': []}]}]}
+              def encoded(value): return json.dumps(value).encode()
+              clean_audit(encoded(positive), '/owned/project.csproj')
+              with_empty = copy.deepcopy(positive); with_empty['problems'] = []
+              with_empty['projects'][0]['frameworks'][0]['transitivePackages'] = []
+              clean_audit(encoded(with_empty), '/owned/project.csproj')
+              cases = [b'', b'prefix' + encoded(positive), encoded(positive) + b'{}', encoded(positive).replace(b'"version": 1', b'"version": 1, "version": 1', 1),
+                       b'{"version":NaN}', encoded(positive) * 20000]
+              def variant(change):
+                  value = copy.deepcopy(positive); change(value); cases.append(encoded(value))
+              variant(lambda v: v.update(version=True))
+              variant(lambda v: v.update(version=2))
+              variant(lambda v: v.update(parameters='--vulnerable'))
+              variant(lambda v: v.update(sources=[]))
+              variant(lambda v: v.update(sources=['https://private.invalid/index.json']))
+              variant(lambda v: v.update(problems=[{'level': 'warning', 'text': 'audit unavailable'}]))
+              variant(lambda v: v.update(problems={}))
+              variant(lambda v: v.update(unknown=[]))
+              variant(lambda v: v.update(projects=[]))
+              variant(lambda v: v['projects'].append(copy.deepcopy(v['projects'][0])))
+              variant(lambda v: v['projects'][0].update(path='/other/project.csproj'))
+              variant(lambda v: v['projects'][0].pop('frameworks'))
+              variant(lambda v: v['projects'][0].update(frameworks=[]))
+              variant(lambda v: v['projects'][0]['frameworks'][0].update(framework='net9.0'))
+              variant(lambda v: v['projects'][0]['frameworks'][0].update(topLevelPackages={}))
+              variant(lambda v: v['projects'][0]['frameworks'][0].update(topLevelPackages=[{'id': 'vulnerable', 'vulnerabilities': [{'severity': 'Low'}]}]))
+              variant(lambda v: v['projects'][0]['frameworks'][0].update(transitivePackages=[{'id': 'missing-details'}]))
+              variant(lambda v: v['projects'][0]['frameworks'][0].update(vulnerabilities=[]))
+              for raw in cases:
+                  refused = False
+                  try: clean_audit(raw, '/owned/project.csproj')
+                  except (Refused, ValueError, UnicodeError, TypeError, KeyError): refused = True
+                  require(refused)
+              return {'PositiveCasesObserved': 2, 'NegativeCasesObserved': len(cases)}
+          
+          # Typed Linux kernel reads are separate from source files. The spawned leader remains
+          # unreaped until teardown: WNOWAIT reserves its PID/session ID against reuse.
+          def generation(pid):
+              require(type(pid) is int and pid > 0)
+              with open('/proc/' + str(pid) + '/stat', 'rb') as stream: raw = stream.read(8193)
+              require(0 < len(raw) <= 8192)
+              end = raw.rfind(b')'); require(end > 0 and int(raw[:raw.index(b'(')].strip()) == pid)
+              fields = raw[end + 2:].split(); require(len(fields) >= 20)
+              return (int(fields[19]), int(fields[1]), int(fields[2]), int(fields[3]), fields[0].decode('ascii'))
+          
+          def session_members(session, deadline):
+              entries = list(pathlib.Path('/proc').iterdir()); require(len(entries) <= 32768)
+              result = {}
+              for entry in entries:
+                  require(time.monotonic() < deadline)
+                  if re.fullmatch(r'[1-9][0-9]*', entry.name) is None: continue
+                  try: observed = generation(int(entry.name))
+                  except FileNotFoundError: continue  # A vanished kernel process is absent, never an invented owned success.
+                  if observed[3] == session: result[int(entry.name)] = observed
+              return result
+          
+          LAST_CLEANUP = None
+          
+          def dispose_owned_session(process, held):
+              deadline = time.monotonic() + 5
+              failures = []; observed = None; members = None; anchor = held
+              # Recovery reobserves the exact un-reaped leader independently of reader setup.
+              for attempt in range(2):
+                  try:
+                      current = generation(process.pid)
+                      require(process.returncode is None and current[1:4] == (os.getpid(), process.pid, process.pid))
+                      if anchor is not None: require(current[:4] == anchor[:4])
+                      anchor = current; observed = current
+                      break
+                  except Exception as error:
+                      failures.append(type(error).__name__)
+              if observed is not None:
+                  try:
+                      members = session_members(process.pid, deadline)
+                      require(members.get(process.pid, ())[:4] == anchor[:4])
+                  except Exception as error: failures.append(type(error).__name__)
+                  for attempt in range(2):
+                      try:
+                          # The unreaped leader reserves its PID; reobserve before EACH retry.
+                          current = generation(process.pid)
+                          require(process.returncode is None and current[:4] == anchor[:4] and time.monotonic() < deadline)
+                          try: os.killpg(process.pid, signal.SIGKILL)
+                          except ProcessLookupError:
+                              require(current[4] == 'Z' and members is not None and all(x[4] == 'Z' for x in members.values()))
+                          break
+                      except Exception as error: failures.append(type(error).__name__)
+              # Reaping and readback are attempted even when signal/census failed. Never signal after reaping.
+              try: process.wait(timeout=max(0.001, deadline - time.monotonic()))
+              except Exception as error: failures.append(type(error).__name__)
+              remaining = None
+              try:
+                  while True:
+                      remaining = session_members(process.pid, deadline)
+                      if not remaining: break
+                      for pid, value in remaining.items():
+                          if pid != process.pid and value[1] == os.getpid() and value[4] == 'Z':
+                              require(generation(pid) == value)
+                              reaped, _ = os.waitpid(pid, os.WNOHANG); require(reaped in (0, pid))
+                      require(time.monotonic() < deadline); time.sleep(0.02)
+              except Exception as error: failures.append(type(error).__name__)
+              if observed is None or members is None or remaining != {} or process.returncode is None: failures.append('OwnedCleanupUncertain')
+              receipt = None if failures else {'HeldLeaderExitedBeforeCleanup': observed[4] == 'Z',
+                  'SessionMembersBeforeCleanup': len(members), 'SessionMembersAfterCleanup': len(remaining)}
+              return receipt, failures
+          
+          # All allocations after successful childbirth are inside the protected try. Cleanup
+          # attempts remain independent, and recovered uncertainty never becomes a clean receipt.
+          def run(argv, cwd, seconds, stderr_must_be_empty=True):
+              global LAST_CLEANUP
+              LAST_CLEANUP = None
+              end = min(time.monotonic() + seconds, OVERALL_DEADLINE); require(end > time.monotonic())
+              held = selector = primary = observation = None
+              process = subprocess.Popen(argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE, start_new_session=True)
+              try:
+                  output, error = bytearray(), bytearray()
+                  selector = selectors.DefaultSelector()
+                  held = generation(process.pid)
+                  require(held[1:4] == (os.getpid(), process.pid, process.pid))
+                  selector.register(process.stdout, selectors.EVENT_READ, output)
+                  selector.register(process.stderr, selectors.EVENT_READ, error)
+                  while selector.get_map():
+                      require(time.monotonic() < end)
+                      for key, _ in selector.select(min(0.1, max(0, end - time.monotonic()))):
+                          piece = os.read(key.fileobj.fileno(), 4096)
+                          if not piece: selector.unregister(key.fileobj); continue
+                          key.data.extend(piece); require(len(key.data) <= 4 * 1024 * 1024)
+                  while True:
+                      require(time.monotonic() < end)
+                      status = os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+                      if status is not None: break
+                      time.sleep(0.01)
+                  code = status.si_status if status.si_code == os.CLD_EXITED else -status.si_status
+                  if code != 0 or (stderr_must_be_empty and error.strip()):
+                      codes = sorted(set(x.decode('ascii') for x in re.findall(rb'\b(?:NU|CS|MSB|CA)[0-9]{3,6}\b', output + error)))
+                      print(json.dumps({'OwnedCommandExitCode': code, 'DiagnosticCodes': codes}), file=sys.stderr)
+                      raise Refused()
+                  require(re.search(rb'\b(?:warning|error)\s+(?:NU|CS|MSB|CA)[0-9]+', output, re.I) is None)
+                  return bytes(output)
+              except BaseException as error:
+                  primary = error
+                  raise
+              finally:
+                  failures = []
+                  try:
+                      observation, failures = dispose_owned_session(process, held)
+                  except BaseException as error: failures.append(type(error).__name__)
+                  # Each close is attempted even if another close failed or selector never existed.
+                  for owned in (selector, process.stdout, process.stderr):
+                      if owned is not None:
+                          try: owned.close()
+                          except BaseException as error: failures.append(type(error).__name__)
+                  LAST_CLEANUP = None if failures else observation
+                  if failures:
+                      if primary is None: raise Refused()
+                      primary.add_note('Owned cleanup uncertain; no successful cleanup receipt.')
+          
+          class InjectedSelectorSetupFailure(Exception): pass
+          
+          def supervisor_controls(root):
+              # Real leader exits while its real child retains inherited pipes.
+              program = "import subprocess,sys; subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)']); sys.exit(0)"
+              refused = False
+              try: run([sys.executable, '-c', program], root, 0.75)
+              except Refused: refused = True
+              require(refused and LAST_CLEANUP is not None and LAST_CLEANUP['HeldLeaderExitedBeforeCleanup'] is True
+                      and LAST_CLEANUP['SessionMembersBeforeCleanup'] >= 2 and LAST_CLEANUP['SessionMembersAfterCleanup'] == 0)
+              # Constructor failure occurs AFTER a real child is born, before reader creation.
+              original = selectors.DefaultSelector
+              def fail_after_birth(): raise InjectedSelectorSetupFailure()
+              selectors.DefaultSelector = fail_after_birth
+              injected = False
+              try:
+                  try: run([sys.executable, '-c', 'import time; time.sleep(30)'], root, 3)
+                  except InjectedSelectorSetupFailure: injected = True
+              finally: selectors.DefaultSelector = original
+              require(injected and LAST_CLEANUP is not None and LAST_CLEANUP['SessionMembersBeforeCleanup'] >= 1
+                      and LAST_CLEANUP['SessionMembersAfterCleanup'] == 0)
+              return {'ExitedLeaderPipeDescendantDeadlineRefused': True, 'HeldGenerationSessionCleanupObserved': True,
+                      'PostBirthSelectorConstructorFailureRefused': True, 'ConstructorFailureOwnedCleanupObserved': True}
+          
+          def exact_sources(root):
+              for item in SOURCE_INVENTORY:
+                  path = root / item['path']
+                  require(path.is_file() and not path.is_symlink() and hashlib.sha256(path.read_bytes()).hexdigest() == item['rawSha256'])
+          
+          def lock_bytes(root):
+              require({p.relative_to(root).as_posix() for p in root.rglob('packages.lock.json')} == set(LOCKS))
+              result = {}
+              for relative in LOCKS:
+                  path = root / relative; require(path.is_file() and not path.is_symlink())
+                  raw = path.read_bytes(); value = parse(raw)
+                  require(type(value) is dict and set(value) == {'version', 'dependencies'} and type(value['version']) is int
+                          and value['version'] in (1, 2) and type(value['dependencies']) is dict and set(value['dependencies']) == {'net10.0'})
+                  for package, data in value['dependencies']['net10.0'].items():
+                      require(re.fullmatch(r'[A-Za-z0-9_.-]+', package) is not None and type(data) is dict
+                              and set(data) <= {'type', 'requested', 'resolved', 'contentHash', 'dependencies'}
+                              and data.get('type') in ('Direct', 'Transitive', 'Project'))
+                      for key in ('requested', 'resolved'):
+                          if key in data: require(type(data[key]) is str and re.fullmatch(r'[A-Za-z0-9.*+, ()\[\]-]+', data[key]) is not None)
+                      if 'contentHash' in data: require(type(data['contentHash']) is str and re.fullmatch(r'[A-Za-z0-9+/]{86}==', data['contentHash']) is not None)
+                      if 'dependencies' in data:
+                          require(type(data['dependencies']) is dict)
+                          for identifier, version in data['dependencies'].items():
+                              require(re.fullmatch(r'[A-Za-z0-9_.-]+', identifier) is not None and type(version) is str
+                                      and re.fullmatch(r'[A-Za-z0-9.*+, ()\[\]-]+', version) is not None)
+                  result[relative] = raw
+              return result
+          
+          try:
+              require(sys.platform == 'linux' and os.environ.get('GITHUB_ACTIONS') == 'true')
+              # Only this private supervisor process changes its child-adoption behavior.
+              # No host PID1, credentials, grants or daemon configuration is modified.
+              libc = ctypes.CDLL(None, use_errno=True)
+              libc.prctl.argtypes = (ctypes.c_int, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong)
+              libc.prctl.restype = ctypes.c_int
+              require(libc.prctl(36, 1, 0, 0, 0) == 0)  # PR_SET_CHILD_SUBREAPER
+              observed_subreaper = ctypes.c_int()
+              require(libc.prctl(37, ctypes.cast(ctypes.byref(observed_subreaper), ctypes.c_void_p).value, 0, 0, 0) == 0
+                      and observed_subreaper.value == 1)  # PR_GET_CHILD_SUBREAPER
+              OVERALL_DEADLINE = time.monotonic() + 690
+              workspace = pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve(strict=True)
+              event = parse(pathlib.Path(os.environ['GITHUB_EVENT_PATH']).read_bytes())
+              number = os.environ['EXPECTED_PR_NUMBER']; require(re.fullmatch(r'[1-9][0-9]*', number) is not None)
+              require(os.environ['GITHUB_EVENT_NAME'] == 'pull_request' and event['number'] == int(number)
+                      and event['pull_request']['head']['ref'] == 'codex/financial-http-counters-20261007'
+                      and event['pull_request']['head']['repo']['full_name'] == os.environ['GITHUB_REPOSITORY']
+                      and os.environ['GITHUB_REPOSITORY'] == 'MALIEV-Co-Ltd/Legacy.Maliev.QuotationService')
+              head = os.environ['EXPECTED_SOURCE_HEAD']; require(re.fullmatch(r'[0-9a-f]{40}', head) is not None)
+              require(event['pull_request']['head']['sha'] == head and run(['git', 'rev-parse', 'HEAD'], workspace, 10).decode().strip() == head)
+              parser_receipt = parser_controls()
+              source = workspace / 'tools/FinancialHttpCounters'; exact_sources(source)
+              # Isolate the four projects from unrelated repository/user build configuration.
+              with tempfile.TemporaryDirectory(prefix='financial-http-codec-', dir=os.environ['RUNNER_TEMP']) as owned:
+                  root = pathlib.Path(owned); os.chmod(root, 0o700)
+                  for item in SOURCE_INVENTORY:
+                      target = root / item['path']; target.parent.mkdir(parents=True, exist_ok=True)
+                      target.write_bytes((source / item['path']).read_bytes())
+                  exact_sources(root)
+                  supervisor_receipt = supervisor_controls(root)
+                  (root / 'NuGet.Config').write_text('<configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources><auditSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></auditSources></configuration>')
+                  dotnet = str(pathlib.Path(shutil.which('dotnet')).resolve(strict=True))
+                  sdk = run([dotnet, '--version'], root, 10).decode().strip(); require(re.fullmatch(r'10\.0\.[0-9]+', sdk) is not None)
+                  flags = ['-p:ImportDirectoryBuildProps=false', '-p:ImportDirectoryBuildTargets=false', '-p:ManagePackageVersionsCentrally=false',
+                           '-p:RestorePackagesWithLockFile=true', '-p:NuGetAudit=true', '-p:NuGetAuditMode=all', '-p:TreatWarningsAsErrors=true',
+                           '-p:WarningsAsErrors=', '-p:NoWarn=', '-p:UseSharedCompilation=false', '-nodeReuse:false']
+                  for project in PROJECTS:
+                      run([dotnet, 'restore', str(root / project), '--configfile', str(root / 'NuGet.Config'), '--disable-parallel', '--verbosity', 'minimal', *flags], root, 90)
+                  locks = lock_bytes(root)
+                  for project in PROJECTS:
+                      run([dotnet, 'restore', str(root / project), '--locked-mode', '--configfile', str(root / 'NuGet.Config'), '--disable-parallel', '--verbosity', 'minimal', *flags], root, 60)
+                  require(lock_bytes(root) == locks)
+                  for project in PROJECTS:
+                      audit = run([dotnet, 'package', 'list', '--project', str(root / project), '--no-restore', '--vulnerable', '--include-transitive', '--format', 'json', '--output-version', '1'], root, 45)
+                      clean_audit(audit, str(root / project))
+                      run([dotnet, 'format', str(root / project), '--verify-no-changes', '--no-restore', '--verbosity', 'minimal'], root, 90)
+                      run([dotnet, 'build', str(root / project), '--configuration', 'Release', '--no-restore', '--disable-build-servers', '--verbosity', 'minimal', '-warnaserror', *flags], root, 60)
+                  exact_sources(root); require(lock_bytes(root) == locks)
+                  controls_raw = run([dotnet, str(root / 'controls/bin/Release/net10.0/FinancialHttpCounters.Controls.dll')], root, 30)
+                  controls = parse(controls_raw, 4096)
+                  require(type(controls) is dict and set(controls) == {'ControlledCasesPassed', 'HostedEventPipeWitness', 'GenuineEightHostFinancialAccepted'}
+                          and type(controls['ControlledCasesPassed']) is int and controls['ControlledCasesPassed'] == 15
+                          and controls['HostedEventPipeWitness'] is False and controls['GenuineEightHostFinancialAccepted'] is False)
+                  witness = (root / 'witness-host/bin/Release/net10.0/FinancialHttpCounters.WitnessHost.dll').resolve(strict=True)
+                  native_raw = run([dotnet, str(root / 'native-controls/bin/Release/net10.0/FinancialHttpCounters.NativeControls.dll'), dotnet, str(witness)], root, 90)
+                  native = parse(native_raw, 4096)
+                  require(type(native) is dict and set(native) == {'NativeEventPipeCodecWitnessPassed', 'NativePostBirthFaultCleanupPassed', 'SourceAdmissionAccepted', 'RealBusinessSchemaAccepted',
+                          'SmtpNoSendProven', 'SocketNoSendProven', 'GenuineEightHostFinancialAccepted'}
+                          and native['NativeEventPipeCodecWitnessPassed'] is True and native['NativePostBirthFaultCleanupPassed'] is True
+                          and all(native[key] is False for key in native if key not in ('NativeEventPipeCodecWitnessPassed', 'NativePostBirthFaultCleanupPassed')))
+                  exact_sources(root); exact_sources(source); require(lock_bytes(root) == locks)
+                  public = workspace / 'TestResults/FinancialHttpCounterCodec'
+                  require(not public.exists() and public.resolve() == public); public.mkdir(parents=True)
+                  (public / 'controls.json').write_bytes(json.dumps(controls, sort_keys=True).encode() + b'\n')
+                  (public / 'native-codec.json').write_bytes(json.dumps(native, sort_keys=True).encode() + b'\n')
+                  for relative, raw in locks.items():
+                      target = public / 'locks' / relative; target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(raw)
+                  (public / 'qualification.json').write_text(json.dumps({'SourceHead': head, 'RunId': os.environ['GITHUB_RUN_ID'],
+                      'RunAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'SdkVersion': sdk, 'AuditJsonV1ProjectsAccepted': len(PROJECTS),
+                      'AuditParserControls': parser_receipt, 'OwnedSupervisorControls': supervisor_receipt, 'LockedRestoreRepeated': True,
+                      'NuGetLockSha256': {p: hashlib.sha256(raw).hexdigest() for p, raw in locks.items()},
+                      'SourceAdmissionAccepted': False, 'SelectedHostCountersAccepted': False, 'GenuineEightHostFinancialAccepted': False,
+                      'SmtpNoSendProven': False, 'SocketNoSendProven': False}, sort_keys=True) + '\n')
+          except Exception as error:
+              # Never print private child exceptions/stdout/stderr/environment.
+              print('Codec qualification refused: ' + type(error).__name__, file=sys.stderr)
+              sys.exit(1)
+          PY
+      - name: Retain only public qualification receipts and four fixed NuGet locks
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: financial-http-counter-codec-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            TestResults/FinancialHttpCounterCodec/controls.json
+            TestResults/FinancialHttpCounterCodec/native-codec.json
+            TestResults/FinancialHttpCounterCodec/qualification.json
+            TestResults/FinancialHttpCounterCodec/locks/source/packages.lock.json
+            TestResults/FinancialHttpCounterCodec/locks/controls/packages.lock.json
+            TestResults/FinancialHttpCounterCodec/locks/native-controls/packages.lock.json
+            TestResults/FinancialHttpCounterCodec/locks/witness-host/packages.lock.json
+          if-no-files-found: error
+          retention-days: 7
