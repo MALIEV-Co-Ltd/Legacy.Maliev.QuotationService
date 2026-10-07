@@ -42,8 +42,17 @@ def discovery_names(text):
     return set(names)
 
 
-def validate_trx(data, discovered, assembly, delayed=None):
+def validate_trx(data, discovered, assembly, delayed=None, delayed_cases=None):
     delayed = delayed or {}
+    delayed_cases = delayed_cases or {}
+    if set(delayed_cases) != set(delayed):
+        raise ValueError("delayed theory requires exact reviewed case inventory")
+    for method, count in delayed.items():
+        cases = delayed_cases[method]
+        if (type(count) is not int or count < 2 or not isinstance(cases, (list, tuple, set))
+                or len(cases) != count or len(set(cases)) != count
+                or any(not isinstance(name, str) or not name.startswith(method + "(") for name in cases)):
+            raise ValueError("invalid exact delayed theory cases")
     root = xml(data)
     if root.tag != NS + "TestRun":
         raise ValueError("unexpected suite document root")
@@ -64,53 +73,68 @@ def validate_trx(data, discovered, assembly, delayed=None):
         raise ValueError("suite includes failed/skipped/unavailable results")
     definitions = root.findall("./" + NS + "TestDefinitions/" + NS + "UnitTest")
     results = root.findall("./" + NS + "Results/" + NS + "UnitTestResult")
-    if len(definitions) != expected or len(results) != expected:
-        raise ValueError("suite definitions/results incomplete")
+    if len(results) != expected:
+        raise ValueError("suite results incomplete")
+    reviewed_names = {name for cases in delayed_cases.values() for name in cases}
     identities = {}
     definition_executions = {}
     for case in definitions:
-        method = case.find(NS + "TestMethod")
-        if method is None or Path(method.get("codeBase", "")).name != assembly + ".dll":
+        methods = case.findall(NS + "TestMethod")
+        if len(methods) != 1 or Path(methods[0].get("codeBase", "")).name != assembly + ".dll":
             raise ValueError("suite assembly identity mismatch")
         identity = guid(case.get("id"))
-        if not identity or identity in identities:
-            raise ValueError("duplicate/missing definition identity")
-        identities[identity] = case.get("name")
-        execution = case.find(NS + "Execution")
-        if execution is None:
-            raise ValueError("missing definition execution identity")
-        definition_executions[identity] = guid(execution.get("id"))
-    names = []
-    seen = set()
+        if identity in identities:
+            raise ValueError("duplicate definition identity")
+        name = case.get("name")
+        bound = [method for method, cases in delayed_cases.items() if name == method or name in cases]
+        if bound:
+            method = bound[0]
+            class_name, method_name = method.rsplit(".", 1)
+            if (len(bound) != 1 or methods[0].get("className") != class_name
+                    or methods[0].get("name") != method_name
+                    or methods[0].get("adapterTypeName") != "executor://xunit/VsTestRunner3/netcore/"):
+                raise ValueError("reviewed theory method/adapter identity mismatch")
+        identities[identity] = name
+        executions = case.findall(NS + "Execution")
+        if len(executions) != 1:
+            raise ValueError("missing/duplicate definition execution identity")
+        definition_executions[identity] = guid(executions[0].get("id"))
+    groups = {identity: [] for identity in identities}
     executions = {}
+    names = []
     for result in results:
         identity = guid(result.get("testId"))
         execution = guid(result.get("executionId"))
         name = result.get("testName")
-        if identity not in identities or identity in seen or name != identities[identity] or result.get("outcome") != "Passed":
+        if identity not in identities or result.get("outcome") != "Passed":
             raise ValueError("suite result identity/outcome mismatch")
-        if definition_executions[identity] != execution:
-            raise ValueError("definition/result execution mismatch")
-        seen.add(identity)
         if execution in executions:
             raise ValueError("duplicate suite execution")
         executions[execution] = identity
+        groups[identity].append((name, execution))
         names.append(name)
-    ordinary = []
     if len(set(names)) != expected:
         raise ValueError("duplicate suite case names, including delayed rows")
-    for name in names:
-        matching = [method for method in expanded if name.startswith(method + "(")]
-        if not matching:
-            ordinary.append(name)
-    for method, count in expanded.items():
-        if sum(name.startswith(method + "(") for name in names) != count:
-            raise ValueError("source-bound delayed theory expansion incomplete")
-    if len(set(ordinary)) != len(ordinary) or set(ordinary) != discovered - expanded.keys():
+    for identity, rows in groups.items():
+        definition_name = identities[identity]
+        if definition_name in expanded:
+            if (len(rows) != delayed[definition_name]
+                    or {name for name, _ in rows} != set(delayed_cases[definition_name])
+                    or definition_executions[identity] not in {execution for _, execution in rows}):
+                raise ValueError("shared reviewed theory definition/result mismatch")
+        elif (len(rows) != 1 or rows[0][0] != definition_name
+                or rows[0][1] != definition_executions[identity]):
+            raise ValueError("ordinary definition/result execution mismatch")
+    for method, cases in delayed_cases.items():
+        case_set = set(cases)
+        if set(names) & case_set != case_set:
+            raise ValueError("exact reviewed theory rows incomplete")
+        theory_definitions = [name for name in identities.values() if name == method or name in case_set]
+        if theory_definitions != [method] and (len(theory_definitions) != len(cases) or set(theory_definitions) != case_set):
+            raise ValueError("mixed/incomplete reviewed theory definition layout")
+    ordinary = set(names) - reviewed_names
+    if ordinary != discovered - expanded.keys() - reviewed_names:
         raise ValueError("suite cases differ from original compiled discovery")
-    for method, count in delayed.items():
-        if sum(name.startswith(method + "(") for name in names) != count:
-            raise ValueError("reviewed theory row count differs from source")
     entries = {}
     for entry in root.findall("./" + NS + "TestEntries/" + NS + "TestEntry"):
         execution = guid(entry.get("executionId"))
@@ -121,6 +145,25 @@ def validate_trx(data, discovered, assembly, delayed=None):
         entries[execution] = identity
     if entries != executions:
         raise ValueError("suite entries/results identity mismatch")
+
+
+def load_delayed_inventory(root, inventory):
+    delayed, delayed_cases = {}, {}
+    for case in inventory:
+        source = (root / case["source"]).read_bytes().replace(b"\r\n", b"\n")
+        if hashlib.sha256(source).hexdigest() != case["normalizedSourceSha256"]:
+            raise ValueError("reviewed delayed theory source changed")
+        assembly, method = case["assembly"], case["method"]
+        if method in delayed.get(assembly, {}):
+            raise ValueError("duplicate reviewed delayed theory")
+        names = case["caseNames"]
+        if (len(names) != case["rows"] or len(set(names)) != len(names)
+                or sum(name.endswith("allowed: True)") for name in names) != case["reviewedAllowedRows"]
+                or sum(name.endswith("allowed: False)") for name in names) != case["reviewedDeniedRows"]):
+            raise ValueError("reviewed employee decision case inventory differs")
+        delayed.setdefault(assembly, {})[method] = case["rows"]
+        delayed_cases.setdefault(assembly, {})[method] = names
+    return delayed, delayed_cases
 
 
 def validate_resolved_graph(report, expected_projects):
@@ -229,20 +272,15 @@ def main():
     root = args.candidate.resolve(strict=True)
     if args.phase == "suite":
         inventory = json.loads((Path(__file__).parent / "quotation-candidate-delayed-theories.json").read_text())
-        delayed = {}
-        for case in inventory:
-            source = (root / case["source"]).read_bytes().replace(b"\r\n", b"\n")
-            if hashlib.sha256(source).hexdigest() != case["normalizedSourceSha256"]:
-                raise ValueError("reviewed delayed theory source changed")
-            delayed.setdefault(case["assembly"], {})[case["method"]] = case["rows"]
+        delayed, delayed_cases = load_delayed_inventory(root, inventory)
         directory = root / "TestResults/CandidateNative/Suite"
         expected = {Path(p).stem for p in TEST_PROJECTS}
         if {p.stem for p in directory.glob("*.trx")} != expected:
             raise ValueError("missing/extra original test project reports")
         for project in TEST_PROJECTS:
             name = Path(project).stem
-            discovery = discovery_names((directory / (name + ".discovery.log")).read_text())
-            validate_trx((directory / (name + ".trx")).read_bytes(), discovery, name, delayed.get(name))
+            discovery = discovery_names((directory / (name + ".discovery.log")).read_text(encoding="utf-8"))
+            validate_trx((directory / (name + ".trx")).read_bytes(), discovery, name, delayed.get(name), delayed_cases.get(name))
         print("All four actual test projects match original compiled discovery and passed completely.")
     elif args.phase == "audit":
         solution = xml((root / "Legacy.Maliev.QuotationService.slnx").read_bytes())

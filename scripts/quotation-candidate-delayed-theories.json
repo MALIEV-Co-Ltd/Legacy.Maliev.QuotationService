@@ -7,6 +7,18 @@
     "dataMember": "EmployeeDecisionCallers",
     "rows": 10,
     "reviewedAllowedRows": 2,
-    "reviewedDeniedRows": 8
+    "reviewedDeniedRows": 8,
+    "caseNames": [
+      "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationControllerContractTests.EmployeeInitiatedDecision_AcceptsOnlyEmployeeOrExactLegacyIntranetService(claims: [http://schemas.microsoft.com/ws/2008/06/identity/claims/role: Customer, identity_kind: customer, permissions: legacy.quotations.update], allowed: False)",
+      "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationControllerContractTests.EmployeeInitiatedDecision_AcceptsOnlyEmployeeOrExactLegacyIntranetService(claims: [http://schemas.microsoft.com/ws/2008/06/identity/claims/role: Employee, identity_kind: customer], allowed: False)",
+      "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationControllerContractTests.EmployeeInitiatedDecision_AcceptsOnlyEmployeeOrExactLegacyIntranetService(claims: [identity_kind: service, identity_kind: employee, sub: service:legacy-intranet, permissions: legacy.quotations.update], allowed: False)",
+      "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationControllerContractTests.EmployeeInitiatedDecision_AcceptsOnlyEmployeeOrExactLegacyIntranetService(claims: [identity_kind: service, sub: service:legacy-intranet, permission: legacy.quotations.update], allowed: False)",
+      "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationControllerContractTests.EmployeeInitiatedDecision_AcceptsOnlyEmployeeOrExactLegacyIntranetService(claims: [identity_kind: service, sub: service:legacy-intranet, permissions: *], allowed: False)",
+      "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationControllerContractTests.EmployeeInitiatedDecision_AcceptsOnlyEmployeeOrExactLegacyIntranetService(claims: [identity_kind: service, sub: service:legacy-intranet, permissions: legacy.quotations.update, permissions: legacy.quotations.*], allowed: False)",
+      "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationControllerContractTests.EmployeeInitiatedDecision_AcceptsOnlyEmployeeOrExactLegacyIntranetService(claims: [identity_kind: service, sub: service:legacy-intranet, permissions: legacy.quotations.update], allowed: True)",
+      "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationControllerContractTests.EmployeeInitiatedDecision_AcceptsOnlyEmployeeOrExactLegacyIntranetService(claims: [identity_kind: service, sub: service:legacy-intranet], allowed: False)",
+      "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationControllerContractTests.EmployeeInitiatedDecision_AcceptsOnlyEmployeeOrExactLegacyIntranetService(claims: [identity_kind: service, sub: service:other, permissions: legacy.quotations.update], allowed: False)",
+      "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationControllerContractTests.EmployeeInitiatedDecision_AcceptsOnlyEmployeeOrExactLegacyIntranetService(claims: [sub: joined-employee, identity_kind: employee], allowed: True)"
+    ]
   }
 ]
