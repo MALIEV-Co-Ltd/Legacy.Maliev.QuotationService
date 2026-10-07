@@ -4,6 +4,7 @@ extern alias IamInfrastructure;
 using System.Reflection;
 using System.Text.Json;
 using FinancialCompositionAdapter;
+using FinancialCompositionAdapterControls;
 using IamApplication::Maliev.IAMService.Application.Interfaces;
 using IamApplication::Maliev.IAMService.Application.Services;
 using IamApplication::Maliev.IAMService.Application.Validators;
@@ -42,9 +43,14 @@ try
     results.Add("SubstitutedPrincipalRepositoryRefusedBeforeDatabase");
     Require(NeverInvokeProxy.Calls == 0);
     results.Add("NoSubstitutedDependencyInvoked");
+    var physicalColumnControls = await PhysicalColumnControls.RunAsync();
     await protocol.WriteLineAsync(JsonSerializer.Serialize(new
     {
         Passed = results,
+        PhysicalColumnControlsPassed = physicalColumnControls,
+        PhysicalColumnControlCount = physicalColumnControls.Count,
+        PhysicalPostgreSqlObserved = false,
+        PhysicalSchemaAccepted = false,
         HostStarted = false,
         DatabaseOpened = false,
         EnrollmentAccepted = false,

@@ -32,9 +32,9 @@
     },
     {
       "destination": "docs/financial-composition-adapter-source.md",
-      "bytes": 7415,
-      "sha256": "57f4d1f10d630fc9a8fadb20e8ff247608d07f02fa8e32409539b4b700e8cd10",
-      "gitBlob": "bec672a547d0d07b7a54e73d57584009d024277c"
+      "bytes": 8526,
+      "sha256": "c290d2fe39613f64fee849cbd8b48b3796bd23e82f633e983ce7ab8eaeb54955",
+      "gitBlob": "61941a3547612929cbb7a801c65db597d7c48fda"
     },
     {
       "destination": "tools/FinancialCompositionAdapter/provenance/exact-producer-inventory.json",
@@ -56,15 +56,15 @@
     },
     {
       "destination": "tools/FinancialCompositionAdapter.Controls/Program.cs",
-      "bytes": 5451,
-      "sha256": "5929e4fc71ccd113a3d492b9221807bf7ecb349a4c6c31173231085860d9c2b6",
-      "gitBlob": "81e629de5f123b249e062cd9ddaeb73760ca6c1f"
+      "bytes": 5782,
+      "sha256": "4ee49d861f5f792e401066473115261820a597fac901cbbb357b5a0a444723c9",
+      "gitBlob": "7940e63d00434d8a87c03b58900c652a3fb7f547"
     },
     {
       "destination": "tools/FinancialCompositionAdapter.Qualification/qualify.py",
-      "bytes": 49474,
-      "sha256": "bed35d87abb8839954e46061cd14004d3e22d5fdc717036b0f2b76de12745cbc",
-      "gitBlob": "5170bcffa612cd3db4246ee55a9f258ba82055a9"
+      "bytes": 50901,
+      "sha256": "405957b6bd11fc3e807a5aa18e9428faef99d6d951cbbc925bc240abcab6cd73",
+      "gitBlob": "5d98de5c30c7591514df1e17e353778fc873fb5f"
     },
     {
       "destination": "docs/financial-composition-adapter-qualification.md",
@@ -75,8 +75,8 @@
     {
       "destination": ".github/workflows/financial-composition-compile.yml",
       "bytes": 9668,
-      "sha256": "560b66f9edd16966a9892f4ffe737b633ff4046a74ec4b4712aa30f92088e44e",
-      "gitBlob": "8961f06ed85bfa20aeebd7858da0f08599721341"
+      "sha256": "7c34c264a7fd005a2f7114857121014356901f5304fe68aefac130427d07decc",
+      "gitBlob": "b7dd5c301921467a309fd55684d3440a206d008a"
     },
     {
       "destination": "tools/FinancialCompositionAdapter.Qualification/owned_command.py",
@@ -107,6 +107,24 @@
       "bytes": 10937,
       "sha256": "fd0656b70663180ce04bd0776b63d115f6236d2092da143eba3a40393f3255e5",
       "gitBlob": "a5514a947762a16ba68c9254d6260d4c1553881d"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/OwnedPhysicalColumns.cs",
+      "bytes": 16225,
+      "sha256": "7690b58f306517673a108f7f95b40b0c028e49ce039b581ccc21c61dd9b996e3",
+      "gitBlob": "5d3a076cfe413819f5f7b7d75846d5acb1a154a0"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/PhysicalSchemaRelease.cs",
+      "bytes": 1380,
+      "sha256": "6cb8d1d96f7adee395ff73d7430d0a40259625b9a3b0fc2ad372ae99a07831cb",
+      "gitBlob": "e883bc61d21d652edd14acdad832cee9112d2568"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter.Controls/PhysicalColumnControls.cs",
+      "bytes": 4518,
+      "sha256": "5905e406fd88a2d17ea6386c42f9c370622f3f6d528612a44760dc863a52025e",
+      "gitBlob": "8b8ee2da4652347679f0405d4ea9f4b5c2ab1df8"
     }
   ],
   "adapterPacketPatchSha256": "2e380f379ef1ccfa7b00bad331a4ff125ed6058dc200bdf2324e6e271d1ce53d",

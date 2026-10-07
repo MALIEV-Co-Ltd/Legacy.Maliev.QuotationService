@@ -413,7 +413,9 @@ OWNED_COMMAND_HASHES = {
     "owned_command_controls.py": "351a9ae3b600a0c8400dd4d91d21c9b3bcce9f047e9cd7b67d77e211bb1c949e",
     "owned_command_provenance.json": "30304942ffe1ed4aef386e2a8a2c3d06665424187b0c32f94b7c7d5e8860bda9",
 }
-MANIFEST_DESTINATIONS = ('tools/FinancialCompositionAdapter/FinancialCompositionAdapter.csproj', 'tools/FinancialCompositionAdapter/OrdinaryOpaquePrincipalEnrollment.cs', 'tools/FinancialCompositionAdapter/OwnedBusinessSchema.cs', 'tools/FinancialCompositionAdapter/PinnedBusinessSchemas.g.cs', 'tools/FinancialCompositionAdapter/SourceCatalogueAdmission.cs', 'docs/financial-composition-adapter-source.md', 'tools/FinancialCompositionAdapter/provenance/exact-producer-inventory.json', 'tools/FinancialCompositionAdapter/provenance/caller-phase-contract.json', 'tools/FinancialCompositionAdapter.Controls/AdapterCompileControls.csproj', 'tools/FinancialCompositionAdapter.Controls/Program.cs', 'tools/FinancialCompositionAdapter.Qualification/qualify.py', 'docs/financial-composition-adapter-qualification.md', '.github/workflows/financial-composition-compile.yml', 'tools/FinancialCompositionAdapter.Qualification/owned_command.py', 'tools/FinancialCompositionAdapter.Qualification/owned_command_controls.py', 'tools/FinancialCompositionAdapter.Qualification/owned_command_provenance.json', 'tools/FinancialCompositionAdapter.Qualification/owned_command_fixture.py', 'tools/FinancialCompositionAdapter.Qualification/owned_command_hosted_controls.py')
+PHYSICAL_COLUMN_CONTROLS = ['ExactColumnMatches', 'PrecisionMismatchRefused', 'NullabilityMismatchRefused', 'UnexpectedDefaultRefused', 'IdentityMismatchRefused', 'ExactStoredComputedMatches', 'ComputedStorageMismatchRefused', 'ComputedExpressionMismatchRefused', 'ExpectationDigestOrderStable', 'OversizedNameRefusedBeforeDigest', 'OversizedExpressionRefusedBeforeDigest', 'FirstOperationFailureRetainedAndLaterReleaseAttempted', 'SingleReleaseFailureRetained']
+
+MANIFEST_DESTINATIONS = ('tools/FinancialCompositionAdapter/FinancialCompositionAdapter.csproj', 'tools/FinancialCompositionAdapter/OrdinaryOpaquePrincipalEnrollment.cs', 'tools/FinancialCompositionAdapter/OwnedBusinessSchema.cs', 'tools/FinancialCompositionAdapter/PinnedBusinessSchemas.g.cs', 'tools/FinancialCompositionAdapter/SourceCatalogueAdmission.cs', 'docs/financial-composition-adapter-source.md', 'tools/FinancialCompositionAdapter/provenance/exact-producer-inventory.json', 'tools/FinancialCompositionAdapter/provenance/caller-phase-contract.json', 'tools/FinancialCompositionAdapter.Controls/AdapterCompileControls.csproj', 'tools/FinancialCompositionAdapter.Controls/Program.cs', 'tools/FinancialCompositionAdapter.Qualification/qualify.py', 'docs/financial-composition-adapter-qualification.md', '.github/workflows/financial-composition-compile.yml', 'tools/FinancialCompositionAdapter.Qualification/owned_command.py', 'tools/FinancialCompositionAdapter.Qualification/owned_command_controls.py', 'tools/FinancialCompositionAdapter.Qualification/owned_command_provenance.json', 'tools/FinancialCompositionAdapter.Qualification/owned_command_fixture.py', 'tools/FinancialCompositionAdapter.Qualification/owned_command_hosted_controls.py') + ('tools/FinancialCompositionAdapter/OwnedPhysicalColumns.cs', 'tools/FinancialCompositionAdapter/PhysicalSchemaRelease.cs', 'tools/FinancialCompositionAdapter.Controls/PhysicalColumnControls.cs')
 OWNED_COMMAND = None
 OWNED_COMMAND_SUPERVISOR = None
 OWNED_COMMAND_OBSERVATIONS = 0
@@ -577,6 +579,14 @@ def verify_materializer_identity(accepted, materializer, manifest):
             "effectiveText": "set", "effectiveEol": "crlf", "executedCheckoutUnmodified": True}
 
 
+def require_physical_column_controls(actual):
+    require(type(actual) is dict)
+    require(actual.get("PhysicalColumnControlsPassed") == PHYSICAL_COLUMN_CONTROLS)
+    require(type(actual.get("PhysicalColumnControlCount")) is int
+            and actual["PhysicalColumnControlCount"] == len(PHYSICAL_COLUMN_CONTROLS))
+    require(actual.get("PhysicalPostgreSqlObserved") is False and actual.get("PhysicalSchemaAccepted") is False)
+
+
 def main():
     root = pathlib.Path.cwd().resolve()
     parser_controls = audit_parser_controls()
@@ -658,6 +668,7 @@ def main():
     begin_stage("compile-controls")
     actual = strict_json(run(["dotnet", str(executable)], env=env, timeout=30))
     require(actual.get("Passed") == CONTROLS)
+    require_physical_column_controls(actual)
     for key in ("HostStarted", "DatabaseOpened", "EnrollmentAccepted", "FinancialEightAccepted"):
         require(actual.get(key) is False)
     begin_stage("gitleaks")
@@ -682,7 +693,10 @@ def main():
                    "ActualLinuxBackendUsed": True, "HeldResourceConditionsSatisfied": True, "CleanupOriginallyFailed": False,
                    "EscapedSessionDescendantsAccepted": False, "IndependentFdCensusAccepted": False,
                    "KernelResourceCapsObserved": False, "GeneralSourceGitCleanupAccepted": False},
-               "compileControls": actual, "compiled": True, "originalRuntimeDiRegistrationSourceWitness": True,
+               "compileControls": actual, "compiled": True,
+               "compileControlScopes": {"OriginalCompileControlsPassed": len(CONTROLS),
+                   "PhysicalColumnPureControlsPassed": len(PHYSICAL_COLUMN_CONTROLS),
+                   "PhysicalPostgreSqlObserved": False, "QualifiedTwelveRoleColumnExpectationsAvailable": False}, "originalRuntimeDiRegistrationSourceWitness": True,
                "originalRuntimeDiHostStarted": False, "physicalBusinessSchemaAccepted": False, "principalEnrollmentAccepted": False,
                "catalogueRegistrationAccepted": False, "fileSigningAccepted": False, "financialEightAccepted": False}
     begin_stage("public-receipt")
