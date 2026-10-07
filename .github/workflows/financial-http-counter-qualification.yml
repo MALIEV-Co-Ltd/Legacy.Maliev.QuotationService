@@ -210,9 +210,39 @@ jobs:
           
           # All allocations after successful childbirth are inside the protected try. Cleanup
           # attempts remain independent, and recovered uncertainty never becomes a clean receipt.
-          def run(argv, cwd, seconds, stderr_must_be_empty=True):
+          STAGES = ('admission', 'source-head', 'supervisor-control', 'sdk', 'restore', 'locked-restore', 'audit', 'format', 'build', 'controls', 'native', 'receipts')
+          CURRENT_STAGE, CURRENT_PROJECT = 'admission', None
+
+          def public_stage(stage, project=None):
+              global CURRENT_STAGE, CURRENT_PROJECT
+              require(stage in STAGES and (project is None or project in PROJECTS))
+              CURRENT_STAGE, CURRENT_PROJECT = stage, project
+              print(json.dumps({'QualificationStage': stage, 'Project': project}), flush=True)
+
+          def public_diagnostics(raw, root, stage):
+              # Runtime child output can include private witness values: project only stages.
+              if stage not in ('restore', 'locked-restore', 'audit', 'format', 'build'): return [], []
+              require(type(raw) is bytes and len(raw) <= 8 * 1024 * 1024)
+              code_pattern = rb'(?:WHITESPACE|(?:NU|CS|MSB|CA|IDE)[0-9]{3,6})'
+              codes = sorted(set(x.decode('ascii') for x in re.findall(rb'\b' + code_pattern + rb'\b', raw)))[:64]
+              locations = set()
+              for item in SOURCE_INVENTORY:
+                  relative = item['path']
+                  if not relative.endswith(('.cs', '.csproj')): continue
+                  # Match an exact allowlisted public source path, not a raw captured path.
+                  for candidate in (str(root / relative), relative):
+                      pattern = rb'(?:^|[\r\n])' + re.escape(candidate.encode()) + rb'\(([0-9]{1,7}),([0-9]{1,7})\):\s*(?:error|warning)\s+(' + code_pattern + rb')\b'
+                      for match in re.finditer(pattern, raw):
+                          line, column = int(match[1]), int(match[2])
+                          if 0 < line <= 1000000 and 0 < column <= 1000000:
+                              locations.add((relative, line, column, match[3].decode('ascii')))
+              return codes, [{'Source': path, 'Line': line, 'Column': column, 'Code': code}
+                             for path, line, column, code in sorted(locations)[:64]]
+
+          def run(argv, cwd, seconds, stderr_must_be_empty=True, stage="supervisor-control", project=None):
               global LAST_CLEANUP
               LAST_CLEANUP = None
+              public_stage(stage, project)
               end = min(time.monotonic() + seconds, OVERALL_DEADLINE); require(end > time.monotonic())
               held = selector = primary = observation = None
               process = subprocess.Popen(argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
@@ -237,8 +267,9 @@ jobs:
                       time.sleep(0.01)
                   code = status.si_status if status.si_code == os.CLD_EXITED else -status.si_status
                   if code != 0 or (stderr_must_be_empty and error.strip()):
-                      codes = sorted(set(x.decode('ascii') for x in re.findall(rb'\b(?:NU|CS|MSB|CA)[0-9]{3,6}\b', output + error)))
-                      print(json.dumps({'OwnedCommandExitCode': code, 'DiagnosticCodes': codes}), file=sys.stderr)
+                      codes, locations = public_diagnostics(bytes(output + b'\n' + error), cwd, stage)
+                      print(json.dumps({'QualificationStage': stage, 'Project': project, 'OwnedCommandExitCode': code,
+                                        'DiagnosticCodes': codes, 'SourceDiagnostics': locations}), file=sys.stderr)
                       raise Refused()
                   require(re.search(rb'\b(?:warning|error)\s+(?:NU|CS|MSB|CA)[0-9]+', output, re.I) is None)
                   return bytes(output)
@@ -332,7 +363,7 @@ jobs:
                       and event['pull_request']['head']['repo']['full_name'] == os.environ['GITHUB_REPOSITORY']
                       and os.environ['GITHUB_REPOSITORY'] == 'MALIEV-Co-Ltd/Legacy.Maliev.QuotationService')
               head = os.environ['EXPECTED_SOURCE_HEAD']; require(re.fullmatch(r'[0-9a-f]{40}', head) is not None)
-              require(event['pull_request']['head']['sha'] == head and run(['git', 'rev-parse', 'HEAD'], workspace, 10).decode().strip() == head)
+              require(event['pull_request']['head']['sha'] == head and run(['git', 'rev-parse', 'HEAD'], workspace, 10, stage='source-head').decode().strip() == head)
               parser_receipt = parser_controls()
               source = workspace / 'tools/FinancialHttpCounters'; exact_sources(source)
               # Isolate the four projects from unrelated repository/user build configuration.
@@ -345,35 +376,36 @@ jobs:
                   supervisor_receipt = supervisor_controls(root)
                   (root / 'NuGet.Config').write_text('<configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources><auditSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></auditSources></configuration>')
                   dotnet = str(pathlib.Path(shutil.which('dotnet')).resolve(strict=True))
-                  sdk = run([dotnet, '--version'], root, 10).decode().strip(); require(re.fullmatch(r'10\.0\.[0-9]+', sdk) is not None)
+                  sdk = run([dotnet, '--version'], root, 10, stage='sdk').decode().strip(); require(re.fullmatch(r'10\.0\.[0-9]+', sdk) is not None)
                   flags = ['-p:ImportDirectoryBuildProps=false', '-p:ImportDirectoryBuildTargets=false', '-p:ManagePackageVersionsCentrally=false',
                            '-p:RestorePackagesWithLockFile=true', '-p:NuGetAudit=true', '-p:NuGetAuditMode=all', '-p:TreatWarningsAsErrors=true',
                            '-p:WarningsAsErrors=', '-p:NoWarn=', '-p:UseSharedCompilation=false', '-nodeReuse:false']
                   for project in PROJECTS:
-                      run([dotnet, 'restore', str(root / project), '--configfile', str(root / 'NuGet.Config'), '--disable-parallel', '--verbosity', 'minimal', *flags], root, 90)
+                      run([dotnet, 'restore', str(root / project), '--configfile', str(root / 'NuGet.Config'), '--disable-parallel', '--verbosity', 'minimal', *flags], root, 90, stage='restore', project=project)
                   locks = lock_bytes(root)
                   for project in PROJECTS:
-                      run([dotnet, 'restore', str(root / project), '--locked-mode', '--configfile', str(root / 'NuGet.Config'), '--disable-parallel', '--verbosity', 'minimal', *flags], root, 60)
+                      run([dotnet, 'restore', str(root / project), '--locked-mode', '--configfile', str(root / 'NuGet.Config'), '--disable-parallel', '--verbosity', 'minimal', *flags], root, 60, stage='locked-restore', project=project)
                   require(lock_bytes(root) == locks)
                   for project in PROJECTS:
-                      audit = run([dotnet, 'package', 'list', '--project', str(root / project), '--no-restore', '--vulnerable', '--include-transitive', '--format', 'json', '--output-version', '1'], root, 45)
+                      audit = run([dotnet, 'package', 'list', '--project', str(root / project), '--no-restore', '--vulnerable', '--include-transitive', '--format', 'json', '--output-version', '1'], root, 45, stage='audit', project=project)
                       clean_audit(audit, str(root / project))
-                      run([dotnet, 'format', str(root / project), '--verify-no-changes', '--no-restore', '--verbosity', 'minimal'], root, 90)
-                      run([dotnet, 'build', str(root / project), '--configuration', 'Release', '--no-restore', '--disable-build-servers', '--verbosity', 'minimal', '-warnaserror', *flags], root, 60)
+                      run([dotnet, 'format', str(root / project), '--verify-no-changes', '--no-restore', '--verbosity', 'minimal'], root, 90, stage='format', project=project)
+                      run([dotnet, 'build', str(root / project), '--configuration', 'Release', '--no-restore', '--disable-build-servers', '--verbosity', 'minimal', '-warnaserror', *flags], root, 60, stage='build', project=project)
                   exact_sources(root); require(lock_bytes(root) == locks)
-                  controls_raw = run([dotnet, str(root / 'controls/bin/Release/net10.0/FinancialHttpCounters.Controls.dll')], root, 30)
+                  controls_raw = run([dotnet, str(root / 'controls/bin/Release/net10.0/FinancialHttpCounters.Controls.dll')], root, 30, stage='controls', project=PROJECTS[1])
                   controls = parse(controls_raw, 4096)
                   require(type(controls) is dict and set(controls) == {'ControlledCasesPassed', 'HostedEventPipeWitness', 'GenuineEightHostFinancialAccepted'}
                           and type(controls['ControlledCasesPassed']) is int and controls['ControlledCasesPassed'] == 15
                           and controls['HostedEventPipeWitness'] is False and controls['GenuineEightHostFinancialAccepted'] is False)
                   witness = (root / 'witness-host/bin/Release/net10.0/FinancialHttpCounters.WitnessHost.dll').resolve(strict=True)
-                  native_raw = run([dotnet, str(root / 'native-controls/bin/Release/net10.0/FinancialHttpCounters.NativeControls.dll'), dotnet, str(witness)], root, 90)
+                  native_raw = run([dotnet, str(root / 'native-controls/bin/Release/net10.0/FinancialHttpCounters.NativeControls.dll'), dotnet, str(witness)], root, 90, stage='native', project=PROJECTS[2])
                   native = parse(native_raw, 4096)
                   require(type(native) is dict and set(native) == {'NativeEventPipeCodecWitnessPassed', 'NativePostBirthFaultCleanupPassed', 'SourceAdmissionAccepted', 'RealBusinessSchemaAccepted',
                           'SmtpNoSendProven', 'SocketNoSendProven', 'GenuineEightHostFinancialAccepted'}
                           and native['NativeEventPipeCodecWitnessPassed'] is True and native['NativePostBirthFaultCleanupPassed'] is True
                           and all(native[key] is False for key in native if key not in ('NativeEventPipeCodecWitnessPassed', 'NativePostBirthFaultCleanupPassed')))
                   exact_sources(root); exact_sources(source); require(lock_bytes(root) == locks)
+                  public_stage('receipts')
                   public = workspace / 'TestResults/FinancialHttpCounterCodec'
                   require(not public.exists() and public.resolve() == public); public.mkdir(parents=True)
                   (public / 'controls.json').write_bytes(json.dumps(controls, sort_keys=True).encode() + b'\n')
@@ -388,7 +420,8 @@ jobs:
                       'SmtpNoSendProven': False, 'SocketNoSendProven': False}, sort_keys=True) + '\n')
           except Exception as error:
               # Never print private child exceptions/stdout/stderr/environment.
-              print('Codec qualification refused: ' + type(error).__name__, file=sys.stderr)
+              print(json.dumps({'QualificationRefused': True, 'QualificationStage': CURRENT_STAGE,
+                                'Project': CURRENT_PROJECT}), file=sys.stderr)
               sys.exit(1)
           PY
       - name: Retain only public qualification receipts and four fixed NuGet locks
