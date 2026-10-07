@@ -77,23 +77,48 @@ try
         object replay = collector.State.FinalizeWindow(boundaries[1], boundaries[2], guard);
         object baseline = collector.State.FinalizeWindow(DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc), boundaries[0], guard);
         object tail = collector.State.FinalizeWindow(boundaries[2], DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc), guard);
-        observations.Add(collector.Pin.Owner, new { collector.Pin.Pid, collector.Pin.KernelStartTicks, collector.Pin.NativeStartUtcTicks,
-            collector.Pin.SourceSha, collector.Pin.SourceTree, ExecutableSha256 = collector.Pin.Executable.Sha256, DllSha256 = collector.Pin.Dll.Sha256,
-            BeforeBaseline = baseline, Completion = completion, Replay = replay, AfterReplayThroughDrain = tail,
-            EventsLost = collector.Lost, StreamEofObserved = collector.Drained });
+        observations.Add(collector.Pin.Owner, new
+        {
+            collector.Pin.Pid,
+            collector.Pin.KernelStartTicks,
+            collector.Pin.NativeStartUtcTicks,
+            collector.Pin.SourceSha,
+            collector.Pin.SourceTree,
+            ExecutableSha256 = collector.Pin.Executable.Sha256,
+            DllSha256 = collector.Pin.Dll.Sha256,
+            BeforeBaseline = baseline,
+            Completion = completion,
+            Replay = replay,
+            AfterReplayThroughDrain = tail,
+            EventsLost = collector.Lost,
+            StreamEofObserved = collector.Drained
+        });
         using var sourceBudget = CancellationTokenSource.CreateLinkedTokenSource(token); sourceBudget.CancelAfter(TimeSpan.FromSeconds(5));
         await ProcessAdmission.VerifySourceAsync(collector.Pin, sourceBudget.Token);
     }
-    receipt = new { HttpObservationsComplete = true, GenuineEightHostFinancialAccepted = false,
-        SmtpNoSendProven = false, SocketNoSendProven = false, IncomingMethodSchemaCanariesObserved = true,
+    receipt = new
+    {
+        HttpObservationsComplete = true,
+        GenuineEightHostFinancialAccepted = false,
+        SmtpNoSendProven = false,
+        SocketNoSendProven = false,
+        IncomingMethodSchemaCanariesObserved = true,
         Scope = "HttpClient/ASP.NET observations from attach through drained stop; no pre-attach coverage",
-        PrivateInputSha256 = Convert.ToHexStringLower(SHA256.HashData(inputBytes)), Observations = observations };
+        PrivateInputSha256 = Convert.ToHexStringLower(SHA256.HashData(inputBytes)),
+        Observations = observations
+    };
     result = 0;
 }
 catch (Exception error)
 {
-    receipt = new { HttpObservationsComplete = false, GenuineEightHostFinancialAccepted = false,
-        SmtpNoSendProven = false, SocketNoSendProven = false, ErrorType = error.GetType().Name };
+    receipt = new
+    {
+        HttpObservationsComplete = false,
+        GenuineEightHostFinancialAccepted = false,
+        SmtpNoSendProven = false,
+        SocketNoSendProven = false,
+        ErrorType = error.GetType().Name
+    };
 }
 finally
 {

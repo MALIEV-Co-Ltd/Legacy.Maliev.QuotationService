@@ -13,8 +13,16 @@ ProcessAdmission.CanonicalPath(dotnet); ProcessAdmission.CanonicalPath(host);
 bool faultCleanup = await ExerciseAsync(dotnet, host, injectSetupFailure: true);
 CounterState.Require(faultCleanup, "Actual post-birth setup-failure cleanup control failed");
 bool passed = await ExerciseAsync(dotnet, host, injectSetupFailure: false);
-Console.WriteLine(JsonSerializer.Serialize(new { NativeEventPipeCodecWitnessPassed = passed, NativePostBirthFaultCleanupPassed = faultCleanup, SourceAdmissionAccepted = false,
-    RealBusinessSchemaAccepted = false, SmtpNoSendProven = false, SocketNoSendProven = false, GenuineEightHostFinancialAccepted = false }));
+Console.WriteLine(JsonSerializer.Serialize(new
+{
+    NativeEventPipeCodecWitnessPassed = passed,
+    NativePostBirthFaultCleanupPassed = faultCleanup,
+    SourceAdmissionAccepted = false,
+    RealBusinessSchemaAccepted = false,
+    SmtpNoSendProven = false,
+    SocketNoSendProven = false,
+    GenuineEightHostFinancialAccepted = false
+}));
 return passed ? 0 : 1;
 
 static async Task<bool> ExerciseAsync(string dotnet, string host, bool injectSetupFailure)
