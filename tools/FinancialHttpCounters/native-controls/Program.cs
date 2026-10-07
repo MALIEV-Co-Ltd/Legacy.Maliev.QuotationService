@@ -124,6 +124,8 @@ static async Task<bool> ExerciseAsync(string dotnet, string host, bool injectSet
             await Task.Delay(100, budget.Token);
         }
         await Task.Delay(1000, budget.Token); DateTime before = DateTime.UtcNow;
+        // The boundary guard needs quiet time after the recorded boundary as well as before it.
+        await Task.Delay(1000, budget.Token);
         NativeDiagnostics.Mark(NativeControl.WitnessCompletion);
         using (var trigger = await http.GetAsync("/trigger", budget.Token)) trigger.EnsureSuccessStatusCode();
         await Task.Delay(1000, budget.Token); DateTime completion = DateTime.UtcNow;
