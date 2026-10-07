@@ -34,6 +34,11 @@ required. Catalogue restore feeds must match the genuine local package builder a
 nuget.org; the hosted package cache starts fresh. The frozen candidate ZIP stays
 unchanged when these transport checks are tightened.
 
+SDK setup also consumes the original pinned Contracts `global.json`. That source
+requires SDK `10.0.302` with roll-forward disabled; the ordinary Quotation .NET 10
+channel alone cannot run its generator. Installing the declared SDK preserves the
+genuine source pins and global.json rather than rewriting them.
+
 Jobs have finite timeouts, read-only repository permissions and a 4096 MiB memory
 admission guard. They use disposable hosted workspaces and start no detached
 workers or provider sessions. Original logs, TRX, coverage and raw source identity
