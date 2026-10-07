@@ -7,10 +7,36 @@ from datetime import datetime, timezone
 import unittest
 from unittest.mock import patch
 
-from hosted_scanner_readiness import Scanner, database_hashes, IMAGE, CONFIG, EICAR
+from hosted_scanner_readiness import Scanner, database_hashes, no_docker_publication, IMAGE, CONFIG, EICAR
 
 
 class ScannerTests(unittest.TestCase):
+    def test_publication_absence_accepts_only_explicit_unpublished_engine_fields(self):
+        for declared in (None, {}):
+            for actual in (None, {}, {"3310/tcp": None}):
+                observed = no_docker_publication({"HostConfig": {"PortBindings": declared, "PublishAllPorts": False},
+                                                  "NetworkSettings": {"Ports": actual}})
+                self.assertTrue(observed["absenceVerified"])
+                self.assertIs(observed["dockerPortPublicationObserved"], False)
+                self.assertEqual(actual, observed["actualPortBindings"])
+
+    def test_configured_secondary_endpoint_rejected_even_if_engine_suppresses_it(self):
+        for declared in ({"3310/tcp": [{"HostIp": "127.0.0.1", "HostPort": ""}]}, {"3310/tcp": []}):
+            with self.assertRaisesRegex(ValueError, "Configured"):
+                no_docker_publication({"HostConfig": {"PortBindings": declared, "PublishAllPorts": False},
+                                       "NetworkSettings": {"Ports": {}}})
+
+    def test_actual_mapping_publish_all_or_missing_observation_rejected(self):
+        for container in (
+                {"HostConfig": {"PortBindings": {}, "PublishAllPorts": True}, "NetworkSettings": {"Ports": {}}},
+                {"HostConfig": {"PortBindings": {}, "PublishAllPorts": False}, "NetworkSettings": {"Ports": {"3310/tcp": [{"HostIp": "127.0.0.1", "HostPort": "12345"}]}}},
+                {"HostConfig": {"PortBindings": {}, "PublishAllPorts": False}, "NetworkSettings": {"Ports": {"3310/tcp": []}}},
+                {"HostConfig": {"PortBindings": {}, "PublishAllPorts": False}, "NetworkSettings": {"Ports": []}},
+                {"HostConfig": {}, "NetworkSettings": {"Ports": {}}},
+                {"HostConfig": {"PortBindings": {}, "PublishAllPorts": False}, "NetworkSettings": {}}):
+            with self.assertRaises(ValueError):
+                no_docker_publication(container)
+
     def test_startup_diagnostic_records_exact_owned_runtime_state_and_ports(self):
         scanner = Scanner("diagnostic-run")
         scanner.container_id = "a" * 64

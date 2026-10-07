@@ -44,6 +44,22 @@ def digest(value):
     return hashlib.sha256(value).hexdigest()
 
 
+def no_docker_publication(container):
+    host = container.get("HostConfig")
+    settings = container.get("NetworkSettings")
+    if not isinstance(host, dict) or not isinstance(settings, dict) or "PortBindings" not in host or "PublishAllPorts" not in host or "Ports" not in settings:
+        raise ValueError("Actual Docker publication fields required")
+    declared = host["PortBindings"]
+    actual = settings["Ports"]
+    if host["PublishAllPorts"] is not False or declared not in (None, {}) or not (actual is None or isinstance(actual, dict)):
+        raise ValueError("Configured Docker port publication denied")
+    if actual is not None and any(mapping is not None for mapping in actual.values()):
+        raise ValueError("Actual Docker port publication denied")
+    return {"declaredPortBindings": declared, "publishAllPorts": host["PublishAllPorts"],
+            "actualPortBindings": actual, "dockerPortPublicationObserved": False,
+            "absenceVerified": True}
+
+
 def database_hashes(output):
     rows = []
     for line in output.splitlines():
@@ -215,7 +231,7 @@ class Scanner:
         self.container_id = self.docker("create", "--name", self.name, "--label", "financial.acceptance.run=" + self.run_id,
             "--memory", "1536m", "--cpus", "2", "--read-only", "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges", "--tmpfs", "/tmp:rw,nosuid,nodev,size=32m",
-            "--tmpfs", "/run:rw,nosuid,nodev,size=4m", "-p", "127.0.0.1::3310",
+            "--tmpfs", "/run:rw,nosuid,nodev,size=4m",
             "--network", self.network_id, "--ipc", "private", "--cgroupns", "private",
             "--entrypoint", "/usr/sbin/clamd", self.image_id, "--foreground", "--config-file=/etc/clamav/acceptance.conf")
         if not re.fullmatch(r"[0-9a-f]{64}", self.container_id):
@@ -234,7 +250,7 @@ class Scanner:
         self.relay = LoopbackRelay(self.validate_backend_endpoint)
         self.port = self.relay.endpoint[1]
         self.receipt["loopbackRelay"] = {**self.relay.identity, "backend": self.backend_identity,
-                                         "dockerPortPublicationObserved": False, "ownedInProcess": True}
+                                         "portIsolation": self.receipt["portIsolation"], "ownedInProcess": True}
         container = json.loads(self.docker("inspect", self.container_id))[0]
         if container["Image"] != self.image_id or container["Id"] != self.container_id or not container["HostConfig"]["ReadonlyRootfs"]:
             raise ValueError("Runtime image or immutable root policy differs")
@@ -310,6 +326,7 @@ class Scanner:
         state = container.get("State", {})
         if container.get("Id") != self.container_id or container.get("Image") != self.image_id or container.get("Created") != generation["createdUtc"] or state.get("StartedAt") != generation["startedUtc"] or state.get("Running") is not True or state.get("Paused") is not False or state.get("Restarting") is not False or container.get("Config", {}).get("Labels", {}).get("financial.acceptance.run") != self.run_id:
             raise ValueError("Relay backend container ownership or generation differs")
+        self.receipt["portIsolation"] = no_docker_publication(container)
         networks = container.get("NetworkSettings", {}).get("Networks", {})
         if len(networks) != 1 or container.get("HostConfig", {}).get("NetworkMode") != self.network_id:
             raise ValueError("Relay backend has foreign network attachment")
