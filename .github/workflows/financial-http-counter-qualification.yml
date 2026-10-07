@@ -49,35 +49,36 @@ jobs:
           umask 077
           timeout --signal=TERM --kill-after=5s 710s python3 -B - <<'PY'
           import copy, ctypes, hashlib, json, os, pathlib, re, selectors, shutil, signal, subprocess, sys, tempfile, time
-          
+
           # NuGet JSON v1 schema checked against primary ListPackageJsonRenderer/GetReportParameters:
           # https://github.com/NuGet/NuGet.Client/blob/fa1508b1123e9d1d86a39cd702f969d3db242884/src/NuGet.Core/NuGet.CommandLine.XPlat/ListPackage/ListPackageJsonRenderer.cs
           # Empty top-level arrays and omitted transitive arrays are the documented clean vulnerable report.
-          SOURCE_INVENTORY = [{'path': 'controls/FinancialHttpCounters.Controls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'controls/Program.cs', 'rawSha256': '6ab9f96662edcdaf3157e5d06302ed406ab9cbaa67e9c18e2baceac9e7de98c7'}, {'path': 'descriptor-provenance.json', 'rawSha256': '475008becd77ae3555fcf6ddad4bc18406bdf563441c74af4d7fdb9511778da3'}, {'path': 'native-controls/AdmissionNativeControls.cs', 'rawSha256': 'dfa0bd6ebdd7ff770b5a4c6463d71835c112761a54510998cf5600e266c4efe6'}, {'path': 'native-controls/FinancialHttpCounters.NativeControls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'native-controls/Program.cs', 'rawSha256': '819a3cd9e8d3c2478806cc4a11279d79ce3a57ffb7be33e1d62422b418934319'}, {'path': 'README.md', 'rawSha256': '4d3820d800d257c97a4c87aeef595930e5a8ba9f2768c7a6d3546034871625aa'}, {'path': 'source/CounterState.cs', 'rawSha256': 'f47257546fa7cc1df99f023068a10446f12890d5a404ba227901612a13faa158'}, {'path': 'source/DescriptorBoundFrontFile.cs', 'rawSha256': '79e6c218c9776888e86cf7fc92ed3f16b8e26058b91df86ab5e2166441e9b185'}, {'path': 'source/DescriptorBoundOutput.cs', 'rawSha256': 'b6c1d45b958db1362c784b64154fdd552711639d5fb5f065a273dd4f9fe974ac'}, {'path': 'source/EventCollector.cs', 'rawSha256': 'feecc76366cdb2c892b649b2eb396bcd6e2e02556b2f050b3a404d27bc71fbfb'}, {'path': 'source/FinancialHttpCounters.csproj', 'rawSha256': '5254ec772153643963d71a2b03d76b8dcc230f9a4a69978d5c7bc6367a8423f9'}, {'path': 'source/ProcessAdmission.cs', 'rawSha256': '53473f8d9497b37d4efafde158b8712eab06fde8a8832c6679652b41fddb374c'}, {'path': 'source/Program.cs', 'rawSha256': 'bb227e581745a355c8df6e3bba50c6cd29d0222d72b5ea073a2266de6c4ea461'}, {'path': 'source-provenance.json', 'rawSha256': '5e66670d9469696a85d14bb74b5e89a2080fa19d59f94662aa708f54a49a4a62'}, {'path': 'witness-host/FinancialHttpCounters.WitnessHost.csproj', 'rawSha256': '25e9385fa7053264d6b20be455942ad1548a587fc006e017350d193d6a1a36b4'}, {'path': 'witness-host/Program.cs', 'rawSha256': 'be6dddd2461f1077ff0832859bd8c63bd28ed6ef2d995fc5054556481ddd775e'}]
+          SOURCE_INVENTORY = [{'path': 'controls/FinancialHttpCounters.Controls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'controls/Program.cs', 'rawSha256': '6ab9f96662edcdaf3157e5d06302ed406ab9cbaa67e9c18e2baceac9e7de98c7'}, {'path': 'descriptor-provenance.json', 'rawSha256': '475008becd77ae3555fcf6ddad4bc18406bdf563441c74af4d7fdb9511778da3'}, {'path': 'native-controls/AdmissionNativeControls.cs', 'rawSha256': 'dfa0bd6ebdd7ff770b5a4c6463d71835c112761a54510998cf5600e266c4efe6'}, {'path': 'native-controls/FinancialHttpCounters.NativeControls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'native-controls/Program.cs', 'rawSha256': '819a3cd9e8d3c2478806cc4a11279d79ce3a57ffb7be33e1d62422b418934319'}, {'path': 'README.md', 'rawSha256': '4d3820d800d257c97a4c87aeef595930e5a8ba9f2768c7a6d3546034871625aa'}, {'path': 'source/CounterState.cs', 'rawSha256': 'f47257546fa7cc1df99f023068a10446f12890d5a404ba227901612a13faa158'}, {'path': 'source/DescriptorBoundFrontFile.cs', 'rawSha256': '79e6c218c9776888e86cf7fc92ed3f16b8e26058b91df86ab5e2166441e9b185'}, {'path': 'source/DescriptorBoundOutput.cs', 'rawSha256': 'b6c1d45b958db1362c784b64154fdd552711639d5fb5f065a273dd4f9fe974ac'}, {'path': 'source/EventCollector.cs', 'rawSha256': 'feecc76366cdb2c892b649b2eb396bcd6e2e02556b2f050b3a404d27bc71fbfb'}, {'path': 'source/FinancialHttpCounters.csproj', 'rawSha256': '5254ec772153643963d71a2b03d76b8dcc230f9a4a69978d5c7bc6367a8423f9'}, {'path': 'source/ProcessAdmission.cs', 'rawSha256': '349a504e0b206037fc721ccc96cc0972602e6c9eacc7d6942954874256e37aec'}, {'path': 'source/Program.cs', 'rawSha256': 'bb227e581745a355c8df6e3bba50c6cd29d0222d72b5ea073a2266de6c4ea461'}, {'path': 'source-provenance.json', 'rawSha256': '5e66670d9469696a85d14bb74b5e89a2080fa19d59f94662aa708f54a49a4a62'}, {'path': 'witness-host/FinancialHttpCounters.WitnessHost.csproj', 'rawSha256': '25e9385fa7053264d6b20be455942ad1548a587fc006e017350d193d6a1a36b4'}, {'path': 'witness-host/Program.cs', 'rawSha256': 'be6dddd2461f1077ff0832859bd8c63bd28ed6ef2d995fc5054556481ddd775e'}, {'path': 'helper-controls/HelperHostedControls.csproj', 'rawSha256': 'b80e57f135ffd22216a0d7439e089e8f1e92f8fe0b48d6a8f9cea71f19d5e057'}, {'path': 'helper-controls/Program.cs', 'rawSha256': 'a7d60b12beeb22068f3563872343ae188c4a3ca63176159eb82394ede3fc9bb6'}, {'path': 'helper-controls/fixture_git.py', 'rawSha256': '628703d47e3c02a74ed4f119164cc1b20d13b0a1f2c6de14422a173d7d074637'}]
           PROJECTS = (
               'source/FinancialHttpCounters.csproj',
               'controls/FinancialHttpCounters.Controls.csproj',
               'native-controls/FinancialHttpCounters.NativeControls.csproj',
               'witness-host/FinancialHttpCounters.WitnessHost.csproj',
+              'helper-controls/HelperHostedControls.csproj',
           )
           LOCKS = tuple(str(pathlib.PurePosixPath(p).parent / 'packages.lock.json') for p in PROJECTS)
-          
+
           class Refused(Exception): pass
-          
+
           def require(condition):
               if not condition: raise Refused()
-          
+
           def pairs(items):
               result = {}
               for key, value in items:
                   require(key not in result); result[key] = value
               return result
-          
+
           def parse(raw, maximum=1024 * 1024):
               require(type(raw) is bytes and 0 < len(raw) <= maximum)
               return json.loads(raw.decode('utf-8'), object_pairs_hook=pairs,
                                 parse_constant=lambda _: (_ for _ in ()).throw(Refused()))
-          
+
           def clean_audit(raw, expected_project):
               value = parse(raw)
               require(type(value) is dict and set(value) in (
@@ -99,7 +100,7 @@ jobs:
               # including an entry with missing/empty/malformed vulnerability details.
               require(type(frame['topLevelPackages']) is list and frame['topLevelPackages'] == [])
               require(type(frame.get('transitivePackages', [])) is list and frame.get('transitivePackages', []) == [])
-          
+
           def parser_controls():
               positive = {'version': 1, 'parameters': '--vulnerable --include-transitive',
                           'sources': ['https://api.nuget.org/v3/index.json'], 'projects': [
@@ -137,7 +138,7 @@ jobs:
                   except (Refused, ValueError, UnicodeError, TypeError, KeyError): refused = True
                   require(refused)
               return {'PositiveCasesObserved': 2, 'NegativeCasesObserved': len(cases)}
-          
+
           # Typed Linux kernel reads are separate from source files. The spawned leader remains
           # unreaped until teardown: WNOWAIT reserves its PID/session ID against reuse.
           def generation(pid):
@@ -147,7 +148,7 @@ jobs:
               end = raw.rfind(b')'); require(end > 0 and int(raw[:raw.index(b'(')].strip()) == pid)
               fields = raw[end + 2:].split(); require(len(fields) >= 20)
               return (int(fields[19]), int(fields[1]), int(fields[2]), int(fields[3]), fields[0].decode('ascii'))
-          
+
           def session_members(session, deadline):
               entries = list(pathlib.Path('/proc').iterdir()); require(len(entries) <= 32768)
               result = {}
@@ -158,9 +159,9 @@ jobs:
                   except FileNotFoundError: continue  # A vanished kernel process is absent, never an invented owned success.
                   if observed[3] == session: result[int(entry.name)] = observed
               return result
-          
+
           LAST_CLEANUP = None
-          
+
           def dispose_owned_session(process, held):
               deadline = time.monotonic() + 5
               failures = []; observed = None; members = None; anchor = held
@@ -207,10 +208,10 @@ jobs:
               receipt = None if failures else {'HeldLeaderExitedBeforeCleanup': observed[4] == 'Z',
                   'SessionMembersBeforeCleanup': len(members), 'SessionMembersAfterCleanup': len(remaining)}
               return receipt, failures
-          
+
           # All allocations after successful childbirth are inside the protected try. Cleanup
           # attempts remain independent, and recovered uncertainty never becomes a clean receipt.
-          STAGES = ('admission', 'source-head', 'supervisor-control', 'sdk', 'restore', 'locked-restore', 'audit', 'format', 'build', 'controls', 'native', 'receipts')
+          STAGES = ('admission', 'source-head', 'supervisor-control', 'sdk', 'restore', 'locked-restore', 'audit', 'format', 'build', 'controls', 'source-helper', 'native', 'receipts')
           CURRENT_STAGE, CURRENT_PROJECT = 'admission', None
 
           def public_stage(stage, project=None):
@@ -329,9 +330,9 @@ jobs:
                   if failures:
                       if primary is None: raise Refused()
                       primary.add_note('Owned cleanup uncertain; no successful cleanup receipt.')
-          
+
           class InjectedSelectorSetupFailure(Exception): pass
-          
+
           def supervisor_controls(root):
               # Real leader exits while its real child retains inherited pipes.
               program = "import subprocess,sys; subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)']); sys.exit(0)"
@@ -353,12 +354,12 @@ jobs:
                       and LAST_CLEANUP['SessionMembersAfterCleanup'] == 0)
               return {'ExitedLeaderPipeDescendantDeadlineRefused': True, 'HeldGenerationSessionCleanupObserved': True,
                       'PostBirthSelectorConstructorFailureRefused': True, 'ConstructorFailureOwnedCleanupObserved': True}
-          
+
           def exact_sources(root):
               for item in SOURCE_INVENTORY:
                   path = root / item['path']
                   require(path.is_file() and not path.is_symlink() and hashlib.sha256(path.read_bytes()).hexdigest() == item['rawSha256'])
-          
+
           def lock_bytes(root):
               require({p.relative_to(root).as_posix() for p in root.rglob('packages.lock.json')} == set(LOCKS))
               result = {}
@@ -381,7 +382,7 @@ jobs:
                                       and re.fullmatch(r'[A-Za-z0-9.*+, ()\[\]-]+', version) is not None)
                   result[relative] = raw
               return result
-          
+
           try:
               require(sys.platform == 'linux' and os.environ.get('GITHUB_ACTIONS') == 'true')
               # Only this private supervisor process changes its child-adoption behavior.
@@ -436,6 +437,27 @@ jobs:
                   require(type(controls) is dict and set(controls) == {'ControlledCasesPassed', 'HostedEventPipeWitness', 'GenuineEightHostFinancialAccepted'}
                           and type(controls['ControlledCasesPassed']) is int and controls['ControlledCasesPassed'] == 15
                           and controls['HostedEventPipeWitness'] is False and controls['GenuineEightHostFinancialAccepted'] is False)
+                  public = workspace / 'TestResults/FinancialHttpCounterCodec'
+                  require(not public.exists() and public.resolve() == public); public.mkdir(parents=True)
+                  helper_receipts = []
+                  for case in ('fast', 'overflow', 'timeout', 'inherited'):
+                      case_root = root / ('source-helper-' + case)
+                      helper_raw = run([dotnet, str(root / 'helper-controls/bin/Release/net10.0/HelperHostedControls.dll'), case, str(case_root)], root, 60, stage='source-helper', project=PROJECTS[4])
+                      helper = parse(helper_raw, 4096)
+                      require(type(helper) is dict and set(helper) == {'Case', 'Outcome', 'ActualVerifySourceAsyncInvoked', 'ActualSyntheticGitBirths', 'ExactOriginalChildrenExited', 'RetainedOriginalTasksObserved', 'RecoveredHeldHandlesClosed', 'StickyRefusalAndNoNewBirth', 'ExactOwnedPipeIdentitiesAbsent', 'ExactSyntheticWriterPidfdExitObserved', 'NaturalParentExitObserved', 'CausalOverflowObserved', 'FiniteTimeoutObserved', 'ElapsedMilliseconds', 'FinancialAdmissionAccepted'})
+                      require(helper['Case'] == case and helper['Outcome'] == 'Passed'
+                              and helper['ActualVerifySourceAsyncInvoked'] is True
+                              and type(helper['ActualSyntheticGitBirths']) is int and helper['ActualSyntheticGitBirths'] == (3 if case == 'fast' else 1)
+                              and helper['ExactOriginalChildrenExited'] is True and helper['ExactOwnedPipeIdentitiesAbsent'] is True
+                              and helper['FinancialAdmissionAccepted'] is False
+                              and type(helper['ElapsedMilliseconds']) is int and 0 <= helper['ElapsedMilliseconds'] < 45000)
+                      for key in ('RetainedOriginalTasksObserved', 'RecoveredHeldHandlesClosed', 'StickyRefusalAndNoNewBirth', 'ExactSyntheticWriterPidfdExitObserved', 'NaturalParentExitObserved'):
+                          require(helper[key] is (case == 'inherited'))
+                      require(helper['CausalOverflowObserved'] is (case == 'overflow') and helper['FiniteTimeoutObserved'] is (case == 'timeout'))
+                      # Retain this bounded case receipt even if the later codec remains refused.
+                      (public / ('source-helper-' + case + '.json')).write_bytes(json.dumps({'SourceHead': head, 'RunId': os.environ['GITHUB_RUN_ID'], 'RunAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'Control': helper}, sort_keys=True).encode() + b'\n')
+                      helper_receipts.append(helper)
+                  (public / 'source-helper-slice.json').write_bytes(json.dumps({'SourceHead': head, 'ActualCasesPassed': len(helper_receipts), 'FullLifecycleFaultCoverageAccepted': False, 'SourceAdmissionAccepted': False, 'GenuineEightHostFinancialAccepted': False}, sort_keys=True).encode() + b'\n')
                   witness = (root / 'witness-host/bin/Release/net10.0/FinancialHttpCounters.WitnessHost.dll').resolve(strict=True)
                   native_raw = run([dotnet, str(root / 'native-controls/bin/Release/net10.0/FinancialHttpCounters.NativeControls.dll'), dotnet, str(witness)], root, 90, stage='native', project=PROJECTS[2])
                   native = parse(native_raw, 4096)
@@ -445,8 +467,6 @@ jobs:
                           and all(native[key] is False for key in native if key not in ('NativeEventPipeCodecWitnessPassed', 'NativePostBirthFaultCleanupPassed')))
                   exact_sources(root); exact_sources(source); require(lock_bytes(root) == locks)
                   public_stage('receipts')
-                  public = workspace / 'TestResults/FinancialHttpCounterCodec'
-                  require(not public.exists() and public.resolve() == public); public.mkdir(parents=True)
                   (public / 'controls.json').write_bytes(json.dumps(controls, sort_keys=True).encode() + b'\n')
                   (public / 'native-codec.json').write_bytes(json.dumps(native, sort_keys=True).encode() + b'\n')
                   for relative, raw in locks.items():
@@ -463,11 +483,17 @@ jobs:
                                 'Project': CURRENT_PROJECT}), file=sys.stderr)
               sys.exit(1)
           PY
-      - name: Retain only public qualification receipts and four fixed NuGet locks
+      - name: Retain only public qualification receipts and five fixed NuGet locks
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: financial-http-counter-codec-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            TestResults/FinancialHttpCounterCodec/source-helper-fast.json
+            TestResults/FinancialHttpCounterCodec/source-helper-overflow.json
+            TestResults/FinancialHttpCounterCodec/source-helper-timeout.json
+            TestResults/FinancialHttpCounterCodec/source-helper-inherited.json
+            TestResults/FinancialHttpCounterCodec/source-helper-slice.json
             TestResults/FinancialHttpCounterCodec/controls.json
             TestResults/FinancialHttpCounterCodec/native-codec.json
             TestResults/FinancialHttpCounterCodec/qualification.json
@@ -475,5 +501,6 @@ jobs:
             TestResults/FinancialHttpCounterCodec/locks/controls/packages.lock.json
             TestResults/FinancialHttpCounterCodec/locks/native-controls/packages.lock.json
             TestResults/FinancialHttpCounterCodec/locks/witness-host/packages.lock.json
+            TestResults/FinancialHttpCounterCodec/locks/helper-controls/packages.lock.json
           if-no-files-found: error
           retention-days: 7

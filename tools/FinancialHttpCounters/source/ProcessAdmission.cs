@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.IO.Pipes;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -149,29 +152,289 @@ public static class ProcessAdmission
         CounterState.Require(pin.Dll.Path.StartsWith(pin.Repository + '/', StringComparison.Ordinal), "Build must lie inside selected source root");
     }
 
+    private static readonly SemaphoreSlim SourceGitGate = new(1, 1);
+    private static SourceGitLease? SourceGitQuarantine;
+    private static bool SourceGitCleanupRefused;
+
     public static async Task VerifySourceAsync(ProcessPin pin, CancellationToken token)
     {
         async Task<string> Git(params string[] args)
         {
-            var info = new ProcessStartInfo("git") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-            info.ArgumentList.Add("-C"); info.ArgumentList.Add(pin.Repository);
-            foreach (string argument in args) info.ArgumentList.Add(argument);
-            using var process = Process.Start(info) ?? throw new InvalidDataException("Source read failed");
-            async Task<string> BoundedText(StreamReader reader)
+            using var finite = CancellationTokenSource.CreateLinkedTokenSource(token);
+            finite.CancelAfter(TimeSpan.FromSeconds(5));
+            await SourceGitGate.WaitAsync(finite.Token);
+            try
             {
-                var text = new StringBuilder(); char[] buffer = new char[4096]; int length;
-                while ((length = await reader.ReadAsync(buffer.AsMemory(), token)) != 0)
-                { CounterState.Require(text.Length + length <= 65536, "Source observation output exceeded bound"); text.Append(buffer, 0, length); }
-                return text.ToString();
+                if (SourceGitQuarantine is not null)
+                {
+                    // A fresh cleanup attempt, never a cached failed Task. Recovery cannot erase refusal.
+                    if (await SourceGitQuarantine.CleanupAsync()) SourceGitQuarantine = null;
+                }
+                CounterState.Require(!SourceGitCleanupRefused && SourceGitQuarantine is null, "Source helper cleanup remains refused");
+                var info = new ProcessStartInfo("git")
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    RedirectStandardInput = true,
+                    UseShellExecute = false
+                };
+                info.ArgumentList.Add("-C"); info.ArgumentList.Add(pin.Repository);
+                foreach (string argument in args) info.ArgumentList.Add(argument);
+                // Retained before attempted birth. No using/automatic disposal of an uncertain child.
+                var lease = new SourceGitLease(info, finite.Token);
+                Exception? primary = null;
+                try { return await lease.RunAsync(); }
+                catch (Exception error) { primary = error; throw; }
+                finally
+                {
+                    bool closed = false;
+                    try { closed = await lease.CleanupAsync(); }
+                    catch (Exception) { lease.RefuseCleanup(); }
+                    if (!closed || lease.CleanupRefused)
+                    {
+                        SourceGitCleanupRefused = true;
+                        if (!closed) SourceGitQuarantine = lease;
+                        if (primary is not null) primary.Data["SourceGitCleanupVerified"] = false;
+                        else throw new InvalidDataException("Source helper cleanup refused");
+                    }
+                }
             }
-            var output = BoundedText(process.StandardOutput); var error = BoundedText(process.StandardError);
-            try { await process.WaitForExitAsync(token); }
-            catch { if (!process.HasExited) process.Kill(); await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(2)); throw; }
-            string text = await output; string discarded = await error;
-            CounterState.Require(process.ExitCode == 0 && text.Length <= 65536 && discarded.Length <= 65536, "Bounded actual git observation required");
-            return text.TrimEnd('\r', '\n');
+            finally { SourceGitGate.Release(); }
         }
         CounterState.Require(await Git("rev-parse", "HEAD") == pin.SourceSha && await Git("rev-parse", "HEAD^{tree}") == pin.SourceTree
             && await Git("status", "--porcelain", "--untracked-files=all") == "", "Actual clean selected source differs");
+    }
+
+    // Concrete ownership for these three read-only Git commands; not a general process runner.
+    private sealed class SourceGitLease
+    {
+        private readonly Process process;
+        private readonly CancellationToken operation;
+        private readonly CancellationTokenSource readers;
+        private SafeProcessHandle? processHandle;
+        private SafeFileHandle? pidfd;
+        private StreamReader? stdout, stderr;
+        private StreamWriter? stdin;
+        private SafeHandle? stdoutHandle, stderrHandle, stdinHandle;
+        private Task<string>? outputTask, errorTask;
+        private Task? exitTask, cleanupExitTask, outputDrainTask, errorDrainTask;
+        private (ulong Ticks, int Parent)? kernel;
+        private long? native;
+        private bool attempted, bound, outputEof, errorEof, closed, exitVerified;
+        internal bool CleanupRefused { get; private set; }
+
+        internal SourceGitLease(ProcessStartInfo info, CancellationToken operation)
+        {
+            process = new Process { StartInfo = info };
+            this.operation = operation;
+            readers = CancellationTokenSource.CreateLinkedTokenSource(operation);
+        }
+
+        internal void RefuseCleanup() => CleanupRefused = true;
+
+        private static SafeHandle Handle(Stream stream) => stream switch
+        {
+            FileStream file => file.SafeFileHandle,
+            PipeStream pipe => pipe.SafePipeHandle,
+            _ => throw new InvalidDataException("Owned source pipe handle unavailable")
+        };
+
+        private void CaptureStreams()
+        {
+            stdout ??= process.StandardOutput; stdoutHandle ??= Handle(stdout.BaseStream);
+            stderr ??= process.StandardError; stderrHandle ??= Handle(stderr.BaseStream);
+            stdin ??= process.StandardInput; stdinHandle ??= Handle(stdin.BaseStream);
+        }
+
+        private async Task<string> BoundedText(StreamReader reader, bool output)
+        {
+            var text = new StringBuilder(); char[] buffer = new char[4096]; int length;
+            while ((length = await reader.ReadAsync(buffer.AsMemory(), readers.Token)) != 0)
+            {
+                CounterState.Require(text.Length + length <= 65536, "Source observation output exceeded bound");
+                text.Append(buffer, 0, length);
+            }
+            if (output) outputEof = true; else errorEof = true;
+            return text.ToString();
+        }
+
+        private bool Exited()
+        {
+            if (exitVerified) return true;
+            process.Refresh();
+            exitVerified = process.HasExited; // Exact retained child WaitState, not /proc PID absence.
+            return exitVerified;
+        }
+
+        private async Task BindLiveAsync(CancellationToken token)
+        {
+            if (Exited()) return;
+            processHandle ??= process.SafeHandle; // Linux pseudo-handle retained, never used to signal.
+            if (Exited()) return;
+            try
+            {
+                var observed = await KernelAsync(process.Id, token);
+                long observedNative = process.StartTime.ToUniversalTime().Ticks;
+                if (Exited()) return;
+                CounterState.Require(observed.Parent == System.Environment.ProcessId
+                    && (!kernel.HasValue || kernel.Value == observed) && (!native.HasValue || native.Value == observedNative), "Owned source generation differs");
+                kernel ??= observed; native ??= observedNative;
+                if (pidfd is null)
+                {
+                    int descriptor = pidfd_open(process.Id, 0);
+                    if (descriptor < 0)
+                    {
+                        if (Exited()) return;
+                        throw new InvalidDataException("Source pidfd unavailable");
+                    }
+                    pidfd = new SafeFileHandle((IntPtr)descriptor, ownsHandle: true);
+                }
+                // Runtime may reap asynchronously. Never signal a descriptor acquired after original exit.
+                if (Exited()) return;
+                var after = await KernelAsync(process.Id, token);
+                long afterNative = process.StartTime.ToUniversalTime().Ticks;
+                if (Exited()) return;
+                CounterState.Require(after == kernel.Value && afterNative == native.Value && !pidfd.IsInvalid && !pidfd.IsClosed,
+                    "Source pidfd generation association differs");
+                bound = true;
+            }
+            catch (Exception)
+            {
+                if (Exited()) return; // Fast natural exit uses retained exit + both actual EOFs, no signal.
+                throw;
+            }
+        }
+
+        internal async Task<string> RunAsync()
+        {
+            CounterState.Require(OperatingSystem.IsLinux(), "Hosted Linux source helper required");
+            operation.ThrowIfCancellationRequested();
+            attempted = true;
+            CounterState.Require(process.Start(), "Source read failed");
+            CaptureStreams();
+            stdin!.Dispose(); // Owned EOF: these read-only commands consume no interactive input.
+            outputTask = BoundedText(stdout!, output: true);
+            errorTask = BoundedText(stderr!, output: false);
+            exitTask = process.WaitForExitAsync(readers.Token);
+            await BindLiveAsync(operation);
+            var pending = new List<Task> { outputTask, errorTask, exitTask };
+            while (pending.Count != 0)
+            {
+                // A failed/overflowed reader stops observation immediately, before a blocked writer can deadlock.
+                Task completed = await Task.WhenAny(pending).WaitAsync(operation);
+                await completed; pending.Remove(completed);
+            }
+            string text = await outputTask; string discarded = await errorTask;
+            CounterState.Require(Exited() && outputEof && errorEof && process.ExitCode == 0
+                && text.Length <= 65536 && discarded.Length <= 65536, "Bounded actual git observation required");
+            return text.TrimEnd('\r', '\n');
+        }
+
+        private async Task DrainAsync(StreamReader reader, bool output, CancellationToken token)
+        {
+            char[] buffer = new char[4096]; int total = 0, length;
+            while ((length = await reader.ReadAsync(buffer.AsMemory(), token)) != 0)
+                CounterState.Require((total += length) <= 65536, "Source cleanup drain exceeded bound");
+            if (output) outputEof = true; else errorEof = true;
+        }
+
+        private async Task QuiesceAsync(Task? task, StreamReader? reader, bool output, CancellationToken token)
+        {
+            if (task is not null)
+            {
+                try { await task.WaitAsync(token); }
+                catch (Exception) { if (!task.IsCompleted) throw; }
+                CounterState.Require(task.IsCompleted, "Source reader remains active");
+            }
+            if (!(output ? outputEof : errorEof))
+            {
+                CounterState.Require(reader is not null, "Source reader ownership unavailable");
+                Task? draining = output ? outputDrainTask : errorDrainTask;
+                if (draining is null || draining.IsCompleted)
+                {
+                    // Observe a completed failure before releasing its last retained task reference.
+                    if (draining?.IsFaulted == true) _ = draining.Exception;
+                    // A completed failed drain can be retried; an in-flight read is retained and never overlapped.
+                    draining = DrainAsync(reader!, output, token);
+                    if (output) outputDrainTask = draining; else errorDrainTask = draining;
+                }
+                await draining.WaitAsync(token);
+            }
+        }
+
+        internal async Task<bool> CleanupAsync()
+        {
+            if (closed) return true;
+            if (!attempted)
+            {
+                // No Start invocation occurred: this is the only unassociated no-child disposal case.
+                try { process.Dispose(); } catch (Exception) { RefuseCleanup(); }
+                try { readers.Dispose(); } catch (Exception) { RefuseCleanup(); }
+                closed = !CleanupRefused;
+                return closed;
+            }
+            using var finite = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try
+            {
+                // Capture every redirected stream independently, including recovery after Start/readersetup throw.
+                try { stdout ??= process.StandardOutput; stdoutHandle ??= Handle(stdout.BaseStream); } catch (Exception) { RefuseCleanup(); }
+                try { stderr ??= process.StandardError; stderrHandle ??= Handle(stderr.BaseStream); } catch (Exception) { RefuseCleanup(); }
+                try { stdin ??= process.StandardInput; stdinHandle ??= Handle(stdin.BaseStream); } catch (Exception) { RefuseCleanup(); }
+                try { stdin?.Dispose(); } catch (Exception) { RefuseCleanup(); }
+                for (int attempt = 0; attempt < 2; attempt++)
+                {
+                    try
+                    {
+                        if (Exited()) break;
+                        await BindLiveAsync(finite.Token);
+                        if (Exited()) break;
+                        CounterState.Require(bound && pidfd is not null && !pidfd.IsClosed, "Source live signal ownership unavailable");
+                        if (pidfd_send_signal(pidfd!, 9, IntPtr.Zero, 0) != 0)
+                            CounterState.Require(Marshal.GetLastPInvokeError() == 3 && Exited(), "Source pidfd signal failed");
+                        break;
+                    }
+                    catch (Exception) { RefuseCleanup(); }
+                }
+                bool exited = false;
+                try
+                {
+                    if (cleanupExitTask is null || (cleanupExitTask.IsCompleted && !cleanupExitTask.IsCompletedSuccessfully))
+                    {
+                        if (cleanupExitTask?.IsFaulted == true) _ = cleanupExitTask.Exception;
+                        cleanupExitTask = process.WaitForExitAsync();
+                    }
+                    await cleanupExitTask.WaitAsync(finite.Token);
+                    exited = Exited();
+                }
+                catch (Exception) { RefuseCleanup(); }
+                try { readers.Cancel(); } catch (Exception) { RefuseCleanup(); }
+                try { await QuiesceAsync(outputTask, stdout, output: true, finite.Token); } catch (Exception) { RefuseCleanup(); }
+                try { await QuiesceAsync(errorTask, stderr, output: false, finite.Token); } catch (Exception) { RefuseCleanup(); }
+                bool tasksDone = (outputTask is null || outputTask.IsCompleted) && (errorTask is null || errorTask.IsCompleted)
+                    && (exitTask is null || exitTask.IsCompleted) && (cleanupExitTask is null || cleanupExitTask.IsCompleted)
+                    && (outputDrainTask is null || outputDrainTask.IsCompleted) && (errorDrainTask is null || errorDrainTask.IsCompleted);
+                if (!attempted || !exited || !tasksDone || !outputEof || !errorEof || stdoutHandle is null || stderrHandle is null || stdinHandle is null)
+                { RefuseCleanup(); return false; }
+                foreach (var task in new[] { outputTask, errorTask, exitTask, cleanupExitTask, outputDrainTask, errorDrainTask })
+                    if (task?.IsFaulted == true) _ = task.Exception;
+                // Only a positively exited child and independently quiescent/EOF readers permit handle disposal.
+                try { stdout!.Dispose(); } catch (Exception) { RefuseCleanup(); }
+                try { stderr!.Dispose(); } catch (Exception) { RefuseCleanup(); }
+                try { pidfd?.Dispose(); } catch (Exception) { RefuseCleanup(); }
+                try { process.Dispose(); } catch (Exception) { RefuseCleanup(); }
+                try { readers.Dispose(); } catch (Exception) { RefuseCleanup(); }
+                closed = stdoutHandle.IsClosed && stderrHandle.IsClosed && stdinHandle.IsClosed
+                    && (pidfd is null || pidfd.IsClosed) && (processHandle is null || processHandle.IsClosed);
+                if (!closed) RefuseCleanup();
+                return closed;
+            }
+            finally
+            {
+                try { finite.Cancel(); } catch (Exception) { RefuseCleanup(); }
+            }
+        }
+
+        [DllImport("libc", SetLastError = true)] private static extern int pidfd_open(int pid, uint flags);
+        [DllImport("libc", SetLastError = true)] private static extern int pidfd_send_signal(SafeFileHandle pidfd, int signal, IntPtr info, uint flags);
     }
 }
