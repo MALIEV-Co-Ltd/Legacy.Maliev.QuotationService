@@ -161,7 +161,7 @@ jobs:
 
       - name: Retain complete coverage evidence
         if: always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx') != '')
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: quotation-complete-coverage-${{ github.sha }}
           path: |
@@ -180,7 +180,7 @@ jobs:
 
       - name: Retain actual qualification wire-source evidence
         if: always() && hashFiles('TestResults/QualificationWire/qualification-wire.trx') != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: qualification-source-wire-${{ github.sha }}
           path: |
