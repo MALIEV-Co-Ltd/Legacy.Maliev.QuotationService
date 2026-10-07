@@ -9,6 +9,11 @@ on:
     paths:
       - 'tools/FinancialHttpCounters/**'
       - '.github/workflows/financial-http-counter-qualification.yml'
+      - 'tools/InvoiceCompletionProducerAcceptance/companion/**'
+      - 'tools/FinancialOwnerReceiptCoordinator/**'
+      - 'tools/FinancialCompositionAdapter.Qualification/owned_command.py'
+      - 'docs/financial-held-phase-qualification.md'
+      - '.github/workflows/financial-held-phase-qualification.yml'
 permissions:
   contents: read
 concurrency:
