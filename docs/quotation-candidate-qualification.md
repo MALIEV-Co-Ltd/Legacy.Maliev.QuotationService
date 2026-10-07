@@ -45,3 +45,10 @@ workers or provider sessions. Original logs, TRX, coverage and raw source identi
 receipts are retained for seven days. Missing or failed native evidence leaves the
 candidate ineligible for a C# commit. Successful native evidence still requires a
 subsequent source PR and its normal protected checks before integration.
+
+Clean NuGet vulnerability JSON can retain only a project path, omitting framework
+rows. Such a row is accepted only when a separate original full transitive package
+graph confirms the exact project set and sole net10.0 framework. Both CLI reports
+and their empty stderr are retained. Explicit empty, null or substituted framework
+rows, malformed resolved packages, missing graphs and audit warnings still fail.
+The trusted transport reruns both reports independently of candidate evidence.

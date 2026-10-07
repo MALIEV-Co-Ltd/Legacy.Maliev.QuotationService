@@ -123,7 +123,47 @@ def validate_trx(data, discovered, assembly, delayed=None):
         raise ValueError("suite entries/results identity mismatch")
 
 
-def validate_audit(report, expected_projects, allowed_sources=None):
+def validate_resolved_graph(report, expected_projects):
+    if (not isinstance(report, dict) or type(report.get("version")) is not int or report["version"] != 1
+            or not isinstance(report.get("parameters"), str)
+            or report["parameters"].split() != ["--include-transitive"]
+            or not isinstance(report.get("projects"), list)):
+        raise ValueError("missing original full transitive package graph")
+    actual = []
+    for project in report["projects"]:
+        if not isinstance(project, dict) or not isinstance(project.get("path"), str) or not project["path"]:
+            raise ValueError("resolved graph project identity missing")
+        frameworks = project.get("frameworks")
+        if (not isinstance(frameworks, list) or len(frameworks) != 1
+                or not isinstance(frameworks[0], dict) or frameworks[0].get("framework") != "net10.0"):
+            raise ValueError("resolved graph framework identity differs")
+        for key in ("topLevelPackages", "transitivePackages"):
+            if key not in frameworks[0]:
+                continue
+            rows = frameworks[0][key]
+            if (not isinstance(rows, list) or any(not isinstance(row, dict)
+                    or any(not isinstance(row.get(field), str) or not row[field]
+                           for field in ("id", "resolvedVersion")) for row in rows)):
+                raise ValueError("malformed resolved package rows")
+            if len({row["id"].lower() for row in rows}) != len(rows):
+                raise ValueError("duplicate resolved package identity")
+        actual.append(Path(project["path"]).resolve())
+    if len(actual) != len(set(actual)) or set(actual) != set(expected_projects):
+        raise ValueError("resolved graph project set differs")
+    def check(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in ("vulnerabilities", "errors", "problems", "warnings") and (not isinstance(value, list) or value):
+                    raise ValueError("resolved graph contains unavailable or unsafe evidence")
+                check(value)
+        elif isinstance(node, list):
+            for child in node:
+                check(child)
+    check(report)
+    return set(actual)
+
+
+def validate_audit(report, expected_projects, allowed_sources=None, resolved_graph=None):
     allowed_sources = allowed_sources or {"https://api.nuget.org/v3/index.json"}
     if type(report.get("version")) is not int or report["version"] != 1 or not isinstance(report.get("projects"), list):
         raise ValueError("missing resolved audit graph")
@@ -147,12 +187,22 @@ def validate_audit(report, expected_projects, allowed_sources=None):
             for child in node:
                 check(child)
     check(report)
+    resolved = validate_resolved_graph(resolved_graph, expected_projects) if resolved_graph is not None else set()
     actual = []
     for project in report["projects"]:
+        if not isinstance(project, dict):
+            raise ValueError("malformed audit project")
         path = project.get("path")
         frameworks = project.get("frameworks")
-        if not isinstance(path, str) or not path or not isinstance(frameworks, list) or len(frameworks) != 1:
-            raise ValueError("audit project/framework missing")
+        if not isinstance(path, str) or not path:
+            raise ValueError("audit project identity missing")
+        if "frameworks" not in project:
+            if Path(path).resolve() not in resolved:
+                raise ValueError("sparse clean audit requires original full graph")
+            actual.append(Path(path).resolve())
+            continue
+        if not isinstance(frameworks, list) or len(frameworks) != 1:
+            raise ValueError("audit framework malformed")
         if not isinstance(frameworks[0], dict) or frameworks[0].get("framework") != "net10.0":
             raise ValueError("audit framework identity mismatch")
         actual.append(Path(path).resolve())
@@ -202,7 +252,9 @@ def main():
         for project in expected:
             assets = json.loads((project.parent / "obj/project.assets.json").read_text())
             validate_restore_sources(assets, {"https://api.nuget.org/v3/index.json"})
-        validate_audit(json.loads((root / "TestResults/CandidateNative/package-audit.json").read_text()), expected)
+        validate_empty_stderr(root / "TestResults/CandidateNative/package-graph.stderr.log")
+        graph = json.loads((root / "TestResults/CandidateNative/package-graph.json").read_text())
+        validate_audit(json.loads((root / "TestResults/CandidateNative/package-audit.json").read_text()), expected, resolved_graph=graph)
         print("Exact solution project/net10.0 vulnerability graph has no findings or unavailable evidence.")
     else:
         project = root / "tooling/Quotation.PermissionRegistration.Tests/Quotation.PermissionRegistration.Tests.csproj"
@@ -213,7 +265,9 @@ def main():
         directory = root / "TestResults/QuotationCatalogue"
         stderr = directory / "trusted-vulnerability-audit.stderr.log"
         validate_empty_stderr(stderr)
-        validate_audit(json.loads((directory / "trusted-vulnerability-audit.json").read_text()), [project.resolve()], allowed)
+        validate_empty_stderr(directory / "trusted-package-graph.stderr.log")
+        graph = json.loads((directory / "trusted-package-graph.json").read_text())
+        validate_audit(json.loads((directory / "trusted-vulnerability-audit.json").read_text()), [project.resolve()], allowed, graph)
         print("Exact catalogue project/net10.0 audit and genuine restore feeds have no affected rows or unavailable evidence.")
 
 

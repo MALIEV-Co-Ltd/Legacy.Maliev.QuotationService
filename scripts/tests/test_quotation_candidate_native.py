@@ -12,6 +12,42 @@ spec.loader.exec_module(gate)
 
 
 class NativeEvidenceTests(unittest.TestCase):
+    def test_actual_sparse_clean_audit_requires_independent_full_graph(self):
+        path = Path("boundary.csproj").resolve()
+        sparse = {"version": 1, "parameters": "--vulnerable --include-transitive",
+                  "sources": ["https://api.nuget.org/v3/index.json"], "projects": [{"path": str(path)}]}
+        graph = {"version": 1, "parameters": "--include-transitive", "projects": [{"path": str(path),
+                 "frameworks": [{"framework": "net10.0", "topLevelPackages": [{"id": "Package", "resolvedVersion": "1.2.3"}]}]}]}
+        EXPECTED = [path]
+        with self.assertRaises(ValueError):
+            gate.validate_audit(sparse, EXPECTED)
+        gate.validate_audit(sparse, EXPECTED, resolved_graph=graph)
+        for change in ("missing", "other", "duplicate", "framework", "null-framework", "warning", "boolean-version", "vulnerable-scope", "outdated-scope", "deprecated-scope", "malformed-package", "duplicate-package"):
+            bad = copy.deepcopy(graph)
+            if change == "missing": bad["projects"] = []
+            elif change == "other": bad["projects"][0]["path"] = "other.csproj"
+            elif change == "duplicate": bad["projects"] *= 2
+            elif change == "framework": bad["projects"][0]["frameworks"][0]["framework"] = "net9.0"
+            elif change == "null-framework": bad["projects"][0]["frameworks"] = None
+            elif change == "warning": bad["warnings"] = ["NU1900"]
+            elif change == "boolean-version": bad["version"] = True
+            elif change == "vulnerable-scope": bad["parameters"] += " --vulnerable"
+            elif change == "outdated-scope": bad["parameters"] += " --outdated"
+            elif change == "deprecated-scope": bad["parameters"] += " --deprecated"
+            elif change == "malformed-package": bad["projects"][0]["frameworks"][0]["topLevelPackages"] = [{}]
+            elif change == "duplicate-package": bad["projects"][0]["frameworks"][0]["topLevelPackages"] *= 2
+            with self.subTest(graphChange=change), self.assertRaises(ValueError):
+                gate.validate_audit(sparse, EXPECTED, resolved_graph=bad)
+        for key in ("warnings", "errors", "problems", "vulnerabilities", "topLevelPackages", "transitivePackages"):
+            for value in (["unavailable"], {}, None, False, ""):
+                bad = copy.deepcopy(sparse); bad[key] = value
+                with self.subTest(auditKey=key, value=value), self.assertRaises(ValueError):
+                    gate.validate_audit(bad, EXPECTED, resolved_graph=graph)
+        for frameworks in ([], None, [{"framework": "net9.0"}]):
+            bad = copy.deepcopy(sparse); bad["projects"][0]["frameworks"] = frameworks
+            with self.subTest(auditFrameworks=frameworks), self.assertRaises(ValueError):
+                gate.validate_audit(bad, EXPECTED, resolved_graph=graph)
+
     def test_actual_restore_feeds_must_match_reviewed_graph(self):
         feed = "https://api.nuget.org/v3/index.json"
         assets = {"project": {"restore": {"sources": {feed: {}}}}}

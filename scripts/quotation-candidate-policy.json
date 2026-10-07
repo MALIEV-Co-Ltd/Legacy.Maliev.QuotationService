@@ -333,8 +333,8 @@
     },
     {
       "path": "provisioning/iam/README.md",
-      "sha256": "e8f97a57ae996262f8a8e8b06ca72b0b26e7c01e491766e5414240ab8260d18c",
-      "bytes": 4140
+      "sha256": "a8872b8b4536155dbca487a982661a6f3915064dab7b552057e6b4b2ef2a30dc",
+      "bytes": 4625
     },
     {
       "path": "scripts/Register-QuotationPermissions.ps1",
@@ -353,8 +353,8 @@
     },
     {
       "path": "scripts/run_quotation_catalogue_ci.sh",
-      "sha256": "68d85bebb6a95c7c6df30fc7860d29ae4ced3de4c20bc05b855e31639c947531",
-      "bytes": 6293
+      "sha256": "6b81490023cd8ebb39cc024242043a75a4e925e4eb2e15d3a92e8a64fcc6c881",
+      "bytes": 6485
     },
     {
       "path": "scripts/quotation-catalogue-inventory.json",
@@ -363,14 +363,14 @@
     },
     {
       "path": "scripts/check_quotation_catalogue_results.py",
-      "sha256": "0340c059b32baa33d94672db57ec7cf665083ffd0e706ba7b3182057a04fa1f8",
-      "bytes": 4449
+      "sha256": "43a70b8ea475e355bef1bfd25e3ffc5d293ad66eab309c328a23141deaf6d2f6",
+      "bytes": 7724
     },
     {
       "path": "scripts/tests/test_quotation_catalogue_results.py",
-      "sha256": "53d71388c31dd09bff06a2025c8cf8dd0a54073567f79d49a22b8c33b1907669",
-      "bytes": 6599
+      "sha256": "b2659491f6899e280aeec6b749df8fe439cc893ed993020e8ae067c5f3dffaad",
+      "bytes": 9460
     }
   ],
-  "manifestSha256": "e72900b8964952ec8026495ebb5fe4b1102876159e3854fe25baddd148d285d9"
+  "manifestSha256": "78e1c4bd5f38912fedd65118e068765fabb328179e07a85c077f399f81d3b453"
 }

@@ -28,6 +28,7 @@ for project in "${projects[@]}"; do
 done
 python3 -B ../scripts/check_quotation_candidate_native.py --candidate "$PWD" --phase suite
 dotnet format "$solution" --verify-no-changes --no-restore 2>&1 | tee TestResults/CandidateNative/format.log
+dotnet list "$solution" package --include-transitive --no-restore --format json --output-version 1 > TestResults/CandidateNative/package-graph.json 2> TestResults/CandidateNative/package-graph.stderr.log
 dotnet list "$solution" package --vulnerable --include-transitive --no-restore --format json --output-version 1 > TestResults/CandidateNative/package-audit.json 2> TestResults/CandidateNative/package-audit.stderr.log
 python3 -B ../scripts/check_quotation_candidate_native.py --candidate "$PWD" --phase audit
 # Prove coverage gate failure and success behavior
