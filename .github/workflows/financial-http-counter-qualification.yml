@@ -53,7 +53,7 @@ jobs:
           # NuGet JSON v1 schema checked against primary ListPackageJsonRenderer/GetReportParameters:
           # https://github.com/NuGet/NuGet.Client/blob/fa1508b1123e9d1d86a39cd702f969d3db242884/src/NuGet.Core/NuGet.CommandLine.XPlat/ListPackage/ListPackageJsonRenderer.cs
           # Empty top-level arrays and omitted transitive arrays are the documented clean vulnerable report.
-          SOURCE_INVENTORY = [{'path': 'controls/FinancialHttpCounters.Controls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'controls/Program.cs', 'rawSha256': 'cae422f5c11a94b74c2c96f13f89756f83ca262e9557029551fe7628f79b4cdd'}, {'path': 'descriptor-provenance.json', 'rawSha256': '475008becd77ae3555fcf6ddad4bc18406bdf563441c74af4d7fdb9511778da3'}, {'path': 'native-controls/AdmissionNativeControls.cs', 'rawSha256': 'dfa0bd6ebdd7ff770b5a4c6463d71835c112761a54510998cf5600e266c4efe6'}, {'path': 'native-controls/FinancialHttpCounters.NativeControls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'native-controls/Program.cs', 'rawSha256': '7aac870965504e9a938961e93a1a960a063859a9e3ed5633423cdf876008c288'}, {'path': 'README.md', 'rawSha256': '4d3820d800d257c97a4c87aeef595930e5a8ba9f2768c7a6d3546034871625aa'}, {'path': 'source/CounterState.cs', 'rawSha256': 'f47257546fa7cc1df99f023068a10446f12890d5a404ba227901612a13faa158'}, {'path': 'source/DescriptorBoundFrontFile.cs', 'rawSha256': '79e6c218c9776888e86cf7fc92ed3f16b8e26058b91df86ab5e2166441e9b185'}, {'path': 'source/DescriptorBoundOutput.cs', 'rawSha256': 'b6c1d45b958db1362c784b64154fdd552711639d5fb5f065a273dd4f9fe974ac'}, {'path': 'source/EventCollector.cs', 'rawSha256': 'a4aae9efd9f798ce39319da7dac5170269b8a6afb2d697c3e1214e2d7b1100a7'}, {'path': 'source/FinancialHttpCounters.csproj', 'rawSha256': '5254ec772153643963d71a2b03d76b8dcc230f9a4a69978d5c7bc6367a8423f9'}, {'path': 'source/ProcessAdmission.cs', 'rawSha256': '349a504e0b206037fc721ccc96cc0972602e6c9eacc7d6942954874256e37aec'}, {'path': 'source/Program.cs', 'rawSha256': 'bb227e581745a355c8df6e3bba50c6cd29d0222d72b5ea073a2266de6c4ea461'}, {'path': 'source-provenance.json', 'rawSha256': '5e66670d9469696a85d14bb74b5e89a2080fa19d59f94662aa708f54a49a4a62'}, {'path': 'witness-host/FinancialHttpCounters.WitnessHost.csproj', 'rawSha256': '25e9385fa7053264d6b20be455942ad1548a587fc006e017350d193d6a1a36b4'}, {'path': 'witness-host/Program.cs', 'rawSha256': 'be6dddd2461f1077ff0832859bd8c63bd28ed6ef2d995fc5054556481ddd775e'}, {'path': 'helper-controls/HelperHostedControls.csproj', 'rawSha256': 'b80e57f135ffd22216a0d7439e089e8f1e92f8fe0b48d6a8f9cea71f19d5e057'}, {'path': 'helper-controls/Program.cs', 'rawSha256': '1b353b259d141711a62829ddfee092e52413c30cedd2cdf1fd0373c99350a70b'}, {'path': 'helper-controls/fixture_git.py', 'rawSha256': '628703d47e3c02a74ed4f119164cc1b20d13b0a1f2c6de14422a173d7d074637'}]
+          SOURCE_INVENTORY = [{'path': 'README.md', 'rawSha256': '4d3820d800d257c97a4c87aeef595930e5a8ba9f2768c7a6d3546034871625aa'}, {'path': 'controls/FinancialHttpCounters.Controls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'controls/Program.cs', 'rawSha256': '7e2502c918f7df8453b77c0ed5a13ce3e5a8b1279ed6727b3a101c7fd2f9a501'}, {'path': 'descriptor-provenance.json', 'rawSha256': '475008becd77ae3555fcf6ddad4bc18406bdf563441c74af4d7fdb9511778da3'}, {'path': 'helper-controls/HelperHostedControls.csproj', 'rawSha256': 'b80e57f135ffd22216a0d7439e089e8f1e92f8fe0b48d6a8f9cea71f19d5e057'}, {'path': 'helper-controls/Program.cs', 'rawSha256': '1b353b259d141711a62829ddfee092e52413c30cedd2cdf1fd0373c99350a70b'}, {'path': 'helper-controls/fixture_git.py', 'rawSha256': '628703d47e3c02a74ed4f119164cc1b20d13b0a1f2c6de14422a173d7d074637'}, {'path': 'native-controls/AdmissionNativeControls.cs', 'rawSha256': 'dfa0bd6ebdd7ff770b5a4c6463d71835c112761a54510998cf5600e266c4efe6'}, {'path': 'native-controls/FinancialHttpCounters.NativeControls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'native-controls/Program.cs', 'rawSha256': '0c83e4a01d30c0f9bed211b2f2e7b82c183b452e1bb21fa4edc6db8915af2bdf'}, {'path': 'native-controls/WitnessLease.cs', 'rawSha256': '14785041e6c39dcd0e33972c767ce271f4c75727153b5db42977d4e64e41e9ed'}, {'path': 'native-controls/WitnessLifecycleControls.cs', 'rawSha256': '5f8706a7152d46bb3422a611c1eb87b1f3dd2ca2ae6112229ae2e58243ba5419'}, {'path': 'source-provenance.json', 'rawSha256': '5e66670d9469696a85d14bb74b5e89a2080fa19d59f94662aa708f54a49a4a62'}, {'path': 'source/CounterState.cs', 'rawSha256': '14dd422b0eb8cf63b5ab3cc8cc6c220aa88c6323c517321b2392525d03d16c6a'}, {'path': 'source/DescriptorBoundFrontFile.cs', 'rawSha256': '79e6c218c9776888e86cf7fc92ed3f16b8e26058b91df86ab5e2166441e9b185'}, {'path': 'source/DescriptorBoundOutput.cs', 'rawSha256': 'b6c1d45b958db1362c784b64154fdd552711639d5fb5f065a273dd4f9fe974ac'}, {'path': 'source/EventCollector.cs', 'rawSha256': '02e6a9472e735ba6d4f7d0166258f57435310c58829217c0c198acc9754282aa'}, {'path': 'source/FinancialHttpCounters.csproj', 'rawSha256': '5254ec772153643963d71a2b03d76b8dcc230f9a4a69978d5c7bc6367a8423f9'}, {'path': 'source/NativeWitnessAccess.cs', 'rawSha256': 'b73b4e725d926eb08e4caa5b03ab21febef6a7f713b7ffca0bef6acd37852cea'}, {'path': 'source/ProcessAdmission.cs', 'rawSha256': '349a504e0b206037fc721ccc96cc0972602e6c9eacc7d6942954874256e37aec'}, {'path': 'source/Program.cs', 'rawSha256': 'bb227e581745a355c8df6e3bba50c6cd29d0222d72b5ea073a2266de6c4ea461'}, {'path': 'witness-host/FinancialHttpCounters.WitnessHost.csproj', 'rawSha256': '25e9385fa7053264d6b20be455942ad1548a587fc006e017350d193d6a1a36b4'}, {'path': 'witness-host/Program.cs', 'rawSha256': 'be6dddd2461f1077ff0832859bd8c63bd28ed6ef2d995fc5054556481ddd775e'}]
           PROJECTS = (
               'source/FinancialHttpCounters.csproj',
               'controls/FinancialHttpCounters.Controls.csproj',
@@ -211,7 +211,7 @@ jobs:
 
           # All allocations after successful childbirth are inside the protected try. Cleanup
           # attempts remain independent, and recovered uncertainty never becomes a clean receipt.
-          STAGES = ('admission', 'source-head', 'supervisor-control', 'sdk', 'restore', 'locked-restore', 'audit', 'format', 'build', 'controls', 'source-helper', 'native', 'receipts')
+          STAGES = ('admission', 'source-head', 'supervisor-control', 'sdk', 'restore', 'locked-restore', 'audit', 'format', 'build', 'controls', 'source-helper', 'native-lifecycle', 'native', 'receipts')
           CURRENT_STAGE, CURRENT_PROJECT = 'admission', None
 
           def public_stage(stage, project=None):
@@ -242,8 +242,9 @@ jobs:
 
           NATIVE_CONTROL_ORDER = ('Context', 'AdmissionBegin', 'AdmissionRootCreate', 'AdmissionFifoCreate', 'AdmissionFifoReject', 'AdmissionDeviceReject', 'AdmissionDirectoryReject', 'AdmissionPrivateFileCreate', 'AdmissionSymlinkReplacement', 'AdmissionSymlinkRecovery', 'AdmissionSameBytesReplacement', 'AdmissionReplacementRecovery', 'AdmissionModeReject', 'AdmissionExpiredReject', 'AdmissionOutputPrepare', 'AdmissionRedirectedOutput', 'AdmissionReplacedOutput', 'AdmissionPositiveOutput', 'AdmissionCleanup', 'CallerPaths', 'FaultBegin', 'WitnessReserve', 'WitnessConfigure', 'WitnessBirth', 'WitnessSetup', 'WitnessInjectedFailure', 'WitnessCleanup', 'FaultResult', 'CodecBegin', 'WitnessReserve', 'WitnessConfigure', 'WitnessBirth', 'WitnessSetup', 'WitnessReaders', 'WitnessReadiness', 'WitnessPin', 'WitnessCollectorStart', 'WitnessCanary', 'WitnessCompletion', 'WitnessReplay', 'WitnessDrain', 'WitnessCounters', 'WitnessCleanup', 'CodecResult', 'Receipt')
           NATIVE_FAILURE_ONLY = ('ReaderParserSetup', 'ReaderProcessIdentity', 'ReaderListenerSchema', 'ReaderBridgeSchema', 'ReaderProjectionArguments', 'ReaderCounterState', 'ReaderParserRead', 'ReaderParserCompletion', 'ReaderStreamCompletion', 'ReaderCancelled', 'ReaderUnknown', 'CanaryMissingHeartbeat', 'CanaryMissingHealth', 'CanaryMissingBoth')
+          NATIVE_WINDOW_FAILURE_ONLY = ('WindowPendingRequests', 'WindowMissingHeartbeat', 'WindowMissingHealthCanary', 'WindowMissingIncomingListener', 'WindowOutgoingListener', 'WindowBoundarySpan', 'WindowGuardInterval', 'ExpectedEffectCounts', 'GenerationDrain')
           NATIVE_MARKER_LINES = {json.dumps({'NativeControl': control}, separators=(',', ':')).encode('ascii'): control
-                                 for control in frozenset(NATIVE_CONTROL_ORDER + NATIVE_FAILURE_ONLY)}
+                                 for control in frozenset(NATIVE_CONTROL_ORDER + NATIVE_FAILURE_ONLY + NATIVE_WINDOW_FAILURE_ONLY)}
 
           def native_control_projection(raw, succeeded=False):
               require(type(raw) is bytes and len(raw) <= 4 * 1024 * 1024 and type(succeeded) is bool)
@@ -272,6 +273,11 @@ jobs:
               for category in NATIVE_FAILURE_ONLY:
                   valid_orders.add(canary_prefix + (category,))
                   valid_orders.add(canary_prefix + (category, 'WitnessCleanup'))
+              # One fixed window category explains only an actual codec counter failure; never success.
+              counter_prefix = NATIVE_CONTROL_ORDER[:NATIVE_CONTROL_ORDER.index('WitnessCounters') + 1]
+              for category in NATIVE_WINDOW_FAILURE_ONLY:
+                  valid_orders.add(counter_prefix + (category,))
+                  valid_orders.add(counter_prefix + (category, 'WitnessCleanup'))
               accepted = bool(markers) and not malformed and observed in valid_orders
               if succeeded:
                   canonical = b''.join(json.dumps({'NativeControl': control}, separators=(',', ':')).encode('ascii') + b'\n'
@@ -349,6 +355,187 @@ jobs:
                       'NativeFailureMarkerPrivacyCases': privacy,
                       'UnchangedSuccessMarkerCount': 45, 'FailureOnlyCategoryCount': 14,
                       'LocalNativeExecution': False, 'GenuineEightHostFinancialAccepted': False}
+
+          def native_window_marker_controls():
+              positive = negative = privacy = 0
+
+              def encoded(markers):
+                  return b''.join(json.dumps({'NativeControl': marker}, separators=(',', ':')).encode('ascii') + b'\n'
+                                  for marker in markers)
+
+              def reject(raw, success=False):
+                  nonlocal negative
+                  if success:
+                      refused = False
+                      try: native_control_projection(raw, succeeded=True)
+                      except Refused: refused = True
+                      require(refused)
+                  else:
+                      result = native_control_projection(raw)
+                      require(not result['NativeMarkerProtocolAccepted'] and result['NativeControlsObserved'] == []
+                              and result['NativeLastOperation'] is None)
+                  negative += 1
+
+              canonical = encoded(NATIVE_CONTROL_ORDER)
+              require(len(NATIVE_CONTROL_ORDER) == 45 and native_control_projection(canonical, succeeded=True)['NativeMarkerProtocolAccepted'])
+              positive += 1
+              counter = NATIVE_CONTROL_ORDER.index('WitnessCounters')
+              prefix = NATIVE_CONTROL_ORDER[:counter + 1]
+              require(NATIVE_CONTROL_ORDER.index('CodecBegin') < counter and NATIVE_CONTROL_ORDER[counter + 1] == 'WitnessCleanup')
+              require(len(NATIVE_WINDOW_FAILURE_ONLY) == 9 and len(set(NATIVE_WINDOW_FAILURE_ONLY)) == 9
+                      and not set(NATIVE_WINDOW_FAILURE_ONLY).intersection(NATIVE_CONTROL_ORDER + NATIVE_FAILURE_ONLY))
+              for marker in NATIVE_WINDOW_FAILURE_ONLY:
+                  for tail in ((), ('WitnessCleanup',)):
+                      raw = encoded(prefix + (marker,) + tail)
+                      result = native_control_projection(raw)
+                      require(result['NativeMarkerProtocolAccepted'] and result['NativeLastOperation'] == marker
+                              and result['NativeMarkerCount'] == len(prefix) + 1 + len(tail))
+                      positive += 1
+                      reject(raw, success=True)
+                  for position in range(len(NATIVE_CONTROL_ORDER) + 1):
+                      if position != counter + 1:
+                          reject(encoded(NATIVE_CONTROL_ORDER[:position] + (marker,)))
+                  for other in NATIVE_WINDOW_FAILURE_ONLY:
+                      reject(encoded(prefix + (marker, other)))
+                      reject(encoded(prefix + (marker, 'WitnessCleanup', other)))
+                  for other in NATIVE_FAILURE_ONLY:
+                      reject(encoded(prefix + (marker, other)))
+                      reject(encoded(NATIVE_CONTROL_ORDER[:NATIVE_CONTROL_ORDER.index('WitnessCanary') + 1] + (other, marker)))
+                  for invalid in (prefix + (marker, 'CodecResult'), prefix + ('WitnessCleanup', marker),
+                                  prefix + (marker, 'WitnessCleanup', 'WitnessCleanup'), prefix + (marker, 'Receipt')):
+                      reject(encoded(invalid))
+                  for counterfeit in (b'{"NativeControl":"' + marker.encode() + b'","Private":"opaque"}\n',
+                                      b'{"NativeControl":"' + marker.encode() + b'PrivateSuffix"}\n',
+                                      b'{"NativeControl":"UnknownWindowCategory"}\n',
+                                      b'{"NativeControl":"' + marker.encode() + b'","Count":987654}\n'):
+                      raw = encoded(prefix) + counterfeit + encoded(('WitnessCleanup',))
+                      reject(raw)
+                      require('opaque' not in json.dumps(native_control_projection(raw)) and '987654' not in json.dumps(native_control_projection(raw)))
+                      privacy += 1
+                  raw = encoded(prefix + (marker, 'WitnessCleanup')) + b'private-opaque-value /private/path token-value\n'
+                  result = native_control_projection(raw)
+                  require(result['NativeMarkerProtocolAccepted'] and result['NativeLastOperation'] == marker
+                          and 'private' not in json.dumps(result) and 'token-value' not in json.dumps(result))
+                  privacy += 1
+                  for changed in (b' ' + encoded((marker,)), encoded((marker,)).replace(b'{"', b'{ "')):
+                      result = native_control_projection(encoded(prefix) + changed + encoded(('WitnessCleanup',)))
+                      require(result['NativeLastOperation'] not in NATIVE_WINDOW_FAILURE_ONLY)
+                      reject(encoded(prefix) + changed + encoded(('WitnessCleanup',)), success=True)
+                  reject(canonical + encoded((marker,)), success=True)
+                  reject(encoded(prefix + (marker,) + NATIVE_CONTROL_ORDER[counter + 1:]), success=True)
+              return {'NativeWindowMarkerParserPositiveCases': positive, 'NativeWindowMarkerParserNegativeCases': negative,
+                      'NativeWindowMarkerPrivacyCases': privacy, 'UnchangedSuccessMarkerCount': 45,
+                      'FailureOnlyWindowCategoryCount': 9, 'LocalNativeExecution': False,
+                      'GenuineEightHostFinancialAccepted': False}
+
+          NATIVE_CLEANUP_FIELDS = ('BirthAttempted', 'ProcessAssociated', 'PidfdBound', 'ExactOriginalExitObserved',
+              'AllRetainedOperationsCompleted', 'OutputEof', 'ErrorEof', 'AllPipeHandlesClosed', 'ProcessWaitHandleClosed',
+              'PidfdClosed', 'CollectorQuiescent', 'CleanupOriginallyFailed', 'PhysicalCleanupCompleted')
+          NATIVE_LIFECYCLE_CASES = ('PostBirthSetupFault', 'ReaderOverflow', 'RetainedWaitTimeout', 'CleanupDeadlineRecovery', 'CollectorReaderFault')
+          NATIVE_LIFECYCLE_FAULTS = ('SetupFaultObserved', 'ReaderFaultObserved', 'CollectorReaderFaultObserved',
+              'WaitTimeoutObserved', 'RetainedWaitPendingAfterTimeout', 'FirstCleanupDeadlineObserved', 'QuarantineRetained',
+              'PhysicalRecoveryCompleted', 'StickyAdmissionRefused')
+
+          def native_cleanup_record(value, originally_failed=False, incomplete=False):
+              require(type(value) is dict and set(value) == set(NATIVE_CLEANUP_FIELDS)
+                      and all(type(value[key]) is bool for key in NATIVE_CLEANUP_FIELDS))
+              if incomplete:
+                  true_fields = {'BirthAttempted', 'ProcessAssociated', 'PidfdBound', 'CollectorQuiescent', 'CleanupOriginallyFailed'}
+                  require(originally_failed is True)
+              else:
+                  true_fields = set(NATIVE_CLEANUP_FIELDS) - {'CleanupOriginallyFailed'}
+                  if originally_failed: true_fields.add('CleanupOriginallyFailed')
+              require(all(value[key] is (key in true_fields) for key in NATIVE_CLEANUP_FIELDS))
+
+          def native_lifecycle_receipt(raw, case):
+              require(case in NATIVE_LIFECYCLE_CASES)
+              value = parse(raw, 8192)
+              fields = set(NATIVE_LIFECYCLE_FAULTS) | {'ControlCase', 'Passed', 'Cleanup', 'RecoveredCleanup',
+                  'NativeEventPipeCodecAccepted', 'GenuineEightHostFinancialAccepted'}
+              require(type(value) is dict and set(value) == fields and type(value['ControlCase']) is str
+                      and value['ControlCase'] == case and value['Passed'] is True
+                      and value['NativeEventPipeCodecAccepted'] is False and value['GenuineEightHostFinancialAccepted'] is False)
+              expected = {
+                  'PostBirthSetupFault': {'SetupFaultObserved'},
+                  'ReaderOverflow': {'ReaderFaultObserved', 'QuarantineRetained'},
+                  'RetainedWaitTimeout': {'WaitTimeoutObserved', 'RetainedWaitPendingAfterTimeout'},
+                  'CleanupDeadlineRecovery': {'FirstCleanupDeadlineObserved', 'QuarantineRetained', 'PhysicalRecoveryCompleted', 'StickyAdmissionRefused'},
+                  'CollectorReaderFault': {'CollectorReaderFaultObserved', 'QuarantineRetained'}
+              }[case]
+              require(all(type(value[key]) is bool and value[key] is (key in expected) for key in NATIVE_LIFECYCLE_FAULTS))
+              require(type(value['Cleanup']) is list and len(value['Cleanup']) == 1)
+              failed = case in ('ReaderOverflow', 'CleanupDeadlineRecovery', 'CollectorReaderFault')
+              recovery = case == 'CleanupDeadlineRecovery'
+              native_cleanup_record(value['Cleanup'][0], originally_failed=failed, incomplete=recovery)
+              if recovery: native_cleanup_record(value['RecoveredCleanup'], originally_failed=True)
+              else: require(value['RecoveredCleanup'] is None)
+              return value
+
+          def native_normal_cleanup_records(value):
+              require(type(value) is list and len(value) == 2)
+              for record in value: native_cleanup_record(record)
+
+          def native_lifecycle_parser_controls():
+              positive = negative = 0
+              def encoded(value): return json.dumps(value, separators=(',', ':')).encode()
+              def refused(raw, case):
+                  nonlocal negative
+                  rejected = False
+                  try: native_lifecycle_receipt(raw, case)
+                  except (Refused, ValueError, TypeError, KeyError): rejected = True
+                  require(rejected); negative += 1
+              complete = {key: key != 'CleanupOriginallyFailed' for key in NATIVE_CLEANUP_FIELDS}
+              native_normal_cleanup_records([complete.copy(), complete.copy()]); positive += 1
+              for case in NATIVE_LIFECYCLE_CASES:
+                  expected = {'PostBirthSetupFault': {'SetupFaultObserved'}, 'ReaderOverflow': {'ReaderFaultObserved', 'QuarantineRetained'},
+                      'RetainedWaitTimeout': {'WaitTimeoutObserved', 'RetainedWaitPendingAfterTimeout'},
+                      'CleanupDeadlineRecovery': {'FirstCleanupDeadlineObserved', 'QuarantineRetained', 'PhysicalRecoveryCompleted', 'StickyAdmissionRefused'},
+                      'CollectorReaderFault': {'CollectorReaderFaultObserved', 'QuarantineRetained'}}[case]
+                  value = {key: key in expected for key in NATIVE_LIFECYCLE_FAULTS}
+                  value.update({'ControlCase': case, 'Passed': True, 'Cleanup': [complete.copy()], 'RecoveredCleanup': None,
+                      'NativeEventPipeCodecAccepted': False, 'GenuineEightHostFinancialAccepted': False})
+                  value['Cleanup'][0]['CleanupOriginallyFailed'] = case in ('ReaderOverflow', 'CleanupDeadlineRecovery', 'CollectorReaderFault')
+                  if case == 'CleanupDeadlineRecovery':
+                      value['Cleanup'][0] = {key: key in {'BirthAttempted', 'ProcessAssociated', 'PidfdBound', 'CollectorQuiescent', 'CleanupOriginallyFailed'} for key in NATIVE_CLEANUP_FIELDS}
+                      value['RecoveredCleanup'] = {key: True for key in NATIVE_CLEANUP_FIELDS}
+                  require(native_lifecycle_receipt(encoded(value), case) == value); positive += 1
+                  for key in value:
+                      changed = copy.deepcopy(value); del changed[key]; refused(encoded(changed), case)
+                  for key in NATIVE_LIFECYCLE_FAULTS + ('Passed', 'NativeEventPipeCodecAccepted', 'GenuineEightHostFinancialAccepted'):
+                      for replacement in (not value[key], int(value[key]), 'private-opaque-value'):
+                          changed = copy.deepcopy(value); changed[key] = replacement; refused(encoded(changed), case)
+                  for key in NATIVE_CLEANUP_FIELDS:
+                      for replacement in (not value['Cleanup'][0][key], int(value['Cleanup'][0][key]), None):
+                          changed = copy.deepcopy(value); changed['Cleanup'][0][key] = replacement; refused(encoded(changed), case)
+                      changed = copy.deepcopy(value); del changed['Cleanup'][0][key]; refused(encoded(changed), case)
+                  for replacement in ([], value['Cleanup'] * 2, None, {}):
+                      changed = copy.deepcopy(value); changed['Cleanup'] = replacement; refused(encoded(changed), case)
+                  for replacement in ('UnknownCase', 'private-opaque-value', 1):
+                      changed = copy.deepcopy(value); changed['ControlCase'] = replacement; refused(encoded(changed), case)
+                  changed = copy.deepcopy(value); changed['Private'] = '/private/path'; refused(encoded(changed), case)
+                  changed = copy.deepcopy(value); changed['Cleanup'][0]['Private'] = '/private/path'; refused(encoded(changed), case)
+                  refused(encoded(value) + b'\n' + encoded(value), case)
+                  refused(encoded(value).replace(b'"Passed":true', b'"Passed":true,"Passed":true'), case)
+                  changed = copy.deepcopy(value); changed['RecoveredCleanup'] = None if case == 'CleanupDeadlineRecovery' else complete.copy(); refused(encoded(changed), case)
+                  if case == 'CleanupDeadlineRecovery':
+                      for key in NATIVE_CLEANUP_FIELDS:
+                          changed = copy.deepcopy(value); changed['RecoveredCleanup'][key] = False; refused(encoded(changed), case)
+                          changed = copy.deepcopy(value); del changed['RecoveredCleanup'][key]; refused(encoded(changed), case)
+              for replacement in ([], [complete], [complete] * 3, {}, None):
+                  rejected = False
+                  try: native_normal_cleanup_records(replacement)
+                  except Refused: rejected = True
+                  require(rejected); negative += 1
+              for key in NATIVE_CLEANUP_FIELDS:
+                  for replacement in (not complete[key], int(complete[key]), None):
+                      changed = [complete.copy(), complete.copy()]; changed[1][key] = replacement
+                      rejected = False
+                      try: native_normal_cleanup_records(changed)
+                      except Refused: rejected = True
+                      require(rejected); negative += 1
+              return {'NativeLifecycleReceiptParserPositiveCases': positive, 'NativeLifecycleReceiptParserNegativeCases': negative,
+                      'ActualNativeLifecycleControlsExecutedLocally': False, 'NativeEventPipeCodecAccepted': False,
+                      'GenuineEightHostFinancialAccepted': False}
 
           def run(argv, cwd, seconds, stderr_must_be_empty=True, stage="supervisor-control", project=None):
               global LAST_CLEANUP
@@ -482,6 +669,10 @@ jobs:
               parser_receipt = parser_controls()
               native_failure_parser_receipt = native_failure_marker_controls()
               print(json.dumps(native_failure_parser_receipt), flush=True)
+              native_window_parser_receipt = native_window_marker_controls()
+              print(json.dumps(native_window_parser_receipt), flush=True)
+              native_lifecycle_parser_receipt = native_lifecycle_parser_controls()
+              print(json.dumps(native_lifecycle_parser_receipt), flush=True)
               source = workspace / 'tools/FinancialHttpCounters'; exact_sources(source)
               # Isolate the four projects from unrelated repository/user build configuration.
               with tempfile.TemporaryDirectory(prefix='financial-http-codec-', dir=os.environ['RUNNER_TEMP']) as owned:
@@ -512,7 +703,7 @@ jobs:
                   controls_raw = run([dotnet, str(root / 'controls/bin/Release/net10.0/FinancialHttpCounters.Controls.dll')], root, 30, stage='controls', project=PROJECTS[1])
                   controls = parse(controls_raw, 4096)
                   require(type(controls) is dict and set(controls) == {'ControlledCasesPassed', 'HostedEventPipeWitness', 'GenuineEightHostFinancialAccepted'}
-                          and type(controls['ControlledCasesPassed']) is int and controls['ControlledCasesPassed'] == 40
+                          and type(controls['ControlledCasesPassed']) is int and controls['ControlledCasesPassed'] == 48
                           and controls['HostedEventPipeWitness'] is False and controls['GenuineEightHostFinancialAccepted'] is False)
                   public = workspace / 'TestResults/FinancialHttpCounterCodec'
                   require(not public.exists() and public.resolve() == public); public.mkdir(parents=True)
@@ -535,13 +726,22 @@ jobs:
                       (public / ('source-helper-' + case + '.json')).write_bytes(json.dumps({'SourceHead': head, 'RunId': os.environ['GITHUB_RUN_ID'], 'RunAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'Control': helper}, sort_keys=True).encode() + b'\n')
                       helper_receipts.append(helper)
                   (public / 'source-helper-slice.json').write_bytes(json.dumps({'SourceHead': head, 'ActualCasesPassed': len(helper_receipts), 'FullLifecycleFaultCoverageAccepted': False, 'SourceAdmissionAccepted': False, 'GenuineEightHostFinancialAccepted': False}, sort_keys=True).encode() + b'\n')
+                  native_dll = (root / 'native-controls/bin/Release/net10.0/FinancialHttpCounters.NativeControls.dll').resolve(strict=True)
+                  native_lifecycle_receipts = []
+                  for case in NATIVE_LIFECYCLE_CASES:
+                      # Each fixed fault case gets a fresh owned parent and a finite outer deadline.
+                      lifecycle_raw = run([dotnet, str(native_dll), dotnet, str(native_dll), case], root, 50, stage='native-lifecycle', project=PROJECTS[2])
+                      lifecycle = native_lifecycle_receipt(lifecycle_raw, case)
+                      (public / ('native-lifecycle-' + case + '.json')).write_bytes(json.dumps({'SourceHead': head, 'RunId': os.environ['GITHUB_RUN_ID'], 'RunAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'Control': lifecycle}, sort_keys=True).encode() + b'\n')
+                      native_lifecycle_receipts.append(lifecycle)
                   witness = (root / 'witness-host/bin/Release/net10.0/FinancialHttpCounters.WitnessHost.dll').resolve(strict=True)
-                  native_raw = run([dotnet, str(root / 'native-controls/bin/Release/net10.0/FinancialHttpCounters.NativeControls.dll'), dotnet, str(witness)], root, 90, stage='native', project=PROJECTS[2])
+                  native_raw = run([dotnet, str(root / 'native-controls/bin/Release/net10.0/FinancialHttpCounters.NativeControls.dll'), dotnet, str(witness)], root, 140, stage='native', project=PROJECTS[2])
                   native = parse(native_raw, 4096)
                   require(type(native) is dict and set(native) == {'NativeEventPipeCodecWitnessPassed', 'NativePostBirthFaultCleanupPassed', 'SourceAdmissionAccepted', 'RealBusinessSchemaAccepted',
-                          'SmtpNoSendProven', 'SocketNoSendProven', 'GenuineEightHostFinancialAccepted'}
+                          'SmtpNoSendProven', 'SocketNoSendProven', 'GenuineEightHostFinancialAccepted', 'NativeWitnessCleanup'}
                           and native['NativeEventPipeCodecWitnessPassed'] is True and native['NativePostBirthFaultCleanupPassed'] is True
-                          and all(native[key] is False for key in native if key not in ('NativeEventPipeCodecWitnessPassed', 'NativePostBirthFaultCleanupPassed')))
+                          and all(native[key] is False for key in native if key not in ('NativeEventPipeCodecWitnessPassed', 'NativePostBirthFaultCleanupPassed', 'NativeWitnessCleanup')))
+                  native_normal_cleanup_records(native['NativeWitnessCleanup'])
                   exact_sources(root); exact_sources(source); require(lock_bytes(root) == locks)
                   public_stage('receipts')
                   (public / 'controls.json').write_bytes(json.dumps(controls, sort_keys=True).encode() + b'\n')
@@ -550,7 +750,7 @@ jobs:
                       target = public / 'locks' / relative; target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(raw)
                   (public / 'qualification.json').write_text(json.dumps({'SourceHead': head, 'RunId': os.environ['GITHUB_RUN_ID'],
                       'RunAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'SdkVersion': sdk, 'AuditJsonV1ProjectsAccepted': len(PROJECTS),
-                      'AuditParserControls': parser_receipt, 'NativeFailureMarkerParserControls': native_failure_parser_receipt, 'OwnedSupervisorControls': supervisor_receipt, 'LockedRestoreRepeated': True,
+                      'AuditParserControls': parser_receipt, 'NativeFailureMarkerParserControls': native_failure_parser_receipt, 'NativeWindowMarkerParserControls': native_window_parser_receipt, 'NativeLifecycleReceiptParserControls': native_lifecycle_parser_receipt, 'ActualNativeLifecycleControlCasesPassed': len(native_lifecycle_receipts), 'OwnedSupervisorControls': supervisor_receipt, 'LockedRestoreRepeated': True,
                       'NuGetLockSha256': {p: hashlib.sha256(raw).hexdigest() for p, raw in locks.items()},
                       'SourceAdmissionAccepted': False, 'SelectedHostCountersAccepted': False, 'GenuineEightHostFinancialAccepted': False,
                       'SmtpNoSendProven': False, 'SocketNoSendProven': False}, sort_keys=True) + '\n')
@@ -571,6 +771,11 @@ jobs:
             TestResults/FinancialHttpCounterCodec/source-helper-timeout.json
             TestResults/FinancialHttpCounterCodec/source-helper-inherited.json
             TestResults/FinancialHttpCounterCodec/source-helper-slice.json
+            TestResults/FinancialHttpCounterCodec/native-lifecycle-PostBirthSetupFault.json
+            TestResults/FinancialHttpCounterCodec/native-lifecycle-ReaderOverflow.json
+            TestResults/FinancialHttpCounterCodec/native-lifecycle-RetainedWaitTimeout.json
+            TestResults/FinancialHttpCounterCodec/native-lifecycle-CleanupDeadlineRecovery.json
+            TestResults/FinancialHttpCounterCodec/native-lifecycle-CollectorReaderFault.json
             TestResults/FinancialHttpCounterCodec/controls.json
             TestResults/FinancialHttpCounterCodec/native-codec.json
             TestResults/FinancialHttpCounterCodec/qualification.json

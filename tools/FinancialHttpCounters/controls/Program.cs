@@ -88,4 +88,34 @@ Reject(() => EventCollector.RequireBridgeSchema("Event", ["SourceName", "EventNa
 Reject(() => EventCollector.RequireBridgeSchema("Event", ["SourceName", "EventName", "Arguments", "PrivateExtra"]));
 Reject(() => EventCollector.RequireBridgeSchema("Event", ["SourceName", "SourceName", "Arguments"]));
 Reject(() => EventCollector.RequireBridgeSchema("NewDiagnosticListener", ["SourceName", "PrivateExtra"]));
+// Actual failed window predicates produce only their fixed category; success clears prior failure.
+void WindowReject(CounterState state, WindowFailureCategory expected)
+{
+    bool rejected = false;
+    try { state.FinalizeWindow(t.AddSeconds(2), t.AddSeconds(10), TimeSpan.FromMilliseconds(250)); }
+    catch (InvalidDataException) { rejected = true; }
+    Check(rejected && state.WindowFailure == expected);
+}
+CounterState PrerequisiteState(bool heartbeat, bool health, bool incoming, bool outgoing)
+{
+    var state = new CounterState("Accounting", document, file);
+    if (heartbeat) state.Heartbeat();
+    if (incoming) state.Listener("Microsoft.AspNetCore");
+    if (outgoing) state.Listener("HttpHandlerDiagnosticListener");
+    if (health)
+    {
+        state.Record("Microsoft.AspNetCore", "Microsoft.AspNetCore.Hosting.BeginRequest", new() { ["Id"] = "synthetic-health", ["Method"] = "GET", ["Path"] = "/health" }, t);
+        state.Record("Microsoft.AspNetCore", "Microsoft.AspNetCore.Hosting.EndRequest", new() { ["Id"] = "synthetic-health", ["Status"] = "200" }, t.AddSeconds(1));
+    }
+    return state;
+}
+WindowReject(duplicate, WindowFailureCategory.PendingRequests);
+WindowReject(PrerequisiteState(false, true, true, true), WindowFailureCategory.MissingHeartbeat);
+WindowReject(PrerequisiteState(true, false, true, true), WindowFailureCategory.MissingHealthCanary);
+WindowReject(PrerequisiteState(true, true, false, true), WindowFailureCategory.MissingIncomingListener);
+WindowReject(PrerequisiteState(true, true, true, false), WindowFailureCategory.OutgoingListener);
+WindowReject(crossing, WindowFailureCategory.BoundarySpan);
+WindowReject(guarded, WindowFailureCategory.GuardInterval);
+_ = guarded.FinalizeWindow(t.AddSeconds(2), t.AddSeconds(20), TimeSpan.FromMilliseconds(250));
+Check(guarded.WindowFailure == WindowFailureCategory.None);
 Console.WriteLine(JsonSerializer.Serialize(new { ControlledCasesPassed = controls, HostedEventPipeWitness = false, GenuineEightHostFinancialAccepted = false }));

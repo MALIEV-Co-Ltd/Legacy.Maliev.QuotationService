@@ -16,6 +16,8 @@ public sealed class CounterState(string owner, Uri document, Uri file)
     public int PendingCount => pending.Count;
     public int EventCount { get; private set; }
     public DateTime LastEventUtc { get; private set; }
+    private int windowFailure;
+    public WindowFailureCategory WindowFailure => (WindowFailureCategory)Volatile.Read(ref windowFailure);
 
     public void Heartbeat() => Heartbeats++;
     public void Listener(string name)
@@ -107,12 +109,13 @@ public sealed class CounterState(string owner, Uri document, Uri file)
 
     public Dictionary<string, Counts> FinalizeWindow(DateTime from, DateTime until, TimeSpan guard)
     {
-        Require(pending.Count == 0 && Heartbeats > 0 && HealthCanaries > 0 && IncomingListenerSeen, "Actual schema canary/quiescence required");
-        if (owner is "Accounting" or "Notification") Require(OutgoingListenerSeen, "Actual outgoing DiagnosticListener required");
+        Volatile.Write(ref windowFailure, (int)WindowFailureCategory.None);
+        RequirePrerequisites(pending.Count == 0 && Heartbeats > 0 && HealthCanaries > 0 && IncomingListenerSeen, "Actual schema canary/quiescence required");
+        if (owner is "Accounting" or "Notification") RequireWindow(OutgoingListenerSeen, "Actual outgoing DiagnosticListener required", WindowFailureCategory.OutgoingListener);
         var effects = completed.Where(x => x.Label != "Other").ToArray();
-        Require(!effects.Any(x => (x.StartUtc <= from && x.StopUtc > from) || (x.StartUtc <= until && x.StopUtc > until)), "Side effect spans phase boundary");
-        Require(!effects.Any(x => (x.StartUtc - from).Duration() < guard || (x.StopUtc - from).Duration() < guard
-            || (x.StartUtc - until).Duration() < guard || (x.StopUtc - until).Duration() < guard), "Side effect inside phase guard interval");
+        RequireWindow(!effects.Any(x => (x.StartUtc <= from && x.StopUtc > from) || (x.StartUtc <= until && x.StopUtc > until)), "Side effect spans phase boundary", WindowFailureCategory.BoundarySpan);
+        RequireWindow(!effects.Any(x => (x.StartUtc - from).Duration() < guard || (x.StopUtc - from).Duration() < guard
+            || (x.StartUtc - until).Duration() < guard || (x.StopUtc - until).Duration() < guard), "Side effect inside phase guard interval", WindowFailureCategory.GuardInterval);
         string[] labels = owner switch
         {
             "Accounting" => ["AccountingInvoiceRenderPost", "AccountingReceiptRenderPost", "AccountingFileUploadPost", "AccountingOtherUploadBoundaryMethod"],
@@ -130,6 +133,32 @@ public sealed class CounterState(string owner, Uri document, Uri file)
         return result;
     }
 
+    private void RequirePrerequisites(bool condition, string message)
+    {
+        try { Require(condition, message); }
+        catch (InvalidDataException)
+        {
+            // Finalization follows reader quiescence. Classify only actual existing state flags.
+            WindowFailureCategory category = pending.Count != 0 ? WindowFailureCategory.PendingRequests
+                : Heartbeats <= 0 ? WindowFailureCategory.MissingHeartbeat
+                : HealthCanaries <= 0 ? WindowFailureCategory.MissingHealthCanary
+                : !IncomingListenerSeen ? WindowFailureCategory.MissingIncomingListener
+                : WindowFailureCategory.None;
+            Volatile.Write(ref windowFailure, (int)category);
+            throw;
+        }
+    }
+
+    private void RequireWindow(bool condition, string message, WindowFailureCategory category)
+    {
+        try { Require(condition, message); }
+        catch (InvalidDataException)
+        {
+            Volatile.Write(ref windowFailure, (int)category);
+            throw;
+        }
+    }
+
     private static string Required(Dictionary<string, string> args, string key)
     { Require(args.TryGetValue(key, out string? value), "Projection key missing"); return value!; }
     public static void Require([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool condition, string message)
@@ -137,4 +166,17 @@ public sealed class CounterState(string owner, Uri document, Uri file)
     private sealed record Pending(DateTime StartUtc, string Label, bool Canary);
     private sealed record Completed(DateTime StartUtc, DateTime StopUtc, string Label, bool Success);
     public sealed record Counts(int Started, int Completed, int Successful);
+}
+
+// Fixed failed-predicate categories contain no observed values or exception text.
+public enum WindowFailureCategory
+{
+    None,
+    PendingRequests,
+    MissingHeartbeat,
+    MissingHealthCanary,
+    MissingIncomingListener,
+    OutgoingListener,
+    BoundarySpan,
+    GuardInterval
 }

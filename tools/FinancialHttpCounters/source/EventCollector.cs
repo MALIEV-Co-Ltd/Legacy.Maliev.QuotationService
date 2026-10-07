@@ -1,5 +1,8 @@
 using System.Diagnostics;
 using System.Diagnostics.Tracing;
+using System.IO.Pipes;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using Microsoft.Diagnostics.NETCore.Client;
 using Microsoft.Diagnostics.Tracing;
 
@@ -21,89 +24,128 @@ public sealed class EventCollector : IAsyncDisposable
     public bool Drained { get; private set; }
     public int Lost { get; private set; } = -1;
     private EventPipeSession? session;
+    private Task<EventPipeSession>? startTask;
+    private Task? stopTask;
+    private readonly SemaphoreSlim operations = new(1, 1);
+    private SafeHandle? heldHandle;
+    private SafeHandle? transportHandle;
+    private Stream? transport;
+    private bool startAttempted, cleanupAttempted, cleanupFailed, resourcesClosed;
+    internal bool CleanupQuiescent => resourcesClosed && (startTask is null || startTask.IsCompleted)
+        && (stopTask is null || stopTask.IsCompleted) && (reader is null || reader.IsCompleted);
+
     private Task? reader;
     private BudgetStream? stream;
     private CancellationTokenSource lifetime;
     private bool stopAttempted;
     private bool stopUncertain;
+    private readonly long traceMaximum;
+    internal bool CleanupOriginallyFailed => cleanupFailed || stopUncertain;
+    internal bool TraceBudgetFaultObserved => stream?.BudgetExceeded == true && reader?.IsFaulted == true;
     private int readerFault;
     public ReaderFaultCategory ReaderFault => (ReaderFaultCategory)Volatile.Read(ref readerFault);
 
     public EventCollector(ProcessPin pin, Uri document, Uri file, CancellationToken token)
+        : this(pin, document, file, token, 64 * 1024 * 1024) { }
+
+    internal EventCollector(ProcessPin pin, Uri document, Uri file, CancellationToken token, CollectorControlFault fault)
+        : this(pin, document, file, token, ControlMaximum(fault)) { }
+
+    private static long ControlMaximum(CollectorControlFault fault) => fault switch
     {
-        Pin = pin; Held = Process.GetProcessById(pin.Pid);
-        // Obtain a retained OS process handle rather than observing an integer PID alone.
-        _ = Held.SafeHandle;
+        CollectorControlFault.TraceBudgetOneByte => 1,
+        _ => throw new InvalidDataException("Known collector control required")
+    };
+
+    private EventCollector(ProcessPin pin, Uri document, Uri file, CancellationToken token, long traceMaximum)
+    {
+        this.traceMaximum = traceMaximum;
+        Pin = pin;
         State = new(pin.Owner, document, file);
         lifetime = CancellationTokenSource.CreateLinkedTokenSource(token);
+        try { Held = Process.GetProcessById(pin.Pid); }
+        catch { lifetime.Dispose(); throw; }
+        // Native handle acquisition happens only after the caller retains this owner.
     }
 
     public async Task StartAsync(CancellationToken token)
     {
-        var providers = new[]
+        await operations.WaitAsync(token);
+        try
         {
-            // Explicit transforms suppress implicit payload serialization. No query,
-            // headers, body, tokens, exception detail or stacks are requested.
-            new EventPipeProvider("Microsoft-Diagnostics-DiagnosticSource", EventLevel.Informational, 0x802,
-                new Dictionary<string, string> { ["FilterAndPayloadSpecs"] = Projection }),
-            new EventPipeProvider("System.Runtime", EventLevel.Informational, 0,
-                new Dictionary<string, string> { ["EventCounterIntervalSec"] = "1" })
-        };
-        var config = new EventPipeSessionConfiguration(providers, circularBufferSizeMB: 16,
-            requestRundown: false, requestStackwalk: false);
-        session = await new DiagnosticsClient(Pin.Pid).StartEventPipeSessionAsync(config, token);
-        stream = new BudgetStream(session.EventStream, 64 * 1024 * 1024, lifetime.Token);
-        reader = Task.Factory.StartNew(() =>
-        {
-            ReaderFaultCategory stage = ReaderFaultCategory.ParserSetup;
-            try
+            CounterState.Require(!cleanupAttempted && !startAttempted && startTask is null && session is null, "Exact collector start already attempted");
+            heldHandle ??= Held.SafeHandle;
+            var providers = new[]
             {
-                stage = ReaderFaultCategory.ParserSetup;
-                using var source = new EventPipeEventSource(stream);
-                source.Dynamic.All += entry =>
+                // Explicit transforms suppress implicit payload serialization. No query,
+                // headers, body, tokens, exception detail or stacks are requested.
+                new EventPipeProvider("Microsoft-Diagnostics-DiagnosticSource", EventLevel.Informational, 0x802,
+                    new Dictionary<string, string> { ["FilterAndPayloadSpecs"] = Projection }),
+                new EventPipeProvider("System.Runtime", EventLevel.Informational, 0,
+                    new Dictionary<string, string> { ["EventCounterIntervalSec"] = "1" })
+            };
+            var config = new EventPipeSessionConfiguration(providers, circularBufferSizeMB: 16,
+                requestRundown: false, requestStackwalk: false);
+            startAttempted = true;
+            startTask = new DiagnosticsClient(Pin.Pid).StartEventPipeSessionAsync(config, token);
+            session = await startTask;
+            transport = session.EventStream;
+            transportHandle = TransportHandle(transport);
+            stream = new BudgetStream(transport, traceMaximum, lifetime.Token);
+            reader = Task.Factory.StartNew(() =>
+            {
+                ReaderFaultCategory stage = ReaderFaultCategory.ParserSetup;
+                try
                 {
-                    stage = ReaderFaultCategory.ProcessIdentity;
-                    CounterState.Require(entry.ProcessID == Pin.Pid, "Actual EventPipe stream PID differs");
-                    lock (Gate)
+                    stage = ReaderFaultCategory.ParserSetup;
+                    using var source = new EventPipeEventSource(stream);
+                    source.Dynamic.All += entry =>
                     {
-                        if (entry.ProviderName == "System.Runtime" && entry.EventName == "EventCounters")
-                        { State.Heartbeat(); stage = ReaderFaultCategory.ParserRead; return; }
-                        if (entry.ProviderName != "Microsoft-Diagnostics-DiagnosticSource") { stage = ReaderFaultCategory.ParserRead; return; }
-                        // Self-describing EventPipe IDs are allocated by NameInfo,
-                        // not the DiagnosticSource methods' Event attributes.
-                        stage = entry.EventName == "NewDiagnosticListener"
-                            ? ReaderFaultCategory.ListenerSchema : ReaderFaultCategory.BridgeSchema;
-                        bool listener = RequireBridgeSchema(entry.EventName, entry.PayloadNames);
-                        if (listener)
+                        stage = ReaderFaultCategory.ProcessIdentity;
+                        CounterState.Require(entry.ProcessID == Pin.Pid, "Actual EventPipe stream PID differs");
+                        lock (Gate)
                         {
-                            State.Listener((string)entry.PayloadValue(0)); stage = ReaderFaultCategory.ParserRead; return;
+                            if (entry.ProviderName == "System.Runtime" && entry.EventName == "EventCounters")
+                            { State.Heartbeat(); stage = ReaderFaultCategory.ParserRead; return; }
+                            if (entry.ProviderName != "Microsoft-Diagnostics-DiagnosticSource") { stage = ReaderFaultCategory.ParserRead; return; }
+                            // Self-describing EventPipe IDs are allocated by NameInfo,
+                            // not the DiagnosticSource methods' Event attributes.
+                            stage = entry.EventName == "NewDiagnosticListener"
+                                ? ReaderFaultCategory.ListenerSchema : ReaderFaultCategory.BridgeSchema;
+                            bool listener = RequireBridgeSchema(entry.EventName, entry.PayloadNames);
+                            if (listener)
+                            {
+                                State.Listener((string)entry.PayloadValue(0)); stage = ReaderFaultCategory.ParserRead; return;
+                            }
+                            stage = ReaderFaultCategory.ProjectionArguments;
+                            var arguments = CounterState.DecodeArguments(entry.PayloadValue(2));
+                            stage = ReaderFaultCategory.CounterState;
+                            State.Record((string)entry.PayloadValue(0), (string)entry.PayloadValue(1),
+                                arguments, entry.TimeStamp.ToUniversalTime());
+                            stage = ReaderFaultCategory.ParserRead;
                         }
-                        stage = ReaderFaultCategory.ProjectionArguments;
-                        var arguments = CounterState.DecodeArguments(entry.PayloadValue(2));
-                        stage = ReaderFaultCategory.CounterState;
-                        State.Record((string)entry.PayloadValue(0), (string)entry.PayloadValue(1),
-                            arguments, entry.TimeStamp.ToUniversalTime());
-                        stage = ReaderFaultCategory.ParserRead;
-                    }
-                };
-                stage = ReaderFaultCategory.ParserRead;
-                bool processed = source.Process();
-                stage = ReaderFaultCategory.ParserCompletion;
-                CounterState.Require(processed, "EventPipe parser did not finish");
-                Lost = source.EventsLost;
-                stage = ReaderFaultCategory.StreamCompletion;
-                // Check the owned stream itself has a real EOF after parser completion.
-                CounterState.Require(stream.Read(new byte[1], 0, 1) == 0 && stream.SawEof && Lost == 0,
-                    "Complete EOF and zero sequence-reported event loss required");
-                Drained = true;
-            }
-            catch (Exception error)
-            {
-                Volatile.Write(ref readerFault, (int)(error is OperationCanceledException
-                    ? ReaderFaultCategory.Cancelled : stage));
-                throw;
-            }
-        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                    };
+                    stage = ReaderFaultCategory.ParserRead;
+                    bool processed = source.Process();
+                    stage = ReaderFaultCategory.ParserCompletion;
+                    CounterState.Require(processed, "EventPipe parser did not finish");
+                    Lost = source.EventsLost;
+                    stage = ReaderFaultCategory.StreamCompletion;
+                    // Check the owned stream itself has a real EOF after parser completion.
+                    CounterState.Require(stream.Read(new byte[1], 0, 1) == 0 && stream.SawEof && Lost == 0,
+                        "Complete EOF and zero sequence-reported event loss required");
+                    Drained = true;
+                }
+                catch (Exception error)
+                {
+                    Volatile.Write(ref readerFault, (int)(error is OperationCanceledException
+                        ? ReaderFaultCategory.Cancelled : stage));
+                    throw;
+                }
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+        catch { cleanupFailed = true; throw; }
+        finally { operations.Release(); }
     }
 
     public static bool RequireBridgeSchema(string eventName, string[] payloadNames)
@@ -120,53 +162,100 @@ public sealed class EventCollector : IAsyncDisposable
 
     public async Task StopAndDrainAsync(CancellationToken token)
     {
-        CounterState.Require(session is not null && reader is not null, "Started exact session required");
-        CounterState.Require(!stopAttempted, "Exact session stop may be attempted once");
-        stopAttempted = true;
-        try { await session!.StopAsync(token); Stopped = true; }
-        catch { stopUncertain = true; throw; }
-        await reader!.WaitAsync(token);
-        CounterState.Require(Drained && Lost == 0, "No-loss drained session required");
+        await operations.WaitAsync(token);
+        try
+        {
+            CounterState.Require(!cleanupAttempted && session is not null && reader is not null, "Started exact session required");
+            CounterState.Require(!stopAttempted, "Exact session stop may be attempted once");
+            stopAttempted = true;
+            stopTask = session!.StopAsync(token);
+            try { await stopTask; Stopped = true; }
+            catch { stopUncertain = true; throw; }
+            await reader!.WaitAsync(token);
+            CounterState.Require(Drained && Lost == 0, "No-loss drained session required");
+        }
+        catch { cleanupFailed = true; throw; }
+        finally { operations.Release(); }
     }
+
+    private static SafeHandle TransportHandle(Stream owned) => owned switch
+    {
+        NetworkStream network => network.Socket.SafeHandle,
+        PipeStream pipe => pipe.SafePipeHandle,
+        FileStream file => file.SafeFileHandle,
+        _ => throw new InvalidDataException("Owned EventPipe transport handle unavailable")
+    };
 
     public async ValueTask DisposeAsync()
     {
-        // Sessions are owned; target application processes are not killed here.
-        bool stopFailed = false;
+        // Failed cleanup can be retried on this retained owner. Original uncertainty
+        // stays sticky even when a later attempt physically settles its resources.
+        using var finite = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        bool entered = false;
         try
         {
-            if (session is not null && !Stopped)
+            await operations.WaitAsync(finite.Token); entered = true;
+            cleanupAttempted = true;
+            if (!resourcesClosed)
             {
-                // Client marks a session stopped before its IPC response. A
-                // second StopAsync can be a no-op after a lost/failed response;
-                // it must never turn uncertainty into a cleanup-success receipt.
-                if (stopAttempted || stopUncertain) stopFailed = true;
-                else
+                try { heldHandle ??= Held.SafeHandle; } catch { cleanupFailed = true; }
+                if (startTask?.IsCompletedSuccessfully == true) session ??= startTask.Result;
+                if (session is not null && (transport is null || transportHandle is null))
                 {
-                    stopAttempted = true;
-                    using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    try { await session.StopAsync(stop.Token); Stopped = true; }
-                    catch { stopUncertain = true; throw; }
+                    try { transport ??= session.EventStream; transportHandle ??= TransportHandle(transport); }
+                    catch { cleanupFailed = true; }
                 }
-            }
-        }
-        catch (Exception) { stopFailed = true; }
-        finally
-        {
-            lifetime.Cancel(); session?.Dispose();
-            try
-            {
+                if (session is not null && !Stopped)
+                {
+                    if (!stopAttempted)
+                    {
+                        stopAttempted = true;
+                        try { stopTask = session.StopAsync(finite.Token); }
+                        catch { stopUncertain = true; cleanupFailed = true; }
+                    }
+                    if (stopTask is not null)
+                    {
+                        try { await stopTask.WaitAsync(finite.Token); Stopped = true; }
+                        catch { stopUncertain = true; cleanupFailed = true; }
+                    }
+                    else { stopUncertain = true; cleanupFailed = true; }
+                }
+                try { lifetime.Cancel(); } catch { cleanupFailed = true; }
                 if (reader is not null)
                 {
-                    try { await reader.WaitAsync(TimeSpan.FromSeconds(5)); }
-                    catch (OperationCanceledException) { }
-                    catch (InvalidDataException) { }
+                    try { await reader.WaitAsync(finite.Token); }
+                    catch { cleanupFailed = true; }
                 }
+                // Completion wrappers never authorize disposal beneath an in-flight operation.
+                bool settled = (startTask is null || startTask.IsCompleted)
+                    && (stopTask is null || stopTask.IsCompleted) && (reader is null || reader.IsCompleted);
+                if (!settled) { cleanupFailed = true; return; }
+                foreach (var task in new Task?[] { startTask, stopTask, reader })
+                    if (task?.IsFaulted == true) { _ = task.Exception; cleanupFailed = true; }
+                // The pinned SDK cannot expose its pre-handoff socket after a failed
+                // connection. Task completion alone is not physical IPC closure.
+                bool ipcKnown = (!startAttempted || startTask?.IsCompletedSuccessfully == true)
+                    && (!stopAttempted || stopTask?.IsCompletedSuccessfully == true);
+                if (!ipcKnown || heldHandle is null || (transport is not null && transportHandle is null))
+                { cleanupFailed = true; return; }
+                try { session?.Dispose(); } catch { cleanupFailed = true; }
+                try { transport?.Dispose(); } catch { cleanupFailed = true; }
+                try { Held.Dispose(); } catch { cleanupFailed = true; }
+                try { lifetime.Dispose(); } catch { cleanupFailed = true; }
+                resourcesClosed = heldHandle.IsClosed && (transport is null || transportHandle?.IsClosed == true);
+                if (!resourcesClosed) cleanupFailed = true;
             }
-            finally { Held.Dispose(); lifetime.Dispose(); }
         }
-        CounterState.Require(!stopFailed, "Exact EventPipe session stop unconfirmed");
+        catch { cleanupFailed = true; throw; }
+        finally
+        {
+            try { finite.Cancel(); } catch { cleanupFailed = true; }
+            if (entered) operations.Release();
+            CounterState.Require(resourcesClosed && !cleanupFailed && !stopUncertain,
+                "Exact EventPipe ownership cleanup unconfirmed");
+        }
     }
+
 }
 
 // No trace file: bytes flow straight into the parser, with bounded total bytes
@@ -174,11 +263,13 @@ public sealed class EventCollector : IAsyncDisposable
 public sealed class BudgetStream(Stream inner, long maximum, CancellationToken token) : Stream
 {
     private long count;
+    internal bool BudgetExceeded { get; private set; }
     public bool SawEof { get; private set; }
     public override int Read(byte[] buffer, int offset, int length)
     {
         token.ThrowIfCancellationRequested();
         int read = inner.ReadAsync(buffer.AsMemory(offset, length), token).AsTask().GetAwaiter().GetResult();
+        BudgetExceeded |= count + read > maximum;
         CounterState.Require((count += read) <= maximum, "Finite private trace byte budget exceeded");
         SawEof |= read == 0;
         return read;
