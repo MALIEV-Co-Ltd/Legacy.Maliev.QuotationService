@@ -1,0 +1,85 @@
+name: Financial fixture readiness
+
+on:
+  pull_request:
+    branches: [main, develop, staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: financial-scanner-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  scanner-readiness:
+    env:
+      FINANCIAL_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Check scanner ownership and refusal controls
+        shell: bash
+        run: |
+          python3 -B -m unittest discover -s tools/InvoiceCompletionProducerAcceptance/companion -p 'test_hosted_scanner_readiness.py'
+      - name: Observe actual pinned scanner and dispose owned resources
+        shell: bash
+        run: |
+          python3 -B tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py --output TestResults/HostedScanner/scanner-readiness.json
+      - name: Retain public scanner receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: financial-scanner-${{ github.run_id }}-${{ github.run_attempt }}
+          path: TestResults/HostedScanner/scanner-readiness.json
+          if-no-files-found: error
+          retention-days: 7
+
+  native-start-observer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MalievWorkspaceRoot: ${{ github.workspace }}/.dependencies
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Check out exact Defaults
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults
+          ref: f72be151917cb3962380971418c187e3df563f8d
+          path: .dependencies/Legacy.Maliev.ServiceDefaults
+          persist-credentials: false
+      - name: Check out exact Contracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.CompatibilityContracts
+          ref: 78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7
+          path: .dependencies/Legacy.Maliev.CompatibilityContracts
+          persist-credentials: false
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.x
+      - name: Compile and execute exact native observer controls
+        shell: bash
+        run: |
+          dotnet test tools/HostedProcessStartObserver.Tests/HostedProcessStartObserver.Tests.csproj --configuration Release -p:GITHUB_ACTIONS=false --results-directory TestResults/HostedStart --logger 'trx;LogFileName=hosted-start.trx'
+          python3 -B scripts/check_hosted_start_results.py
+      - name: Retain native observer receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: financial-start-${{ github.run_id }}-${{ github.run_attempt }}
+          path: TestResults/HostedStart/hosted-start.trx
+          if-no-files-found: error
+          retention-days: 7
