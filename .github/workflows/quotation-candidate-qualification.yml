@@ -140,6 +140,11 @@ jobs:
           bash scripts/run_quotation_catalogue_ci.sh
           GITHUB_ACTIONS=true IamServiceSourceRoot="$PWD/.catalogue-build/IAM" \
             dotnet list tooling/Quotation.PermissionRegistration.Tests/Quotation.PermissionRegistration.Tests.csproj \
+            package --include-transitive --no-restore --format json --output-version 1 \
+            > TestResults/QuotationCatalogue/trusted-package-graph.json \
+            2> TestResults/QuotationCatalogue/trusted-package-graph.stderr.log
+          GITHUB_ACTIONS=true IamServiceSourceRoot="$PWD/.catalogue-build/IAM" \
+            dotnet list tooling/Quotation.PermissionRegistration.Tests/Quotation.PermissionRegistration.Tests.csproj \
             package --vulnerable --include-transitive --no-restore --format json --output-version 1 \
             > TestResults/QuotationCatalogue/trusted-vulnerability-audit.json \
             2> TestResults/QuotationCatalogue/trusted-vulnerability-audit.stderr.log

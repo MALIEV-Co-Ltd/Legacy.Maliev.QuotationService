@@ -5,7 +5,7 @@ its C# files enter a Git commit. The ordinary protected build and test workflow
 remains unchanged. A successful transport PR only validates the transport.
 
 The committed policy pins manifest SHA256, exact accepted base, dependency commits
-and all 73 file hashes/sizes. Operators upload the reviewed manifest and raw ZIP
+and all 75 file hashes/sizes. Operators upload the reviewed manifest and raw ZIP
 through this repository's Git blob API, then dispatch with the two returned blob
 IDs. The materializer reads only this repository, recomputes Git object identities
 and SHA256, bounds bytes, and rejects duplicate entries, noncanonical paths,
@@ -45,3 +45,15 @@ workers or provider sessions. Original logs, TRX, coverage and raw source identi
 receipts are retained for seven days. Missing or failed native evidence leaves the
 candidate ineligible for a C# commit. Successful native evidence still requires a
 subsequent source PR and its normal protected checks before integration.
+
+Clean NuGet vulnerability JSON can retain only a project path, omitting framework
+rows. Such a row is accepted only when a separate original full transitive package
+graph confirms the exact project set and sole net10.0 framework. Both CLI reports
+and their empty stderr are retained. Explicit empty, null or substituted framework
+rows, malformed resolved packages, missing graphs and audit warnings still fail.
+The trusted transport reruns both reports independently of candidate evidence.
+
+The reviewed 75-file successor also includes the source-only admission race
+correction and three deterministic PostgreSQL controls. The protected-main failure
+was observed at 7058f561; this candidate remains uncommitted and requires actual
+full hosted qualification. A transport merge does not prove the race is fixed.

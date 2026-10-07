@@ -108,7 +108,7 @@ def validate_capsule(manifest_bytes, capsule_bytes, policy):
         if type(row["bytes"]) is not int or not 0 < row["bytes"] <= MAX_FILE_BYTES:
             raise ValueError("invalid file size")
         expected[path] = row
-    if len(expected) != 73 or sum(row["bytes"] for row in expected.values()) > MAX_EXPANDED_BYTES:
+    if len(expected) != 75 or sum(row["bytes"] for row in expected.values()) > MAX_EXPANDED_BYTES:
         raise ValueError("invalid expanded inventory")
     files = {}
     with zipfile.ZipFile(io.BytesIO(capsule_bytes)) as archive:
@@ -192,7 +192,7 @@ def main():
             raise ValueError("transport checkout differs from workflow commit")
     if args.verify_only:
         verify_source(root, policy)
-        print("Reviewed raw candidate source remains unchanged (73 files).")
+        print(f"Reviewed raw candidate source remains unchanged ({len(policy["sourceFiles"])} files).")
         return
     if args.receipt is None or args.receipt.exists():
         raise ValueError("fresh evidence receipt path required")
@@ -205,7 +205,7 @@ def main():
                                       "capsuleBlob": args.capsule_blob, "acceptedBase": policy["acceptedBase"],
                                       "sourcePins": policy["sourcePins"], "sourceFiles": policy["sourceFiles"],
                                       "transportCommit": transport_commit, "nativeValidated": False}, indent=2) + "\n")
-    print("Reviewed raw candidate materialized (73 files); native validation pending.")
+    print(f"Reviewed raw candidate materialized ({len(policy["sourceFiles"])} files); native validation pending.")
 
 
 if __name__ == "__main__":
