@@ -7,6 +7,13 @@ import subprocess
 import sys
 import copy
 import re
+import xml.etree.ElementTree as ET
+
+AUDIT_GRAPH = {'IamDomain': {'path': '.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.IAMService/Maliev.IAMService.Domain/Maliev.IAMService.Domain.csproj', 'sha256': '0aec8d23fc31d062753209091db0c1b51aef9b67e0ed3626bf0dee66e38dc118', 'packageFree': True, 'references': [], 'directPackages': {}}, 'IamApplication': {'path': '.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.IAMService/Maliev.IAMService.Application/Maliev.IAMService.Application.csproj', 'sha256': '213e27a03edf02477c105ac518a5118529a6b7f889b66dd9409eeadaacdbdbf5', 'packageFree': False, 'references': ['IamDomain', 'Messaging', 'AspireDefaults'], 'directPackages': {'MassTransit': '[8.5.8, 9.0.0)', 'Microsoft.AspNetCore.Cryptography.KeyDerivation': '10.0.5', 'Microsoft.Extensions.Caching.Abstractions': '10.0.5', 'Microsoft.Extensions.Configuration.Abstractions': '10.0.7', 'Microsoft.Extensions.Logging.Abstractions': '10.0.7', 'Microsoft.Extensions.Configuration.Binder': '10.0.5', 'Microsoft.IdentityModel.Tokens': '8.16.0', 'System.IdentityModel.Tokens.Jwt': '8.16.0', 'Microsoft.AspNetCore.WebUtilities': '10.0.5', 'StackExchange.Redis': '2.12.1'}}, 'IamInfrastructure': {'path': '.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.IAMService/Maliev.IAMService.Infrastructure/Maliev.IAMService.Infrastructure.csproj', 'sha256': 'acc757189230122c3f1ec15f8733d264c899472dd16f59038367d2a1a4a25f24', 'packageFree': False, 'references': ['IamApplication'], 'directPackages': {'Npgsql.EntityFrameworkCore.PostgreSQL': '10.0.1', 'Microsoft.EntityFrameworkCore.Design': '10.0.5'}}, 'AspireDefaults': {'path': '.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.Aspire/Maliev.Aspire.ServiceDefaults/Maliev.Aspire.ServiceDefaults.csproj', 'sha256': 'b7b211fe3c424ed49336fb830f2f76b0b1f9323853fd28250d83ddd2a3d4d8f8', 'packageFree': False, 'references': ['Messaging'], 'directPackages': {'AspNetCore.HealthChecks.Rabbitmq': '9.0.0', 'AspNetCore.HealthChecks.Redis': '9.0.0', 'Microsoft.Extensions.Http.Resilience': '10.4.0', 'Microsoft.Extensions.ServiceDiscovery': '10.4.0', 'OpenTelemetry.Exporter.OpenTelemetryProtocol': '1.15.3', 'OpenTelemetry.Exporter.Prometheus.AspNetCore': '1.14.0-beta.1', 'OpenTelemetry.Extensions.Hosting': '1.15.3', 'OpenTelemetry.Instrumentation.AspNetCore': '1.15.1', 'OpenTelemetry.Instrumentation.Http': '1.15.1', 'OpenTelemetry.Instrumentation.Runtime': '1.15.1', 'MassTransit.RabbitMQ': '[8.5.8, 9.0.0)', 'MassTransit.Abstractions': '[8.5.8, 9.0.0)', 'Microsoft.Extensions.Caching.StackExchangeRedis': '10.0.5', 'Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore': '10.0.5', 'Npgsql.EntityFrameworkCore.PostgreSQL': '10.0.1', 'Microsoft.AspNetCore.Authentication.JwtBearer': '10.0.5', 'System.IdentityModel.Tokens.Jwt': '8.16.0', 'Microsoft.AspNetCore.OpenApi': '10.0.5', 'Microsoft.OpenApi': '2.7.5', 'Scalar.AspNetCore': '2.13.10', 'Asp.Versioning.Mvc.ApiExplorer': '8.1.1'}}, 'Messaging': {'path': '.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.MessagingContracts/generated/csharp/Maliev.MessagingContracts.csproj', 'sha256': '08089949de3ba41e6d62771b09563d018719f9d34a1f3bfc634e460efa2d7007', 'packageFree': True, 'references': [], 'directPackages': {}}, 'Adapter': {'path': 'tools/FinancialCompositionAdapter/FinancialCompositionAdapter.csproj', 'sha256': '911d16013f0bd904f0815f8bb2985d153beb03ed64d7fa9e8cfadd904ef461bc', 'packageFree': True, 'references': ['IamApplication', 'IamInfrastructure'], 'directPackages': {}}, 'Controls': {'path': 'tools/FinancialCompositionAdapter.Controls/AdapterCompileControls.csproj', 'sha256': '84ee70cb4a70d11a2c6f31725cdd11c1a5abcb04ea6963cce91147b19d7fb336', 'packageFree': True, 'references': ['Adapter', 'IamApplication', 'IamInfrastructure'], 'directPackages': {}}}
+AUDIT_GRAPH_SOURCE_INPUTS = {'.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.IAMService/Directory.Build.props': '75382c0f97e85f1d3789ffa5e4483e374ee8fe625fc062bdb055d096fae9e6b4', '.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.Aspire/Directory.Build.props': '0984531cdb437001ea6bc73eaabfd9472f88f12510ecbd7c90dcd14130775574'}
+AUDIT_CONFIG_BYTES = b'<?xml version="1.0" encoding="utf-8"?>\n<configuration>\n  <packageSources>\n    <clear />\n    <add key="public" value="https://api.nuget.org/v3/index.json" />\n  </packageSources>\n  <auditSources>\n    <clear />\n    <add key="public" value="https://api.nuget.org/v3/index.json" />\n  </auditSources>\n</configuration>\n'
+AUDIT_CONFIG_SHA256 = '1c456df63f1ee6da160cdd43c69b1aa2b8d24312ddb25eedcbd0249eeb2fd3c2'
+
 
 SOURCE_NAMES = (
     "Maliev.IAMService", "Maliev.Aspire", "Maliev.MessagingContracts",
@@ -28,6 +35,7 @@ CONTROLS = [
 
 
 STAGES = (
+    'source-assets-lock-graph-admission', 'graph-owner-audit-IamDomain', 'graph-owner-audit-IamApplication', 'graph-owner-audit-IamInfrastructure', 'graph-owner-audit-AspireDefaults', 'graph-owner-audit-Messaging', 'graph-owner-audit-Adapter', 'graph-owner-audit-Controls',
     "bootstrap", "initial-restore", "same-run-lock-discovery", "locked-restore", "locked-restore-digest-verification",
     "library-audit", "controls-audit", "release-build", "library-format", "controls-format",
     "compile-controls", "gitleaks", "source-and-lock-readback", "assembly-readback", "public-receipt",
@@ -128,7 +136,102 @@ def audit_require(value, category, evidence=None):
         raise AuditRejected(category, evidence)
 
 
-def clean_audit(raw, expected_project):
+def verify_audit_configuration(raw):
+    require(type(raw) is bytes and raw == AUDIT_CONFIG_BYTES)
+    require(hashlib.sha256(raw).hexdigest() == AUDIT_CONFIG_SHA256)
+
+
+def requested_range(value):
+    require(type(value) is str)
+    value = value.replace(" ", "")
+    if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", value):
+        return "[" + value + ",)"
+    require(re.fullmatch(r"\[[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?,(?:[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)?\)", value) is not None)
+    return value
+
+
+def admit_project_assets(assets, lock, expected_path, package_free, expected_references, expected_dependencies):
+    require(type(package_free) is bool and type(expected_references) is set)
+    require(type(expected_dependencies) is dict and (not expected_dependencies) == package_free)
+    require(type(assets) is dict and type(assets.get("version")) is int and assets["version"] == 3)
+    project = assets["project"]
+    restore = project["restore"]
+    require(restore["projectPath"] == expected_path and restore["projectUniqueName"] == expected_path)
+    require(restore["originalTargetFrameworks"] == ["net10.0"])
+    require(type(restore["frameworks"]) is dict and set(restore["frameworks"]) == {"net10.0"})
+    references = restore["frameworks"]["net10.0"].get("projectReferences", {})
+    require(type(references) is dict and set(references) == expected_references)
+    require(all(type(value) is dict and value.get("projectPath") == key for key, value in references.items()))
+    require(type(project["frameworks"]) is dict and set(project["frameworks"]) == {"net10.0"})
+    dependencies = project["frameworks"]["net10.0"].get("dependencies", {})
+    require(type(dependencies) is dict and all(type(key) is str and type(value) is dict for key, value in dependencies.items()))
+    require((not dependencies) == package_free)
+    expected_ranges = {key.casefold(): value for key, value in expected_dependencies.items()}
+    require(len(expected_ranges) == len(expected_dependencies))
+    require({key.casefold() for key in dependencies} == set(expected_ranges) and len(dependencies) == len(expected_ranges))
+    require(all(requested_range(value["version"]) == requested_range(expected_ranges[key.casefold()]) for key, value in dependencies.items()))
+    require(type(lock) is dict and type(lock.get("version")) is int and lock["version"] in (1, 2))
+    require(type(lock["dependencies"]) is dict and set(lock["dependencies"]) == {"net10.0"})
+    locked = lock["dependencies"]["net10.0"]
+    require(type(locked) is dict and all(type(key) is str and type(value) is dict for key, value in locked.items()))
+    require(all(value.get("type") in ("Direct", "Transitive", "Project") for value in locked.values()))
+    direct = {key.casefold() for key, value in locked.items() if value["type"] == "Direct"}
+    require(len(direct) == sum(value["type"] == "Direct" for value in locked.values()))
+    require(direct == {key.casefold() for key in dependencies} and len(direct) == len(dependencies))
+    require(all(requested_range(value["requested"]) == requested_range(expected_ranges[key.casefold()]) for key, value in locked.items() if value["type"] == "Direct"))
+    packages = set()
+    for name, value in locked.items():
+        if value["type"] != "Project":
+            require(type(value.get("resolved")) is str and bool(value["resolved"]))
+            packages.add(name.casefold() + "/" + value["resolved"].casefold())
+    libraries = assets["libraries"]
+    require(type(libraries) is dict and all(type(key) is str and type(value) is dict for key, value in libraries.items()))
+    require(all(value.get("type") in ("package", "project") for value in libraries.values()))
+    actual_packages = {key.casefold() for key, value in libraries.items() if value["type"] == "package"}
+    require(actual_packages == packages and len(actual_packages) == sum(value["type"] == "package" for value in libraries.values()))
+    return packages
+
+
+def admit_audit_graph(root, locks):
+    require(all(digest(root / path) == expected for path, expected in AUDIT_GRAPH_SOURCE_INPUTS.items()))
+    projects = {name: root / item["path"] for name, item in AUDIT_GRAPH.items()}
+    expected_locks = {str(path.parent.joinpath("packages.lock.json").relative_to(root)) for path in projects.values()}
+    require(set(locks) == expected_locks and len(expected_locks) == 7)
+    packages = {}
+    records = {}
+    for name, item in AUDIT_GRAPH.items():
+        path = projects[name]
+        require(path.is_file() and digest(path) == item["sha256"])
+        xml = ET.fromstring(path.read_bytes())
+        source_references = [element for element in xml.iter() if element.tag == "PackageReference"]
+        require((not source_references) == item["packageFree"])
+        lock_path = path.parent / "packages.lock.json"
+        require(digest(lock_path) == locks[str(lock_path.relative_to(root))])
+        assets_path = path.parent / "obj/project.assets.json"
+        assets = strict_json(assets_path.read_bytes())
+        lock = strict_json(lock_path.read_bytes())
+        expected_refs = {str(projects[reference]) for reference in item["references"]}
+        packages[name] = admit_project_assets(assets, lock, str(path), item["packageFree"], expected_refs, item["directPackages"])
+        records[name] = {"projectSourceSha256": item["sha256"], "assetsSha256": digest(assets_path),
+                         "sameRunLockSha256": digest(lock_path), "packageFree": item["packageFree"],
+                         "packageCount": len(packages[name]), "framework": "net10.0"}
+    covered = set().union(*(packages[name] for name, item in AUDIT_GRAPH.items() if not item["packageFree"]))
+    require(all(value <= covered for value in packages.values()))
+    return records
+
+
+def verify_graph_assets_unchanged(root, records):
+    require(all(digest(root / path) == expected for path, expected in AUDIT_GRAPH_SOURCE_INPUTS.items()))
+    require(set(records) == set(AUDIT_GRAPH))
+    for name, item in AUDIT_GRAPH.items():
+        path = root / item["path"]
+        require(digest(path) == records[name]["projectSourceSha256"])
+        require(digest(path.parent / "obj/project.assets.json") == records[name]["assetsSha256"])
+        require(digest(path.parent / "packages.lock.json") == records[name]["sameRunLockSha256"])
+
+
+def clean_audit(raw, expected_project, *, package_free=False):
+    require(type(package_free) is bool)
     # Same primary NuGet JSON v1 contract used by the existing counter qualification.
     try:
         value = strict_json(raw)
@@ -148,6 +251,8 @@ def clean_audit(raw, expected_project):
         "ProjectFrameworksPresent": type(project) is dict and "frameworks" in project,
         "ProjectShapeKnown": type(project) is dict and set(project) in ({"path"}, {"path", "frameworks"}),
     }
+    if package_free and type(project) is dict and set(project) == {"path"} and project["path"] == expected_project:
+        return
     audit_require(type(project) is dict and set(project) == {"path", "frameworks"} and project["path"] == expected_project, "ProjectShapeOrPathRejected", project_evidence)
     audit_require(type(project["frameworks"]) is list and len(project["frameworks"]) == 1, "FrameworkInventoryRejected")
     framework = project["frameworks"][0]
@@ -285,10 +390,20 @@ def main():
     run(["dotnet", "restore", project, "--locked-mode", *properties], env=env)
     begin_stage("locked-restore-digest-verification")
     require(all(digest(root / path) == value for path, value in locks.items()))
-    for selected in ("tools/FinancialCompositionAdapter/FinancialCompositionAdapter.csproj", project):
-        begin_stage("controls-audit" if selected == project else "library-audit")
-        expected = str(root / selected)
-        clean_audit(run(["dotnet", "package", "list", "--project", expected, "--vulnerable", "--include-transitive", "--no-restore", "--format", "json", "--output-version", "1"], env=env), expected)
+    begin_stage("source-assets-lock-graph-admission")
+    graph_records = admit_audit_graph(root, locks)
+    audit_directory = root / ".adapter-dependencies/audit-only"
+    audit_directory.mkdir(exist_ok=False)
+    audit_config = audit_directory / "NuGet.Config"
+    audit_config.write_bytes(AUDIT_CONFIG_BYTES)
+    verify_audit_configuration(audit_config.read_bytes())
+    for name, item in AUDIT_GRAPH.items():
+        begin_stage("graph-owner-audit-" + name)
+        expected = str(root / item["path"])
+        verify_audit_configuration(audit_config.read_bytes())
+        clean_audit(run(["dotnet", "package", "list", "--project", expected, "--config", str(audit_config), "--vulnerable", "--include-transitive", "--no-restore", "--format", "json", "--output-version", "1"], env=env), expected, package_free=item["packageFree"])
+    verify_audit_configuration(audit_config.read_bytes())
+    verify_graph_assets_unchanged(root, graph_records)
     print('{"Stage":"same-run-locked-restore-and-vulnerability-audit","Passed":true}', flush=True)
     begin_stage("release-build")
     run(["dotnet", "build", project, "--configuration", "Release", "--no-restore", "--warnaserror", *properties], env=env)
@@ -313,11 +428,13 @@ def main():
         path = executable.parent / name
         require(path.is_file() and 0 < path.stat().st_size <= 32 * 1024 * 1024)
         assemblies[name] = digest(path)
+    verify_audit_configuration(audit_config.read_bytes())
+    verify_graph_assets_unchanged(root, graph_records)
     receipt = {"sourceHead": pr["head"]["sha"], "pullRequestNumber": event["number"], "runId": os.environ["GITHUB_RUN_ID"],
                "runAttempt": os.environ["GITHUB_RUN_ATTEMPT"], "sourceManifestSha256": digest(root / "tools/FinancialCompositionAdapter.Qualification/source-manifest.json"),
                "acceptedFixtureCommit": FIXTURE_COMMIT, "acceptedFixtureRun": 37655912717, "sourceArchives": archives,
                "materializerIdentity": materializer_identity,
-               "sameRunLockDigests": locks, "committedLockAcceptance": False, "assemblySha256": assemblies, "auditParserControls": parser_controls,
+               "sameRunLockDigests": locks, "auditOnlyConfigSha256": AUDIT_CONFIG_SHA256, "auditedGraphOwners": graph_records, "auditedGraphOwnerCount": 7, "committedLockAcceptance": False, "assemblySha256": assemblies, "auditParserControls": parser_controls,
                "compileControls": actual, "compiled": True, "originalRuntimeDiRegistrationSourceWitness": True,
                "originalRuntimeDiHostStarted": False, "physicalBusinessSchemaAccepted": False, "principalEnrollmentAccepted": False,
                "catalogueRegistrationAccepted": False, "fileSigningAccepted": False, "financialEightAccepted": False}
