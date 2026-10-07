@@ -1,0 +1,12 @@
+[
+  {
+    "source": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationControllerContractTests.cs",
+    "normalizedSourceSha256": "b4e36d5389f67130c00f4174e5d2a599e435f8b2ee6baca88e7273ec5e5f0db5",
+    "assembly": "Legacy.Maliev.QuotationService.Tests",
+    "method": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationControllerContractTests.EmployeeInitiatedDecision_AcceptsOnlyEmployeeOrExactLegacyIntranetService",
+    "dataMember": "EmployeeDecisionCallers",
+    "rows": 10,
+    "reviewedAllowedRows": 2,
+    "reviewedDeniedRows": 8
+  }
+]

@@ -1,0 +1,376 @@
+{
+  "acceptedBase": "1adb718c5ecfaa819d1d647953e14ec28ae4d4f0",
+  "sourcePins": {
+    "IAM": "4fe6642e5674013de9a3672505aec898fdcae0ed",
+    "genuineContracts": "71d11dc093fb34ab41263d395c45629203cdbf18",
+    "genuineDefaults": "fb457bde0f3a0e5a01f767c88b942b2ccb8d7c61"
+  },
+  "sourceFiles": [
+    {
+      "path": ".github/workflows/_build-and-test.yml",
+      "sha256": "d47edd6550852c95c42257db4cc860d3b6bb8a30cf061159f565cc3efb0b987c",
+      "bytes": 12715
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Api/Authorization/QuotationIamComposition.cs",
+      "sha256": "7d6774a44d3b05ea469222d8cafe8173cf6071683d0d29de31797f7201eaec29",
+      "bytes": 2574
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Api/Authorization/QuotationInvoiceFinancialAuthorityClient.cs",
+      "sha256": "dc252fabcd8de02c47c928b731c227acc082ee80575723ae3e882a5c6d989c24",
+      "bytes": 5864
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Api/Clients/SourceReturnedFailureHandler.cs",
+      "sha256": "e630f05ab32822ff2cb22b2a49649b9270f4d76018eb12db97269d72b1994dbf",
+      "bytes": 2556
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Api/Controllers/OrderItemsController.cs",
+      "sha256": "b385b78a09b8e99d2c675136cec8e1ce6e2fa5f008423195a2dca2ffcc7961d3",
+      "bytes": 2752
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Api/Controllers/QuotationRequestFilesController.cs",
+      "sha256": "9d107f5ef23818b2e908f489bd071fd82d73c29e78b11b14750ee6ba5f035a3b",
+      "bytes": 5232
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Api/Controllers/QuotationRequestsController.cs",
+      "sha256": "1e820bba5b001cb90fbccb6a80faa0bf5ba5d6164695beda2fa2a8f37abc59d8",
+      "bytes": 11044
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Api/Controllers/QuotationsController.cs",
+      "sha256": "365a4234dd1ed2196ac2dc8bfc8966e183ed35b2c062185e4358010961d90a15",
+      "bytes": 13349
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Api/Program.cs",
+      "sha256": "3492ca50556cc4d0fce70af64badeadb34216996aafb7ac574284744c5236370",
+      "bytes": 8210
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Data/QuotationRepositories.cs",
+      "sha256": "ace959f40cb3629ebae1df7da88ba4c6b202801dc597e953b42948431520377b",
+      "bytes": 67041
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Contracts/FinancialOwnershipIamPermissionContractTests.cs",
+      "sha256": "ea52d67a6abf747e0a05132c79d212f5233b0fe9fdb9c60c3af50a5a263678bb",
+      "bytes": 1405
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Contracts/FrozenIamPermissionFormatValidator.cs",
+      "sha256": "b6e1e7fbde8867ea19c96528d918c9d07b00f5510c48b544d383237e2fb3716e",
+      "bytes": 1946
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QualificationBridgeConsumerHttpTests.cs",
+      "sha256": "633daed2f74fa1357550655b3cdbfbe857187b6accda5bb4eb73b397b03ce957",
+      "bytes": 40220
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QualificationPrivateObservationTests.cs",
+      "sha256": "b7d23c18db6ccce16af471fd19aa32389d1a2cdf29066e0ff915e33910abd6a7",
+      "bytes": 21980
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationAccountingPrivateObservationTests.cs",
+      "sha256": "a54f4b14ee26bdd32a92dcf2c11ebc8f6ea84199553d9c02a5aacdf462b1ee8e",
+      "bytes": 14144
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationDraftAggregateHttpTests.cs",
+      "sha256": "6e9b986fcdda08e4a2da493a9b7765f837dc3819c2a71dcd3bc33571c29fcf68",
+      "bytes": 75947
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationDraftReadParityHttpTests.cs",
+      "sha256": "0b2b25e4c6c453d3566e238560890cd145f71879144fb444e2609cd0273b23aa",
+      "bytes": 21854
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationEmployeeActorHttpTests.cs",
+      "sha256": "2c218acf30c18fe8b9648590ff26c96cfda1fd4e2d4c6c63364717abbaa9e3a7",
+      "bytes": 35240
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationFinancialOutcomeReadbackHttpTests.cs",
+      "sha256": "bc1b7bcdd22d388b5c0793a3780229be09d57e949f283245100626856d09681a",
+      "bytes": 22138
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceConsumerContractHttpTests.cs",
+      "sha256": "8ff6a5911505b491f1a68769000b93e1eaef971290274551f44515a95dd70b79",
+      "bytes": 35506
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceDecisionHttpPostgresTests.cs",
+      "sha256": "4db72642f5b964c2577d2440a0bbebfbfb6d34bacd8019e1be420f139a22af84",
+      "bytes": 54356
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationNormalIamCompositionHttpTests.cs",
+      "sha256": "23d2a86f6c7c4dd6e5059b85594c83937e82a12e74524d452e79919f13b0167a",
+      "bytes": 41574
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationOrderPrivateObservationTests.cs",
+      "sha256": "71eb47426adf0de6472a35f9921fd868da0eee5aac75dba98d062f5909d6255b",
+      "bytes": 16001
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationRequestCreateRetryHttpTests.cs",
+      "sha256": "14cde9cef35a904c4627763d9fb810ae5838a26fd12efcb1c5be22e1f0902a13",
+      "bytes": 45496
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationRequestFileIdempotencyContractTests.cs",
+      "sha256": "467cec0884aacd34f93ecfce5d37e36a69a54e4a3720e42865a918bc31db6821",
+      "bytes": 13181
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationRequestTriageHttpTests.cs",
+      "sha256": "6b7eee2221dad2487e9059175375b9dd9f72ca531fb210c5365a646c09b48cec",
+      "bytes": 53361
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Data/LegacyQuotationOutcomeAdopterTests.cs",
+      "sha256": "7d06c90ca5314d2ef365ea90454e8ca7d51c3175a2ae117e1b23146d2f7ead17",
+      "bytes": 12695
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Data/QuotationPostgresMigrationTests.cs",
+      "sha256": "266fe1a1c30d96b4e2607eff49ccece7963649b31766baeb248e2b8dd4dbe4de",
+      "bytes": 77490
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Diagnostics/QuotationStartupProcessTests.cs",
+      "sha256": "b2cbdce01d527187804e7c5c5c462f5fd6b5b4c8c58ee48306c5346f58389a57",
+      "bytes": 8543
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/ContainerRecoveryOwner.cs",
+      "sha256": "304095a83812500325a573831f4c7b099dd49bc7b3759e265f46f7e993153d70",
+      "bytes": 8550
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/ContainerRecoveryWrapperTests.cs",
+      "sha256": "6df4247889ebf75e3b7c8b4ed1ec1cef509758af370759e7bf78f1ee5c76117c",
+      "bytes": 17168
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerSingle.cs",
+      "sha256": "a22d9f18401f0b2c3dbe3dd476d292eaf72e6aa7f69141999433e1cfeac3f272",
+      "bytes": 1860
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerSingleTests.cs",
+      "sha256": "9c1b5d97f3a792be017f429afd2ba234c2604acf5105457be6db36304ffd349f",
+      "bytes": 1634
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerStartup.cs",
+      "sha256": "871e06ed1a5edad271ca78147b09f0ec3e3b886680900920975bfd708ad5ee27",
+      "bytes": 18322
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerStartupContractTests.cs",
+      "sha256": "f5f41e7ffb840fcfacaa5bf585a831534107f3033fe862589c8396a0f22fc010",
+      "bytes": 27281
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposablePostgresPoolLifetimeTests.cs",
+      "sha256": "99be1e70b5df0e0fc1f63402a824dcb7bdc75bde74255133f8fc5e4dca6932fe",
+      "bytes": 9090
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/EphemeralFixturePlan.cs",
+      "sha256": "dddd468538c675502782b294a8add4e3047c381a4a1da4bb3ce4b684c39a5aa5",
+      "bytes": 2066
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/EphemeralFixturePlanTests.cs",
+      "sha256": "72593d53479968b50566572148c49e904a796987e4e2a9cd357ebf9f4275e035",
+      "bytes": 2357
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/FinancialPhaseHandoffTests.cs",
+      "sha256": "b429049a385965341b5418996d57e7a0dd8982ba5ba6975526e34492d81648af",
+      "bytes": 6848
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/OwnedInspectionProcess.cs",
+      "sha256": "b45364f0a668ac2b34e80bb9aaad87191c222b717b08b55c292f23ae70c15cdf",
+      "bytes": 1152
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/QuotationNormalIamResourceLifetime.cs",
+      "sha256": "faec4f486ec3415404c7ea71170b04d6a38d2c4116a5527e0521ec4bbd454352",
+      "bytes": 5257
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/QuotationNormalIamResourceLifetimeTests.cs",
+      "sha256": "104a758f415502e0dc4c4b9e94310c1007cabf2f50fb3e5a3447c9089b6016c0",
+      "bytes": 20357
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/StrictEphemeralContainer.cs",
+      "sha256": "0db0fdb516e72ff76004f48089d42bf17d5676f09d06a96204b4d1f774bbc07b",
+      "bytes": 6983
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/StrictEphemeralContainerTests.cs",
+      "sha256": "c57ff86f707337b0e2d5fea87ac30144edec7052f421fe8b5142b3b2b1273077",
+      "bytes": 14006
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj",
+      "sha256": "cb933e2c90e8fdd329446d9594d63add58574bd5dd7900fbe2245aad3eb40802",
+      "bytes": 3157
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/MigrationRunner/MigrationRunnerPostgresTests.cs",
+      "sha256": "22fe10d94011d7055bd503443ededbd6ef75b4bfaa08bcfcf4cecc7f36309e91",
+      "bytes": 17486
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Workflows/ArtifactUploadWorkflowContractTests.cs",
+      "sha256": "718f7dfe7d52815b05568a276d4b6f021351cd7a9f1eb7c1f2d1061121320a73",
+      "bytes": 2439
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Workflows/WorkflowContractTests.cs",
+      "sha256": "afb647e7dbdd7f4007b2e05157ff82426ed4e0465b5c24da412cc888e8562023",
+      "bytes": 37342
+    },
+    {
+      "path": "docs/quotation-c821-capability-recipient-draft-20261006.md",
+      "sha256": "05037f02032fa027ab82dfb7e5bbf1df208ed6ff41418cf2c83c9f8b1fceea03",
+      "bytes": 11184
+    },
+    {
+      "path": "scripts/financial-completion-inventory.json",
+      "sha256": "d07b806e61bbedc129cfc38d769d8d9a8ef422d787e8065240024aff3467f1d7",
+      "bytes": 25467
+    },
+    {
+      "path": "scripts/run_qualification_authority_joined.ps1",
+      "sha256": "24a6d0999398c22224269da8fa46ca802d32747f9bbf0b4d25eecf9272c6cfd9",
+      "bytes": 3868
+    },
+    {
+      "path": "tools/FinancialCompletionEvidence.Tests/DescriptorBoundFrontFileTests.cs",
+      "sha256": "11811273d20ed10a1eb5ae691bc34d70340bd35916b8e11e4ce991698bbedc01",
+      "bytes": 5516
+    },
+    {
+      "path": "tools/FinancialCompletionEvidence.Tests/FullCompletionConnectionTests.cs",
+      "sha256": "f7a4af519ae5d4a2a5b9bb4f4b78bc4ecd70686e9d4b29db04b0b2b5c9cd8344",
+      "bytes": 3781
+    },
+    {
+      "path": "tools/FinancialCompletionEvidence.Tests/FullCompletionIsolationTests.cs",
+      "sha256": "cab0d636d307aa35620a0790af79cb2f779b3388deaa7ee896d19cd9f590c302",
+      "bytes": 4656
+    },
+    {
+      "path": "tools/FinancialCompletionEvidence.Tests/SignedByteCompositionTests.cs",
+      "sha256": "e51f4855b8c407488ed18f9d32fb8c30507950a67fcae8ba594c6676fa7787b4",
+      "bytes": 3991
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/Program.cs",
+      "sha256": "c819f900e0d043060ee37b18a020aa1103ed5e5c454acd7473296e80c9f57d3d",
+      "bytes": 28883
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/financial-completion/AccountingFullCompletionProbe.cs",
+      "sha256": "c35da6abebf6326fc5615a6ef9e7cffe105eec2504ea125dfe5c5dbf89ac9a5a",
+      "bytes": 9720
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/financial-completion/AuthenticatedFileSignedRead.cs",
+      "sha256": "f2234777057690fbdd11f62700fd424c49dd2abd5935f2ba72c7c70cf0717b81",
+      "bytes": 4471
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/financial-completion/DescriptorBoundFrontFile.cs",
+      "sha256": "997863f8c3e3637ee3ecb197b1b96222cb861230883f051c461f94a9082758bf",
+      "bytes": 7625
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/financial-completion/FinancialPhaseHandoff.cs",
+      "sha256": "eaadbcef4ae2b3c33ce83c45a8390e99d7bd65463917422faef8ccac9cfd1930",
+      "bytes": 9241
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/financial-completion/FullFinancialScenarioRunner.cs",
+      "sha256": "c24b4a7ea20720901f256e07c4120e648b15e0fa1d574857f3db780ab8242ad5",
+      "bytes": 14052
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/financial-completion/NoSendInvoiceIntent.cs",
+      "sha256": "6044895daa0041b1d2d31f2e3a1272d9d70eb3f200de8e0c5988c0bdcf158fc8",
+      "bytes": 1153
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/financial-completion/ObservedFrontReadback.cs",
+      "sha256": "ac4a3c317da6b1592ccaa44487a0b326629471935e89bdb5aba1dcf8d20d4eaf",
+      "bytes": 13716
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/financial-completion/OwnedRedisAdmission.cs",
+      "sha256": "518409d127c19c1e672fd04379c80acdbce4985f006744530080416661513c75",
+      "bytes": 14596
+    },
+    {
+      "path": "provisioning/iam/quotation-permissions.json",
+      "sha256": "7a7ff1e9122be3ff8f914390d63b447a50e25f5f03f41e75e7609eed499ed34d",
+      "bytes": 2464
+    },
+    {
+      "path": "provisioning/iam/README.md",
+      "sha256": "e8f97a57ae996262f8a8e8b06ca72b0b26e7c01e491766e5414240ab8260d18c",
+      "bytes": 4140
+    },
+    {
+      "path": "scripts/Register-QuotationPermissions.ps1",
+      "sha256": "98ec163ab4cd59e1255ed355b3d68d29f6436be23274e7e81c6670462f4678b1",
+      "bytes": 3605
+    },
+    {
+      "path": "tooling/Quotation.PermissionRegistration.Tests/Quotation.PermissionRegistration.Tests.csproj",
+      "sha256": "9542bad09b7fb16b7b151efc3718385a193d86daca0d56dcab011552971d7bed",
+      "bytes": 1513
+    },
+    {
+      "path": "tooling/Quotation.PermissionRegistration.Tests/QuotationCatalogueRegistrationTests.cs",
+      "sha256": "1f1ec63ad0636cf31b8fdb8eb7030dc6cc5c405e1ea3223a1de0a995dd22bc89",
+      "bytes": 4688
+    },
+    {
+      "path": "scripts/run_quotation_catalogue_ci.sh",
+      "sha256": "68d85bebb6a95c7c6df30fc7860d29ae4ced3de4c20bc05b855e31639c947531",
+      "bytes": 6293
+    },
+    {
+      "path": "scripts/quotation-catalogue-inventory.json",
+      "sha256": "c81f8d884b3a26d959d87ead49454463bde8dd206aabf0827faca2a651f98616",
+      "bytes": 1930
+    },
+    {
+      "path": "scripts/check_quotation_catalogue_results.py",
+      "sha256": "0340c059b32baa33d94672db57ec7cf665083ffd0e706ba7b3182057a04fa1f8",
+      "bytes": 4449
+    },
+    {
+      "path": "scripts/tests/test_quotation_catalogue_results.py",
+      "sha256": "53d71388c31dd09bff06a2025c8cf8dd0a54073567f79d49a22b8c33b1907669",
+      "bytes": 6599
+    }
+  ],
+  "manifestSha256": "e72900b8964952ec8026495ebb5fe4b1102876159e3854fe25baddd148d285d9"
+}

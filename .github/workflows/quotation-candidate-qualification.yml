@@ -1,0 +1,153 @@
+name: Quotation uncommitted candidate qualification
+
+on:
+  pull_request:
+    paths:
+      - scripts/materialize_quotation_candidate.py
+      - scripts/tests/test_materialize_quotation_candidate.py
+      - scripts/check_quotation_candidate_native.py
+      - scripts/tests/test_quotation_candidate_native.py
+      - scripts/quotation-candidate-policy.json
+      - scripts/quotation-candidate-delayed-theories.json
+      - scripts/run_quotation_candidate_native.sh
+      - .github/workflows/quotation-candidate-qualification.yml
+  workflow_dispatch:
+    inputs:
+      manifest_blob:
+        description: Same-repository Git blob ID of the reviewed manifest
+        required: true
+        type: string
+      capsule_blob:
+        description: Same-repository Git blob ID of the exact raw source ZIP
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quotation-candidate-qualification-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  transport-controls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify transport rejection and raw-byte controls
+        run: |
+          python3 -B -m unittest discover -s scripts/tests -p 'test_materialize_quotation_candidate.py'
+          python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_candidate_native.py'
+          bash -n scripts/run_quotation_candidate_native.sh
+
+  candidate-native:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: transport-controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      MSBUILDDISABLENODEREUSE: '1'
+    steps:
+      - name: Check out protected transport
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check out exact clean candidate base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 1adb718c5ecfaa819d1d647953e14ec28ae4d4f0
+          path: candidate
+          persist-credentials: false
+      - name: Verify and materialize exact reviewed raw source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANIFEST_BLOB: ${{ inputs.manifest_blob }}
+          CAPSULE_BLOB: ${{ inputs.capsule_blob }}
+        run: |
+          python3 -B scripts/materialize_quotation_candidate.py \
+            --policy scripts/quotation-candidate-policy.json --candidate candidate \
+            --manifest-blob "$MANIFEST_BLOB" --capsule-blob "$CAPSULE_BLOB" \
+            --receipt evidence/source-materialization.json
+      - name: Check out exact original IAM source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Maliev.IAMService
+          ref: 4fe6642e5674013de9a3672505aec898fdcae0ed
+          path: candidate/.catalogue-sources/IAM
+          persist-credentials: false
+      - name: Check out genuine IAM Contracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Maliev.MessagingContracts
+          ref: 71d11dc093fb34ab41263d395c45629203cdbf18
+          path: candidate/.catalogue-sources/Contracts
+          persist-credentials: false
+      - name: Check out genuine IAM Defaults
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Maliev.Aspire
+          ref: fb457bde0f3a0e5a01f767c88b942b2ccb8d7c61
+          path: candidate/.catalogue-sources/Defaults
+          persist-credentials: false
+      - name: Check out retained Quotation Defaults
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults
+          ref: 7b3099bf67d0f17e56cfdb3dcf36541304abaac2
+          path: candidate/.dependencies/Legacy.Maliev.ServiceDefaults
+          persist-credentials: false
+      - name: Check out retained Quotation Contracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.CompatibilityContracts
+          ref: 78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7
+          path: candidate/.dependencies/Legacy.Maliev.CompatibilityContracts
+          persist-credentials: false
+      - name: Check out compile-time Accounting dependency
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.AccountingService
+          ref: ae0826156b06c34476e95de8c53dfccfcf5a5972
+          path: candidate/.dependencies/Legacy.Maliev.AccountingService
+          persist-credentials: false
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.x
+      - name: Build first and run actual IAM catalogue cases
+        working-directory: candidate
+        run: |
+          available_kib=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
+          if [[ ! "$available_kib" =~ ^[0-9]+$ ]] || (( available_kib < 4194304 )); then
+            echo '4096 MiB resource admission guard failed before first SDK command.' >&2
+            exit 1
+          fi
+          if pgrep -f '(^|/)(dotnet|testhost|VBCSCompiler)( |$)' >/dev/null; then
+            echo 'Existing SDK/test worker blocks new native allocation.' >&2
+            exit 1
+          fi
+          bash scripts/run_quotation_catalogue_ci.sh
+      - name: Build first and qualify affected suite and raw coverage floors
+        working-directory: candidate
+        run: bash ../scripts/run_quotation_candidate_native.sh
+      - name: Verify candidate source did not change during native validation
+        if: always()
+        run: |
+          python3 -B scripts/materialize_quotation_candidate.py \
+            --policy scripts/quotation-candidate-policy.json --candidate candidate --verify-only
+      - name: Retain original native and materialization evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: quotation-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            evidence/
+            candidate/TestResults/
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: false
