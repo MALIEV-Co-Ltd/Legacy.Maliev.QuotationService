@@ -73,7 +73,7 @@ class Scanner:
                         "genuineEightHostFinancialAccepted": False, "resources": [],
                         "scannerReady": False, "cleanupVerified": False}
 
-    def docker(self, *args, timeout=30):
+    def docker(self, *args, timeout=30, capture_stderr=False):
         process = subprocess.Popen(["docker", *args], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output = {process.stdout: bytearray(), process.stderr: bytearray()}
         selector = selectors.DefaultSelector()
@@ -97,7 +97,10 @@ class Scanner:
             process.wait(timeout=max(0.001, deadline-time.monotonic()))
             if process.returncode:
                 raise subprocess.CalledProcessError(process.returncode, ["docker", *args], stderr=output[process.stderr].decode("utf-8", "replace")[:4096])
-            return output[process.stdout].decode("utf-8", "strict").strip()
+            captured = output[process.stdout]
+            if capture_stderr:
+                captured = captured + output[process.stderr]
+            return captured.decode("utf-8", "strict").strip()
         finally:
             if process.poll() is None:
                 process.kill()
@@ -216,7 +219,17 @@ class Scanner:
         self.receipt["resources"][0]["containerId"] = self.container_id
         self.receipt["stage"] = "start-owned-container"
         self.docker("start", self.container_id)
-        binding = self.docker("port", self.container_id, "3310/tcp")
+        self.receipt["stage"] = "observe-container-after-start"
+        diagnostic = self.startup_diagnostic()
+        state = diagnostic.get("state", {})
+        if not diagnostic.get("observed") or state.get("Running") is not True or state.get("Paused") is not False or state.get("Restarting") is not False or type(state.get("Pid")) is not int or state["Pid"] <= 0:
+            raise ValueError("Actual scanner container is not running immediately after start")
+        self.receipt["stage"] = "observe-loopback-publication"
+        try:
+            binding = self.docker("port", self.container_id, "3310/tcp")
+        except Exception:
+            self.startup_diagnostic()
+            raise
         match = re.fullmatch(r"127\.0\.0\.1:([0-9]+)", binding)
         if not match:
             raise ValueError("Scanner endpoint escaped loopback")
@@ -288,6 +301,38 @@ class Scanner:
 
     def counters(self):
         return {"attempted": self.attempted, "clean": self.clean, "infected": self.infected}
+
+    def startup_diagnostic(self):
+        """Observe only the exact owned synthetic container; never replace admission."""
+        diagnostic = {"containerId": self.container_id, "observedUtc": datetime.now(timezone.utc).isoformat()}
+        try:
+            if not self.container_id or not re.fullmatch(r"[0-9a-f]{64}", self.container_id):
+                raise ValueError("Exact created container identity required for diagnostics")
+            container = json.loads(self.docker("inspect", self.container_id, timeout=10))[0]
+            if container.get("Id") != self.container_id or container.get("Image") != self.image_id or container.get("Config", {}).get("Labels", {}).get("financial.acceptance.run") != self.run_id:
+                raise ValueError("Startup diagnostic ownership differs")
+            state = container.get("State", {})
+            diagnostic["state"] = {key: state.get(key) for key in ("Status", "Running", "Paused", "Restarting", "OOMKilled", "Dead", "Pid", "ExitCode", "Error", "StartedAt", "FinishedAt")}
+            diagnostic["createdUtc"] = container.get("Created")
+            diagnostic["declaredPortBindings"] = container.get("HostConfig", {}).get("PortBindings")
+            diagnostic["actualPortBindings"] = container.get("NetworkSettings", {}).get("Ports")
+            diagnostic["networkMode"] = container.get("HostConfig", {}).get("NetworkMode")
+            diagnostic["networkIds"] = {key: value.get("NetworkID") for key, value in container.get("NetworkSettings", {}).get("Networks", {}).items()}
+            diagnostic["observed"] = True
+            try:
+                # Fixed synthetic daemon only. Bounded command + bounded public tail;
+                # no environment/config/private data are collected.
+                tail = self.docker("logs", "--tail", "40", self.container_id, timeout=10, capture_stderr=True)
+                diagnostic["startupLogTail"] = tail[-8192:]
+                diagnostic["startupLogTailSha256"] = digest(tail.encode())
+                diagnostic["startupLogTailTruncated"] = len(tail) > 8192
+            except Exception as error:
+                diagnostic["startupLogErrorType"] = type(error).__name__
+        except Exception as error:
+            diagnostic["observed"] = False
+            diagnostic["diagnosticErrorType"] = type(error).__name__
+        self.receipt["startupDiagnostic"] = diagnostic
+        return diagnostic
 
     def close(self):
         errors = []

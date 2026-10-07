@@ -11,6 +11,44 @@ from hosted_scanner_readiness import Scanner, database_hashes, IMAGE, CONFIG, EI
 
 
 class ScannerTests(unittest.TestCase):
+    def test_startup_diagnostic_records_exact_owned_runtime_state_and_ports(self):
+        scanner = Scanner("diagnostic-run")
+        scanner.container_id = "a" * 64
+        scanner.image_id = "sha256:" + "b" * 64
+        state = {"Status": "exited", "Running": False, "Paused": False, "Restarting": False, "Pid": 0, "ExitCode": 2, "OOMKilled": False}
+        container = {"Id": scanner.container_id, "Image": scanner.image_id, "Config": {"Labels": {"financial.acceptance.run": scanner.run_id}},
+                     "State": state, "HostConfig": {"PortBindings": {"3310/tcp": [{"HostIp": "127.0.0.1", "HostPort": "0"}]}},
+                     "NetworkSettings": {"Ports": {}, "Networks": {}}}
+        with patch.object(scanner, "docker", side_effect=[json.dumps([container]), "synthetic startup failure"]):
+            diagnostic = scanner.startup_diagnostic()
+        self.assertTrue(diagnostic["observed"])
+        self.assertEqual(2, diagnostic["state"]["ExitCode"])
+        self.assertEqual({}, diagnostic["actualPortBindings"])
+        self.assertEqual("synthetic startup failure", diagnostic["startupLogTail"])
+
+    def test_startup_diagnostic_refuses_foreign_container_and_does_not_read_logs(self):
+        scanner = Scanner("diagnostic-run")
+        scanner.container_id = "a" * 64
+        scanner.image_id = "sha256:" + "b" * 64
+        container = {"Id": scanner.container_id, "Image": scanner.image_id, "Config": {"Labels": {"financial.acceptance.run": "foreign"}}}
+        with patch.object(scanner, "docker", return_value=json.dumps([container])) as docker:
+            self.assertFalse(scanner.startup_diagnostic()["observed"])
+        self.assertEqual(1, docker.call_count)
+
+    def test_startup_diagnostic_tail_is_bounded_and_log_failure_is_secondary(self):
+        scanner = Scanner("diagnostic-run")
+        scanner.container_id = "a" * 64
+        scanner.image_id = "sha256:" + "b" * 64
+        container = {"Id": scanner.container_id, "Image": scanner.image_id, "Config": {"Labels": {"financial.acceptance.run": scanner.run_id}}}
+        with patch.object(scanner, "docker", side_effect=[json.dumps([container]), "x" * 10000]):
+            diagnostic = scanner.startup_diagnostic()
+        self.assertEqual(8192, len(diagnostic["startupLogTail"]))
+        self.assertTrue(diagnostic["startupLogTailTruncated"])
+        with patch.object(scanner, "docker", side_effect=[json.dumps([container]), TimeoutError()]):
+            diagnostic = scanner.startup_diagnostic()
+        self.assertTrue(diagnostic["observed"])
+        self.assertEqual("TimeoutError", diagnostic["startupLogErrorType"])
+
     def test_policy_rejects_unbounded_deadline_and_unowned_identity(self):
         for identity in ("../other", "", "a" * 65):
             with self.assertRaises(ValueError):
