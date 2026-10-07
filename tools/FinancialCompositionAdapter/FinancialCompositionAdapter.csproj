@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <GenuineIamSourceRoot Condition="'$(GenuineIamSourceRoot)' == ''">$(MSBuildThisFileDirectory)../../.genuine-iam-source</GenuineIamSourceRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="$(GenuineIamSourceRoot)/Maliev.IAMService/Maliev.IAMService.Application/Maliev.IAMService.Application.csproj" Aliases="IamApplication" />
+    <ProjectReference Include="$(GenuineIamSourceRoot)/Maliev.IAMService/Maliev.IAMService.Infrastructure/Maliev.IAMService.Infrastructure.csproj" Aliases="IamInfrastructure" />
+  </ItemGroup>
+</Project>

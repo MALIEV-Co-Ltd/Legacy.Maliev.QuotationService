@@ -1,0 +1,87 @@
+{
+  "files": [
+    {
+      "destination": "tools/FinancialCompositionAdapter/FinancialCompositionAdapter.csproj",
+      "bytes": 824,
+      "sha256": "911d16013f0bd904f0815f8bb2985d153beb03ed64d7fa9e8cfadd904ef461bc",
+      "gitBlob": "b912e1bb93bb7b31a5c24808515a6ad3c61f332b"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/OrdinaryOpaquePrincipalEnrollment.cs",
+      "bytes": 4825,
+      "sha256": "4e3371c3392a2dd9e3d46a2e2a82730cd5ff0f5ae0b4651a7b4e9c0411dfacf7",
+      "gitBlob": "ad065f8915526ad593a7c1065b6d62ad40f7fec5"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/OwnedBusinessSchema.cs",
+      "bytes": 9930,
+      "sha256": "2efac519c3725c43569b83cbc497335b5a2eb9ecd8d0eb6fd535e6e38ebcf4d0",
+      "gitBlob": "0ce4670f9a4470f51a90494087d5a1ff6a0275af"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/PinnedBusinessSchemas.g.cs",
+      "bytes": 11189,
+      "sha256": "8d110268c67a741cc161e57c8549ff22db5756a87331a0c7cff2084aacd9c151",
+      "gitBlob": "f064bdce618f562f22e96271c33f8d60dcdff4ac"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/SourceCatalogueAdmission.cs",
+      "bytes": 2219,
+      "sha256": "bfa5282db753646ea9cf7a2f77dca28781834f429f3c934f6c6af315bc30d9f6",
+      "gitBlob": "09e2f0560f2f7e1265eeda2078dca9118490e4d3"
+    },
+    {
+      "destination": "docs/financial-composition-adapter-source.md",
+      "bytes": 7415,
+      "sha256": "57f4d1f10d630fc9a8fadb20e8ff247608d07f02fa8e32409539b4b700e8cd10",
+      "gitBlob": "bec672a547d0d07b7a54e73d57584009d024277c"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/provenance/exact-producer-inventory.json",
+      "bytes": 202702,
+      "sha256": "b80a6bfc7e6deb6ee6b22b2ce530018513e73b37f7276486261e081d28d33ef3",
+      "gitBlob": "723cad3a071d27af61e41318604925c228b2c114"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/provenance/caller-phase-contract.json",
+      "bytes": 1215,
+      "sha256": "3361b382e121a4a08fb0ceac553beb5a5a6303fe2dbc303f699c8c29909dacb7",
+      "gitBlob": "66533f750afc2658449f8b84016f425a19fea181"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter.Controls/AdapterCompileControls.csproj",
+      "bytes": 812,
+      "sha256": "84ee70cb4a70d11a2c6f31725cdd11c1a5abcb04ea6963cce91147b19d7fb336",
+      "gitBlob": "4c00d9e02836057cf3fff700bce96dd56a912bd6"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter.Controls/Program.cs",
+      "bytes": 5451,
+      "sha256": "5929e4fc71ccd113a3d492b9221807bf7ecb349a4c6c31173231085860d9c2b6",
+      "gitBlob": "81e629de5f123b249e062cd9ddaeb73760ca6c1f"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter.Qualification/qualify.py",
+      "bytes": 12941,
+      "sha256": "7f8b103f990c53b828724b46f178b80ec9cd38d5aaeb14a984affec932072964",
+      "gitBlob": "6057bc0063df39f8d88ade7f350cceffaba82c73"
+    },
+    {
+      "destination": "docs/financial-composition-adapter-qualification.md",
+      "bytes": 3674,
+      "sha256": "b16861594a25610a59fbe31802c072ae781c4be66285a75ecf5732cd8492fd29",
+      "gitBlob": "b21909622d86b9dac4f7d8bec433d5bd517e8b28"
+    },
+    {
+      "destination": ".github/workflows/financial-composition-compile.yml",
+      "bytes": 5002,
+      "sha256": "4aa252c4472d9cee0c4056eb193e2d53f5b3f0d25df6fa84f7bcd394d3e4c1e7",
+      "gitBlob": "1a677f01de9feacd3b70cec3700d43da0680e7bc"
+    }
+  ],
+  "adapterPacketPatchSha256": "2e380f379ef1ccfa7b00bad331a4ff125ed6058dc200bdf2324e6e271d1ce53d",
+  "acceptedFixtureCommit": "85a00d4bb54cf95199ee67dfd97d2b168233ff68",
+  "acceptedFixtureRun": 37655912717,
+  "acceptedMaterializerSha256": "6288b97f8baf0d55c2d53dc6451e658137dd76cc67175e5d1caa8e32f4bcfd2d",
+  "originalIamProgramDigest": "cd3736e1edfab60e8dbfcffa031806007f36d767dc278e0d1762688a2c2985b8"
+}
