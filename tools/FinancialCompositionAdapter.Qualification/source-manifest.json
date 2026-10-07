@@ -62,9 +62,9 @@
     },
     {
       "destination": "tools/FinancialCompositionAdapter.Qualification/qualify.py",
-      "bytes": 12941,
-      "sha256": "7f8b103f990c53b828724b46f178b80ec9cd38d5aaeb14a984affec932072964",
-      "gitBlob": "6057bc0063df39f8d88ade7f350cceffaba82c73"
+      "bytes": 14632,
+      "sha256": "82407c900603d5f394a77523a03c87448ab22e5a3cf054af7aab1d933db10d68",
+      "gitBlob": "088e2f18ede3b78c3b98d5dcdaa702a02ef2a8a3"
     },
     {
       "destination": "docs/financial-composition-adapter-qualification.md",
@@ -83,5 +83,8 @@
   "acceptedFixtureCommit": "85a00d4bb54cf95199ee67dfd97d2b168233ff68",
   "acceptedFixtureRun": 37655912717,
   "acceptedMaterializerSha256": "6288b97f8baf0d55c2d53dc6451e658137dd76cc67175e5d1caa8e32f4bcfd2d",
-  "originalIamProgramDigest": "cd3736e1edfab60e8dbfcffa031806007f36d767dc278e0d1762688a2c2985b8"
+  "originalIamProgramDigest": "cd3736e1edfab60e8dbfcffa031806007f36d767dc278e0d1762688a2c2985b8",
+  "acceptedMaterializerGitBlob": "aca0b4189bf5f1f80911b5b011908668d903c9a5",
+  "acceptedMaterializerCheckoutSha256": "b5fabd9a63323e9445541106385f78c16d297242760ad979bcb02a8287189076",
+  "acceptedAttributesSha256": "a51d4446ea808450aac392ca1176440927d4a58ae4a5e605266db1ab00c29a3f"
 }

@@ -119,6 +119,26 @@ def run(arguments, *, cwd=None, timeout=180, env=None):
     return result.stdout
 
 
+def verify_materializer_identity(accepted, materializer, manifest):
+    # Bind both immutable Git source and the exact checkout representation required by that source.
+    # Do not rewrite the executed file or apply generic whitespace/line-ending normalization.
+    relative = "eng/Prepare-GenuineIamHttpSource.ps1"
+    expected_blob = manifest["acceptedMaterializerGitBlob"]
+    require(run(["git", "-C", str(accepted), "rev-parse", FIXTURE_COMMIT + ":" + relative]).decode().strip() == expected_blob)
+    blob = run(["git", "-C", str(accepted), "show", FIXTURE_COMMIT + ":" + relative])
+    require(hashlib.sha256(blob).hexdigest() == manifest["acceptedMaterializerSha256"])
+    attributes = accepted / ".gitattributes"
+    require(digest(attributes) == manifest["acceptedAttributesSha256"])
+    effective = run(["git", "-C", str(accepted), "check-attr", "-z", "text", "eol", "--", relative]).split(b"\0")
+    require(effective == [relative.encode(), b"text", b"set", relative.encode(), b"eol", b"crlf", b""])
+    checkout = materializer.read_bytes()
+    require(hashlib.sha256(checkout).hexdigest() == manifest["acceptedMaterializerCheckoutSha256"])
+    require(b"\r" not in blob and checkout == blob.replace(b"\n", b"\r\n"))
+    return {"gitBlob": expected_blob, "blobSha256": hashlib.sha256(blob).hexdigest(),
+            "checkoutSha256": hashlib.sha256(checkout).hexdigest(), "attributesSha256": digest(attributes),
+            "effectiveText": "set", "effectiveEol": "crlf", "executedCheckoutUnmodified": True}
+
+
 def main():
     root = pathlib.Path.cwd().resolve()
     parser_controls = audit_parser_controls()
@@ -135,8 +155,9 @@ def main():
     print('{"Stage":"source-inventory","Passed":true}', flush=True)
     accepted = root / ".adapter-dependencies/AcceptedAuth"
     materializer = accepted / "eng/Prepare-GenuineIamHttpSource.ps1"
-    require(digest(materializer) == manifest["acceptedMaterializerSha256"])
     require(run(["git", "-C", str(accepted), "rev-parse", "HEAD"]).decode().strip() == FIXTURE_COMMIT)
+    materializer_identity = verify_materializer_identity(accepted, materializer, manifest)
+    print('{"Stage":"materializer-source-and-checkout-identity","Passed":true}', flush=True)
     dependencies = accepted / ".dependencies"
     for name, pin in PINS.items():
         source = accepted if name == "Legacy.Maliev.AuthService" else dependencies / ("GenuineIamDefaults" if name == "Legacy.Maliev.ServiceDefaults" else name)
@@ -191,6 +212,7 @@ def main():
     receipt = {"sourceHead": pr["head"]["sha"], "pullRequestNumber": event["number"], "runId": os.environ["GITHUB_RUN_ID"],
                "runAttempt": os.environ["GITHUB_RUN_ATTEMPT"], "sourceManifestSha256": digest(root / "tools/FinancialCompositionAdapter.Qualification/source-manifest.json"),
                "acceptedFixtureCommit": FIXTURE_COMMIT, "acceptedFixtureRun": 37655912717, "sourceArchives": archives,
+               "materializerIdentity": materializer_identity,
                "sameRunLockDigests": locks, "committedLockAcceptance": False, "assemblySha256": assemblies, "auditParserControls": parser_controls,
                "compileControls": actual, "compiled": True, "originalRuntimeDiRegistrationSourceWitness": True,
                "originalRuntimeDiHostStarted": False, "physicalBusinessSchemaAccepted": False, "principalEnrollmentAccepted": False,
