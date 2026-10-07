@@ -53,8 +53,8 @@
     },
     {
       "path": "Legacy.Maliev.QuotationService.Data/QuotationRepositories.cs",
-      "sha256": "ace959f40cb3629ebae1df7da88ba4c6b202801dc597e953b42948431520377b",
-      "bytes": 67041
+      "sha256": "a5caddfba3d63c86e78143f37678b6ee3d5d18d20be2b16a49b4c4a76c3cfd7e",
+      "bytes": 68075
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Contracts/FinancialOwnershipIamPermissionContractTests.cs",
@@ -370,7 +370,12 @@
       "path": "scripts/tests/test_quotation_catalogue_results.py",
       "sha256": "b2659491f6899e280aeec6b749df8fe439cc893ed993020e8ae067c5f3dffaad",
       "bytes": 9460
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceCapabilityHttpTests.cs",
+      "sha256": "abc2591e9a27b0702014b5e18090c511d3b115cf3ed516918604e5770dcff69f",
+      "bytes": 57215
     }
   ],
-  "manifestSha256": "78e1c4bd5f38912fedd65118e068765fabb328179e07a85c077f399f81d3b453"
+  "manifestSha256": "7c1462ee382cc40ea3f192384b5163d743ae276ad03aa35abee19bc5e339e46c"
 }

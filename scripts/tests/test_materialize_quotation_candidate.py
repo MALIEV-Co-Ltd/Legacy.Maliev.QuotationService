@@ -16,7 +16,7 @@ spec.loader.exec_module(gate)
 
 
 def packet(mutate=None):
-    files = {f"scripts/source-{n}.txt": f"raw-{n}\r\n".encode() for n in range(73)}
+    files = {f"scripts/source-{n}.txt": f"raw-{n}\r\n".encode() for n in range(74)}
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as archive:
         for path, data in files.items():
