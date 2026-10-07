@@ -96,7 +96,7 @@ class Scanner:
                         output[key.fileobj].extend(chunk)
             process.wait(timeout=max(0.001, deadline-time.monotonic()))
             if process.returncode:
-                raise subprocess.CalledProcessError(process.returncode, ["docker", *args])
+                raise subprocess.CalledProcessError(process.returncode, ["docker", *args], stderr=output[process.stderr].decode("utf-8", "replace")[:4096])
             return output[process.stdout].decode("utf-8", "strict").strip()
         finally:
             if process.poll() is None:
@@ -214,6 +214,7 @@ class Scanner:
         if not re.fullmatch(r"[0-9a-f]{64}", self.container_id):
             raise ValueError("Invalid observed created container identity")
         self.receipt["resources"][0]["containerId"] = self.container_id
+        self.receipt["stage"] = "start-owned-container"
         self.docker("start", self.container_id)
         binding = self.docker("port", self.container_id, "3310/tcp")
         match = re.fullmatch(r"127\.0\.0\.1:([0-9]+)", binding)
@@ -429,6 +430,9 @@ def main():
         scanner.start()
     except Exception as error:
         scanner.receipt["failureType"] = type(error).__name__
+        if isinstance(error, subprocess.CalledProcessError):
+            scanner.receipt["failureCommand"] = list(error.cmd)
+            scanner.receipt["failureReason"] = error.stderr
         if isinstance(error, ValueError):
             scanner.receipt["failureReason"] = str(error)[:256]
         failed = True
