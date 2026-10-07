@@ -106,26 +106,45 @@ def strict_json(raw):
     return json.loads(raw.decode("utf-8"), object_pairs_hook=pairs, parse_constant=constant)
 
 
+AUDIT_REJECTION_CATEGORIES = ('JsonContractRejected', 'TopLevelShapeRejected', 'VersionRejected', 'ParametersRejected', 'SourcesRejected', 'ProblemsRejected', 'ProjectInventoryRejected', 'ProjectShapeOrPathRejected', 'FrameworkInventoryRejected', 'FrameworkShapeRejected', 'FrameworkIdentityRejected', 'TopLevelPackageInventoryRejected', 'TransitivePackageInventoryRejected')
+
+
+class AuditRejected(RuntimeError):
+    def __init__(self, category):
+        require(category in AUDIT_REJECTION_CATEGORIES)
+        self.category = category
+        super().__init__("audit contract rejected")
+
+
+def audit_require(value, category):
+    require(category in AUDIT_REJECTION_CATEGORIES)
+    if not value:
+        raise AuditRejected(category)
+
+
 def clean_audit(raw, expected_project):
     # Same primary NuGet JSON v1 contract used by the existing counter qualification.
-    value = strict_json(raw)
-    require(type(value) is dict and set(value) in (
+    try:
+        value = strict_json(raw)
+    except (RuntimeError, ValueError, TypeError, UnicodeError):
+        raise AuditRejected("JsonContractRejected") from None
+    audit_require(type(value) is dict and set(value) in (
         {"version", "parameters", "sources", "projects"},
-        {"version", "parameters", "sources", "projects", "problems"}))
-    require(type(value["version"]) is int and value["version"] == 1)
-    require(value["parameters"] == "--vulnerable --include-transitive")
-    require(value["sources"] == ["https://api.nuget.org/v3/index.json"])
-    require(type(value.get("problems", [])) is list and value.get("problems", []) == [])
-    require(type(value["projects"]) is list and len(value["projects"]) == 1)
+        {"version", "parameters", "sources", "projects", "problems"}), "TopLevelShapeRejected")
+    audit_require(type(value["version"]) is int and value["version"] == 1, "VersionRejected")
+    audit_require(value["parameters"] == "--vulnerable --include-transitive", "ParametersRejected")
+    audit_require(value["sources"] == ["https://api.nuget.org/v3/index.json"], "SourcesRejected")
+    audit_require(type(value.get("problems", [])) is list and value.get("problems", []) == [], "ProblemsRejected")
+    audit_require(type(value["projects"]) is list and len(value["projects"]) == 1, "ProjectInventoryRejected")
     project = value["projects"][0]
-    require(type(project) is dict and set(project) == {"path", "frameworks"} and project["path"] == expected_project)
-    require(type(project["frameworks"]) is list and len(project["frameworks"]) == 1)
+    audit_require(type(project) is dict and set(project) == {"path", "frameworks"} and project["path"] == expected_project, "ProjectShapeOrPathRejected")
+    audit_require(type(project["frameworks"]) is list and len(project["frameworks"]) == 1, "FrameworkInventoryRejected")
     framework = project["frameworks"][0]
-    require(type(framework) is dict and set(framework) in (
-        {"framework", "topLevelPackages"}, {"framework", "topLevelPackages", "transitivePackages"}))
-    require(framework["framework"] == "net10.0")
-    require(type(framework["topLevelPackages"]) is list and framework["topLevelPackages"] == [])
-    require(type(framework.get("transitivePackages", [])) is list and framework.get("transitivePackages", []) == [])
+    audit_require(type(framework) is dict and set(framework) in (
+        {"framework", "topLevelPackages"}, {"framework", "topLevelPackages", "transitivePackages"}), "FrameworkShapeRejected")
+    audit_require(framework["framework"] == "net10.0", "FrameworkIdentityRejected")
+    audit_require(type(framework["topLevelPackages"]) is list and framework["topLevelPackages"] == [], "TopLevelPackageInventoryRejected")
+    audit_require(type(framework.get("transitivePackages", [])) is list and framework.get("transitivePackages", []) == [], "TransitivePackageInventoryRejected")
 
 
 def audit_parser_controls():
@@ -301,6 +320,10 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except AuditRejected as rejection:
+        # Category values are a fixed public vocabulary, never actual JSON/configuration values.
+        print(json.dumps({"QualificationFailed": True, "FailedStage": ACTIVE_STAGE, "AuditRejectionCategory": rejection.category}), flush=True)
+        sys.exit(1)
     except Exception:
         # No exception payload, configuration, archive contents or compiler output in public logs.
         print(json.dumps({"QualificationFailed": True, "FailedStage": ACTIVE_STAGE}), flush=True)
