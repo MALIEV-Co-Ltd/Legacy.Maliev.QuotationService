@@ -62,9 +62,9 @@
     },
     {
       "destination": "tools/FinancialCompositionAdapter.Qualification/qualify.py",
-      "bytes": 14632,
-      "sha256": "82407c900603d5f394a77523a03c87448ab22e5a3cf054af7aab1d933db10d68",
-      "gitBlob": "088e2f18ede3b78c3b98d5dcdaa702a02ef2a8a3"
+      "bytes": 19071,
+      "sha256": "1a03b4386b59be6baecd4a2413cf9821d3732032db5702c377970bce5ebb8e51",
+      "gitBlob": "55d4da11e0e7f01a494e854435a4d7c5b416f3e7"
     },
     {
       "destination": "docs/financial-composition-adapter-qualification.md",
