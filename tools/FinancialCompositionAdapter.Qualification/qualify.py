@@ -110,16 +110,22 @@ AUDIT_REJECTION_CATEGORIES = ('JsonContractRejected', 'TopLevelShapeRejected', '
 
 
 class AuditRejected(RuntimeError):
-    def __init__(self, category):
+    def __init__(self, category, evidence=None):
         require(category in AUDIT_REJECTION_CATEGORIES)
+        evidence = {} if evidence is None else evidence
+        require(type(evidence) is dict)
+        require(not evidence or (category == "ProjectShapeOrPathRejected"
+                                and set(evidence) == {"ProjectPathMatches", "ProjectFrameworksPresent", "ProjectShapeKnown"}
+                                and all(type(value) is bool for value in evidence.values())))
         self.category = category
+        self.evidence = dict(evidence)
         super().__init__("audit contract rejected")
 
 
-def audit_require(value, category):
+def audit_require(value, category, evidence=None):
     require(category in AUDIT_REJECTION_CATEGORIES)
     if not value:
-        raise AuditRejected(category)
+        raise AuditRejected(category, evidence)
 
 
 def clean_audit(raw, expected_project):
@@ -137,7 +143,12 @@ def clean_audit(raw, expected_project):
     audit_require(type(value.get("problems", [])) is list and value.get("problems", []) == [], "ProblemsRejected")
     audit_require(type(value["projects"]) is list and len(value["projects"]) == 1, "ProjectInventoryRejected")
     project = value["projects"][0]
-    audit_require(type(project) is dict and set(project) == {"path", "frameworks"} and project["path"] == expected_project, "ProjectShapeOrPathRejected")
+    project_evidence = {
+        "ProjectPathMatches": type(project) is dict and project.get("path") == expected_project,
+        "ProjectFrameworksPresent": type(project) is dict and "frameworks" in project,
+        "ProjectShapeKnown": type(project) is dict and set(project) in ({"path"}, {"path", "frameworks"}),
+    }
+    audit_require(type(project) is dict and set(project) == {"path", "frameworks"} and project["path"] == expected_project, "ProjectShapeOrPathRejected", project_evidence)
     audit_require(type(project["frameworks"]) is list and len(project["frameworks"]) == 1, "FrameworkInventoryRejected")
     framework = project["frameworks"][0]
     audit_require(type(framework) is dict and set(framework) in (
@@ -322,7 +333,7 @@ if __name__ == "__main__":
         main()
     except AuditRejected as rejection:
         # Category values are a fixed public vocabulary, never actual JSON/configuration values.
-        print(json.dumps({"QualificationFailed": True, "FailedStage": ACTIVE_STAGE, "AuditRejectionCategory": rejection.category}), flush=True)
+        print(json.dumps({"QualificationFailed": True, "FailedStage": ACTIVE_STAGE, "AuditRejectionCategory": rejection.category, **rejection.evidence}), flush=True)
         sys.exit(1)
     except Exception:
         # No exception payload, configuration, archive contents or compiler output in public logs.
