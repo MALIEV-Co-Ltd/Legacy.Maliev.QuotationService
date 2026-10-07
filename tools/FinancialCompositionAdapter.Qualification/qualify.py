@@ -141,7 +141,7 @@ def verify_audit_configuration(raw):
     require(hashlib.sha256(raw).hexdigest() == AUDIT_CONFIG_SHA256)
 
 
-GRAPH_REJECTION_CATEGORIES = ('GraphEntryRejected', 'RequestedRangeTypeRejected', 'RequestedRangeSyntaxRejected', 'AdmissionArgumentTypesRejected', 'SourceDirectClassificationRejected', 'AssetsVersionRejected', 'AssetsProjectIdentityRejected', 'AssetsOriginalFrameworkRejected', 'AssetsRestoreFrameworkRejected', 'ProjectReferenceInventoryRejected', 'ProjectReferenceIdentityRejected', 'AssetsProjectFrameworkRejected', 'AssetsDirectDependencyShapeRejected', 'AssetsDirectClassificationRejected', 'SourceDirectDuplicateRejected', 'AssetsSourceDirectInventoryRejected', 'AssetsSourceDirectRangeRejected', 'LockVersionRejected', 'LockFrameworkRejected', 'LockDependencyShapeRejected', 'LockDependencyTypeRejected', 'LockDirectDuplicateRejected', 'LockAssetsDirectInventoryRejected', 'LockSourceDirectRangeRejected', 'LockResolvedVersionRejected', 'AssetsLibraryShapeRejected', 'AssetsLibraryTypeRejected', 'LockAssetsPackageInventoryRejected', 'ImportedSourceDigestRejected', 'SevenLockOwnerInventoryRejected', 'ProjectSourceDigestRejected', 'SourcePackageClassificationRejected', 'SameRunLockDigestRejected', 'GlobalAuditedPackageClosureRejected')
+GRAPH_REJECTION_CATEGORIES = ('AssetsAliasedRestoreIdentityRejected', 'AssetsAliasedProjectIdentityRejected', 'LockAliasedShapeRejected', 'LockAliasedFrameworkRejected', 'LockLegacyShapeRejected', 'GraphEntryRejected', 'RequestedRangeTypeRejected', 'RequestedRangeSyntaxRejected', 'AdmissionArgumentTypesRejected', 'SourceDirectClassificationRejected', 'AssetsVersionRejected', 'AssetsProjectIdentityRejected', 'AssetsOriginalFrameworkRejected', 'AssetsRestoreFrameworkRejected', 'ProjectReferenceInventoryRejected', 'ProjectReferenceIdentityRejected', 'AssetsProjectFrameworkRejected', 'AssetsDirectDependencyShapeRejected', 'AssetsDirectClassificationRejected', 'SourceDirectDuplicateRejected', 'AssetsSourceDirectInventoryRejected', 'AssetsSourceDirectRangeRejected', 'LockVersionRejected', 'LockFrameworkRejected', 'LockDependencyShapeRejected', 'LockDependencyTypeRejected', 'LockDirectDuplicateRejected', 'LockAssetsDirectInventoryRejected', 'LockSourceDirectRangeRejected', 'LockResolvedVersionRejected', 'AssetsLibraryShapeRejected', 'AssetsLibraryTypeRejected', 'LockAssetsPackageInventoryRejected', 'ImportedSourceDigestRejected', 'SevenLockOwnerInventoryRejected', 'ProjectSourceDigestRejected', 'SourcePackageClassificationRejected', 'SameRunLockDigestRejected', 'GlobalAuditedPackageClosureRejected')
 GRAPH_REJECTION_ROLES = ("Graph", *AUDIT_GRAPH)
 GRAPH_ROLE = "Graph"
 GRAPH_POINT = "GraphEntryRejected"
@@ -206,7 +206,7 @@ def admit_project_assets(assets, lock, expected_path, package_free, expected_ref
     graph_point('SourceDirectClassificationRejected')
     graph_require(type(expected_dependencies) is dict and (not expected_dependencies) == package_free, 'SourceDirectClassificationRejected')
     graph_point('AssetsVersionRejected')
-    graph_require(type(assets) is dict and type(assets.get("version")) is int and assets["version"] == 3, 'AssetsVersionRejected')
+    graph_require(type(assets) is dict and type(assets.get("version")) is int and assets["version"] in (3, 4), 'AssetsVersionRejected')
     project = assets["project"]
     restore = project["restore"]
     graph_point('AssetsProjectIdentityRejected')
@@ -215,6 +215,10 @@ def admit_project_assets(assets, lock, expected_path, package_free, expected_ref
     graph_require(restore["originalTargetFrameworks"] == ["net10.0"], 'AssetsOriginalFrameworkRejected')
     graph_point('AssetsRestoreFrameworkRejected')
     graph_require(type(restore["frameworks"]) is dict and set(restore["frameworks"]) == {"net10.0"}, 'AssetsRestoreFrameworkRejected')
+    graph_point("AssetsAliasedRestoreIdentityRejected")
+    graph_require(type(restore["frameworks"]["net10.0"]) is dict
+                  and all(restore["frameworks"]["net10.0"].get(key, "net10.0" if assets["version"] == 3 else None) == "net10.0"
+                          for key in ("framework", "targetAlias")), "AssetsAliasedRestoreIdentityRejected")
     references = restore["frameworks"]["net10.0"].get("projectReferences", {})
     graph_point('ProjectReferenceInventoryRejected')
     graph_require(type(references) is dict and set(references) == expected_references, 'ProjectReferenceInventoryRejected')
@@ -222,6 +226,10 @@ def admit_project_assets(assets, lock, expected_path, package_free, expected_ref
     graph_require(all(type(value) is dict and value.get("projectPath") == key for key, value in references.items()), 'ProjectReferenceIdentityRejected')
     graph_point('AssetsProjectFrameworkRejected')
     graph_require(type(project["frameworks"]) is dict and set(project["frameworks"]) == {"net10.0"}, 'AssetsProjectFrameworkRejected')
+    graph_point("AssetsAliasedProjectIdentityRejected")
+    graph_require(type(project["frameworks"]["net10.0"]) is dict
+                  and all(project["frameworks"]["net10.0"].get(key, "net10.0" if assets["version"] == 3 else None) == "net10.0"
+                          for key in ("framework", "targetAlias")), "AssetsAliasedProjectIdentityRejected")
     dependencies = project["frameworks"]["net10.0"].get("dependencies", {})
     graph_point('AssetsDirectDependencyShapeRejected')
     graph_require(type(dependencies) is dict and all(type(key) is str and type(value) is dict for key, value in dependencies.items()), 'AssetsDirectDependencyShapeRejected')
@@ -235,10 +243,20 @@ def admit_project_assets(assets, lock, expected_path, package_free, expected_ref
     graph_point('AssetsSourceDirectRangeRejected')
     graph_require(all(requested_range(value["version"]) == requested_range(expected_ranges[key.casefold()]) for key, value in dependencies.items()), 'AssetsSourceDirectRangeRejected')
     graph_point('LockVersionRejected')
-    graph_require(type(lock) is dict and type(lock.get("version")) is int and lock["version"] in (1, 2), 'LockVersionRejected')
-    graph_point('LockFrameworkRejected')
-    graph_require(type(lock["dependencies"]) is dict and set(lock["dependencies"]) == {"net10.0"}, 'LockFrameworkRejected')
-    locked = lock["dependencies"]["net10.0"]
+    graph_require(type(lock) is dict and type(lock.get("version")) is int and lock["version"] in (1, 2, 3), 'LockVersionRejected')
+    if lock["version"] == 3:
+        graph_point("LockAliasedShapeRejected")
+        graph_require(set(lock) == {"version", "net10.0"} and type(lock["net10.0"]) is dict
+                      and set(lock["net10.0"]) == {"framework", "dependencies"}, "LockAliasedShapeRejected")
+        graph_point("LockAliasedFrameworkRejected")
+        graph_require(lock["net10.0"]["framework"] == "net10.0", "LockAliasedFrameworkRejected")
+        locked = lock["net10.0"]["dependencies"]
+    else:
+        graph_point("LockLegacyShapeRejected")
+        graph_require(set(lock) == {"version", "dependencies"}, "LockLegacyShapeRejected")
+        graph_point('LockFrameworkRejected')
+        graph_require(type(lock["dependencies"]) is dict and set(lock["dependencies"]) == {"net10.0"}, 'LockFrameworkRejected')
+        locked = lock["dependencies"]["net10.0"]
     graph_point('LockDependencyShapeRejected')
     graph_require(type(locked) is dict and all(type(key) is str and type(value) is dict for key, value in locked.items()), 'LockDependencyShapeRejected')
     graph_point('LockDependencyTypeRejected')
@@ -297,6 +315,7 @@ def admit_audit_graph(root, locks):
         packages[name] = admit_project_assets(assets, lock, str(path), item["packageFree"], expected_refs, item["directPackages"])
         records[name] = {"projectSourceSha256": item["sha256"], "assetsSha256": digest(assets_path),
                          "sameRunLockSha256": digest(lock_path), "packageFree": item["packageFree"],
+                         "assetsSchemaVersion": assets["version"], "packagesLockSchemaVersion": lock["version"],
                          "packageCount": len(packages[name]), "framework": "net10.0"}
     graph_role("Graph")
     covered = set().union(*(packages[name] for name, item in AUDIT_GRAPH.items() if not item["packageFree"]))
