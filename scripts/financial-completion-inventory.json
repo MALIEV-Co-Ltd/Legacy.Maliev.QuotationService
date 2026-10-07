@@ -1,0 +1,395 @@
+{
+  "Legacy.Maliev.QuotationService.Tests.Tools.AccountingCompletionEvidenceTests": {
+    "source": "tools/FinancialCompletionEvidence.Tests/AccountingCompletionEvidenceTests.cs",
+    "normalizedSourceSha256": "f6108bacbd39c0dbb8fbf32fdaa8b9fd106638b17dcd7ddb03e186d83d632222",
+    "methods": {
+      "TypedEvidencePreservesExactDocumentDigestAndCoordinates": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "TypedEvidenceSurvivesSourceDocumentDisposal": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "OriginalValidateReturnsIdenticalDurableResult": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ExactlyOneTotalAndMatchingInvoiceFileIsAccepted": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "MissingExtraMismatchedOrInvalidLinkCountsAreRejected": {
+        "parameters": [
+          {
+            "name": "total",
+            "type": "int"
+          },
+          {
+            "name": "matching",
+            "type": "int"
+          }
+        ],
+        "cases": [
+          "3d5812abc84c11768aa73a732c85d75dbed439188f5bb3239e9b762ea31d9862",
+          "af1a1fc110b6094c48582b0ef83553cb7908d7a4365424eef28e76ef6c88d630",
+          "5aaf1e183f1faf12c327dc2fb8c223022f04684c61fc34533bff62e7e572c776",
+          "1ad6041faf516d0043ca4b91348ab8c8a713496b5b5ce302e0e907e4f7bcbc24",
+          "471610700dbccc74bb026d74039c6117d45755b356953dd303b840c7d308fafb"
+        ]
+      }
+    }
+  },
+  "Legacy.Maliev.QuotationService.Tests.Tools.AccountingCompletionFixtureAdmissionTests": {
+    "source": "tools/FinancialCompletionEvidence.Tests/AccountingCompletionFixtureAdmissionTests.cs",
+    "normalizedSourceSha256": "19041ba55233847b09b6b1ef2f2799ea3a1833994c4731c4879db1ddcd9041f1",
+    "methods": {
+      "ActualConsumedDirectServiceKeysPass": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "BaseUrlSiblingCannotReplaceConsumedDirectKey": {
+        "parameters": [
+          {
+            "name": "key",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "420f38f918d3b6ed012183f9fe61f22f19565adcf62cbc7776ca89c50df60e6a",
+          "58ae39b0a7c2b1ea3b79d5d990760320988efec1afe4b707d0df77d6363c9680",
+          "663e060ef47bd4e175e0a3cb8557e00223083ba73e4e9639baff4d6187af706d"
+        ]
+      },
+      "ActualFileTargetMismatchFails": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "DirectKeyCaseAliasFails": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "DirectKeyColonAliasFails": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "DeclaredDedicatedFileHttpOriginFitsTheSevenHostHttpsGraph": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "AlternateTransportOrUnownedFileTargetsFail": {
+        "parameters": [
+          {
+            "name": "fault",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "ecb8b2c87334c915bf10d52df5c2e87c022a7a9aedf0345376187c82d279d2d5",
+          "c9285d18205e810eff5c0e78978bb2646f618c364303ba9964f86d732dd439e1",
+          "0428293cef57c89ecbc54757a08a71a11e02d1a08b3b2855116d1ab81685e114",
+          "4dd8759cfa7a6a5488b843c38f85a8f7620be4f694bfbda81632409f1c03806c",
+          "26a959d940404b95febfe788c77ba3b8d6f3b75b92f0c220730da845d60fb183",
+          "83ed56fe0101e519468ef460c9bdc0acb731c9a9cf84257d1f013344d66232e3",
+          "57b0742146e7445f21e08c9588c3a43f8e5ab6a493bb1eff77d875f814f82325"
+        ]
+      }
+    }
+  },
+  "Legacy.Maliev.QuotationService.Tests.Tools.AccountingCompletionReceiptTests": {
+    "source": "tools/FinancialCompletionEvidence.Tests/AccountingCompletionReceiptTests.cs",
+    "normalizedSourceSha256": "23dc6399cbfaa4ed1f8c3b94087bef2f33cdf1a6c8cb947845a95a4f81624d5b",
+    "methods": {
+      "ExactRetainedNoSendPhaseMatchesVerifiedOwningReceipt": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "HttpNullableOmissionMatchesDurableResult": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "RetainedPhaseMismatchIsRejected": {
+        "parameters": [
+          {
+            "name": "mutation",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "1c7814b63a0c9eef6a2e127918c2c30610720d11fe6111c1f497b64167a2ae34",
+          "8b5af50e6be2454c69a7ca7f6961cc61f307da9788ecbb26fb47075adbabd7af",
+          "d444cec5eabba7d2bb68f5b9e96347aa4b50b009d7813ff2836256abd4bd9cdc",
+          "c898379ea6238ecad97b351de0977c6ff8b1279211ade3c6363a70b87b03c659",
+          "6a91276ac650c224675bc84476e13ba512308b213d9d17879d1becc5d8211732",
+          "cc603f65bd76b4adc4adf980b3fa11bd178149e9a1b900a4b658996d452598f3",
+          "34e57174a211d86d59b70444d73c7684b3a6dd86555d504537fb1f2b63da8e48",
+          "3bee7b5d1daf0a53269d4fdddbd6199bf24fc90d6c0f54f12bc78e790350ec45",
+          "469f0cfa2d1664d2608825855a625474d91381b44ed92aee16487ff6d26e05bb",
+          "7a8904aaecf45125ad852fec7373773ef955f0ad8459be9739e5d25c5e40ee8c",
+          "21621d6db407720d91c5bd866adce04028f7cc583674b8b27a7161c0779a5be9",
+          "7b0050a1e82fe4e4ca9a2bf2b751745f032be3ae11eecf456fd109d79f53aa32",
+          "d3052b01e45d3fe0a978c668a4e042c21344b432136df57afb583c543764cb13",
+          "530b73e673d036df03daed8769af4b4d99a39650977b13778632650bd6373cf9",
+          "c95b0cdad798f013a533edaa7741f26f3ed80bbf9cb43f61219dc744ffe84837",
+          "1b882daf2e2eccb34bfb6cf4013de600f29de18a49c63695edee19bd1604c662",
+          "d9c559a9957eb69f1d0045eabfdf0c27678156293b72a9d4c986be85437b84d1",
+          "cefe7d1a0376364333bfd17cae93d995552ab6e7ec6252f6003279502fe12955",
+          "d76b7f8aa6cba4b14be0cb228e62da52c2c091301751d7516a1dab5a54ce2895"
+        ]
+      },
+      "DuplicatePhaseOrFileFieldsAreRejected": {
+        "parameters": [
+          {
+            "name": "fault",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "93b78acd8b50b644a8f39b4fa235c89f44603aea56b7a33bccfe4746c472f88f",
+          "66a844ce6e5f9b5c99604c8d1a8ddebf2b7b2c55f1e50f91207bd118b51d7db2"
+        ]
+      },
+      "AlteredHttpReplayIsRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      }
+    }
+  },
+  "InvoiceCompletionProducerAcceptance.FileObjectCompletionEvidenceTests": {
+    "source": "tools/FinancialCompletionEvidence.Tests/FileObjectCompletionEvidenceTests.cs",
+    "normalizedSourceSha256": "6474b63de81122fb1da879a65a5f0968b3e6490809357645fa2d042b7fa13e04",
+    "methods": {
+      "CleanCommittedCoordinatesReturnTypedIndependentFileOperationEvidence": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ExtraOrMissingTotalAndExpectedRowsFail": {
+        "parameters": [
+          {
+            "name": "uploadTotal",
+            "type": "long"
+          },
+          {
+            "name": "uploadExpected",
+            "type": "long"
+          },
+          {
+            "name": "journalTotal",
+            "type": "long"
+          },
+          {
+            "name": "journalExpected",
+            "type": "long"
+          }
+        ],
+        "cases": [
+          "55e96119df52fce37ad0ca0f30f151bb0f27a8b63a235dfa96fb4da7b13ef08c",
+          "77bb34a08ee6396130588e5ffeca90da680feb47c8003cf8e11e01318f1ef89d",
+          "418a1c57ce28fd58dd4c57664e893ef78a7d6f1d234180df395f60c7d4619fa5",
+          "adfcb2c098ae47132286cf053b65a0e7f08d2104ce814df4b1d9e0f03fae350c",
+          "92e12ee5c76c89d7a19fcc8bfc786aa4dbb98edc9c83ad9d14667460bb12a103",
+          "dfd8ec6b87bde7e5d3e3d84f872652474c604f3b95aad3cf3080c5c60b897f5f",
+          "91dbc151e8c7bc1489c88b96f76ffd2b7ce56fb1d49919c775c39deb2bbf1658",
+          "c1351ae9bad213568c06edf592c23cd5c1916c8920b1d01ff652b8f28db5629a"
+        ]
+      },
+      "InvalidScanStageGenerationOrObjectCoordinatesFail": {
+        "parameters": [
+          {
+            "name": "fault",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "b03848653f4054a26644e5a657eb6cd348ee48613bc03dddabc589f4e3ceffb0",
+          "296af19e0c0c32088739d2e750971738a02569e76fb3654f165b18ca1a736062",
+          "47a2905edf8ee4979a14c50c1934a761c9927001286d305ba3cc61316cdab146",
+          "b3e98c1552f2e8ab4a9314d58c9139d4130aa82b1a432a4353b28d23c6cd21af",
+          "148c6966d499fbab6eae3ff117733353888cf4573c743b545d4c9c72d0cc256c",
+          "ef5a9e02e1f0132ffc16d1a996f2e03a408e757dad348954f9f0c8e79a0c8e0b",
+          "d675c7e4d820f40882a5735982d265ea484b75e3699e5e04c78088838df6aafa",
+          "d324dc2ffb0d4f5c5cb178f3c5f7ed757f37e50087d8195d7b6baeb8169354f8",
+          "60ff4051bada729f575247b4caaac53ddc026e202579ded5e9e43fa4c64c034c",
+          "f04c873ecea64c14a9168ae994a63d430c2277ba4d19264a9f892dd4bb645569",
+          "590a91a618856892f0061cb5230de3e5cba2d35725181e4c5ddcd8aeff2fbf63",
+          "b0ce77d1d71ac03893e9014024022d3887d5a9365b4f34dc6ce4f06d5748930c",
+          "836ab76481a37ddd353af8a165cc72b5eecdadfb515b68c42955479b5b1d94a0"
+        ]
+      },
+      "ForgedSingleCountsDoNotAdmitDuplicateActualRows": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "DuplicateSnapshotJsonFieldFailsBeforeDeserialization": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ExactGenerationUriForOwnedLoopbackOriginIsAdmitted": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "CloudOriginCannotBeSelectedByAcceptanceReadback": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "MissingCollectionOrNullRowCannotBecomeFileEvidence": {
+        "parameters": [
+          {
+            "name": "fault",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "682bf747a92c289603c8c165ae36f79af1bc9064f8e2f9081c18de02a97aeec7",
+          "2697a10fb30266e52b351e1fc4cada522bd5cd35528bed914fbde4ae9a59ca35",
+          "572f5ca67d4af88f623ae97430b1f0bae28032064f04135d5c49ed0c2d899b79",
+          "7bdfc205df5d8f4924aedacf844afe4d4f3eaedea9581451a95b44963b75aaa4"
+        ]
+      },
+      "WrongGenerationDuplicateQueryOrEscapedOriginObjectFails": {
+        "parameters": [
+          {
+            "name": "fault",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "26b4f615671f1f61f334b8e440cc29164fe3d4b96954b99b992c9d2e8aa389e3",
+          "c4c0098b0c904f813242b3aa05f4edb023f478047ec8f758a7219af8cedc3b0b",
+          "c34f236ed54f0d09ed7d2766407e09100d9543f70e38519e22afcbda452b83e6",
+          "a39ae0819afc3daee8c479ef3d12c3b38d9f7b63e28bc7638506a2302b6b2b33",
+          "552032a6260ca7c08cbeea6c575c30d555cc4a13e8d119f0c324a4781124caaf",
+          "105475af8f76b492cd8a5f40503d03a0a2dbef368e9c68b8cfb8904addd9e130",
+          "5286d84c6f32e015792eafdc8b4a4a0745372d05f0178ad74749a82cc3ea5084"
+        ]
+      },
+      "ExactBoundedDestinationBytesMatchAccountingDigest": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ChangedTruncatedExtraOrExpiredDestinationBytesFail": {
+        "parameters": [
+          {
+            "name": "fault",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "469f0cfa2d1664d2608825855a625474d91381b44ed92aee16487ff6d26e05bb",
+          "af042324503d36b54ba39d7fda4c1c864b04cda57accbe551ba523ab822682f4",
+          "68ad86edffa34563cdb966af4acfbd518627f6c83126e17f1beb56177b4c6af4",
+          "7d7911bbfe86641c0172cc5d6090fab2e1d0d62030b78e3dc1f30e770bafcf86"
+        ]
+      },
+      "CanceledByteReadFailsBeforeConsumingBody": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "StableReplayRetainsActualRowsAndGeneration": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ChangedDestinationGenerationFailsReplayStability": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "TimestampOnlyPersistenceChangesCannotPassCompletedReplay": {
+        "parameters": [
+          {
+            "name": "changedOwner",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "fea31a72c306aa53ff9879c2ae1d72309d9e5d1ef5932e005400b6b1c3f7e6f4",
+          "dfec66245ca011dea210bde4f350c7b7d7870223a9283f07b807f00fab59cd9e",
+          "ef619aa97c3473fc94dd22fd0a485a933557bf7c990ba097670241379fa93e71"
+        ]
+      },
+      "MissingFullPersistenceSnapshotCannotBecomeReplayEvidence": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "EmptyQuarantineIntentSetCannotBecomeReplayEvidence": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      }
+    }
+  },
+  "FinancialCompletionEvidence.Tests.OwnedGitCommandTests": {
+    "source": "tools/FinancialCompletionEvidence.Tests/OwnedGitCommandTests.cs",
+    "normalizedSourceSha256": "b4b98ed66602cc6dd0f9e48296bb05de2122b4dd8ff3453a79b71ab95acaece9",
+    "methods": {
+      "FastCommandRetainsActualChildExitWithoutInventingMissingObservations": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "OutputBeyondDeclaredBoundFailsAndReapsTheActualChild": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "CancelledBlockingCommandClosesItsOwnedPipeAndReapsItsChild": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "RejectingLedgerCannotLeaveItsObservedBlockingChildRunning": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      }
+    }
+  }
+}

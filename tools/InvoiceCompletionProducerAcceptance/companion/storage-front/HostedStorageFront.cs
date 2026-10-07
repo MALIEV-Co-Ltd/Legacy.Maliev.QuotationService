@@ -30,13 +30,12 @@ public sealed class HostedStorageFront : IDisposable
     // outer owner. No instance may be activated until that concrete caller is reviewed and admitted.
     public HostedStorageFront(Uri observedFrontOrigin, ObservedStorageBackend observedOwnedBackend,
         string fixtureRunId, DateTimeOffset leaseExpiresUtc)
-        : this(observedFrontOrigin, observedOwnedBackend.Origin, fixtureRunId, leaseExpiresUtc,
+        : this(observedFrontOrigin, observedOwnedBackend.AdmitOrigin(fixtureRunId, leaseExpiresUtc), fixtureRunId, leaseExpiresUtc,
             observedOwnedBackend.ObserveAsync,
             (file, token) => CompanionLauncherAdmission.VerifyProcessAsync("File", file.Pid, file.StartedUtc,
                 file.ExecutableDll, file.ExecutableSha256.ToUpperInvariant(), file.RunId, file.ExpiresUtc, token),
             (file, context, token) => new FileSdkCallerGuard(file).VerifyAsync(context, token))
     {
-        observedOwnedBackend.Validate(DateTimeOffset.UtcNow);
     }
 
     // Only the native test assembly can supply controlled protocol/process observers. No runtime configuration selects them.

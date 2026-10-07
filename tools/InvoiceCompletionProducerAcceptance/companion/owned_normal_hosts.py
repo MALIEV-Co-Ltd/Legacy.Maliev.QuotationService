@@ -17,6 +17,8 @@ import time
 import threading
 
 import hosted_companion_resources as h
+import tls_listener_admission as tls
+from tls_listener_admission import TlsIdentity
 
 OWNERS = frozenset({"Auth","Accounting","Quotation","Order","IAM","Document","File","Notification"})
 
@@ -33,6 +35,7 @@ class HostSpec:
     host_port: int
     environment: dict
     heap_limit_bytes: int
+    tls: TlsIdentity | None = None
 
 
 def available_memory_bytes():
@@ -63,6 +66,7 @@ def validate_specs(specs, context, minimum_guard_bytes, available_bytes):
             h.consumed(spec.environment,h.SECTION+"__Enabled","true")
             h.consumed(spec.environment,h.SECTION+"__Admission__fileSourceSha",context.file_sha)
         if spec.owner == "Notification": h.consumed(spec.environment,"Notifications__DeliveryIntentsEnabled","false")
+        tls.validate_configuration(spec)
     # This supplements, never lowers, the existing caller's admission threshold.
     required = max(minimum_guard_bytes,sum(spec.heap_limit_bytes for spec in specs)+1024**3)
     h.require(type(available_bytes) is int and available_bytes >= required,
@@ -88,6 +92,14 @@ def source_and_build(spec):
               and file_hash(dll) == spec.executable_sha256, "Actual normal host source/build differs")
 
 
+def require_unused_expiry_signal():
+    h.require(threading.current_thread() is threading.main_thread()
+              and signal.getsignal(signal.SIGALRM) == signal.SIG_DFL
+              and signal.getitimer(signal.ITIMER_REAL) == (0.0,0.0)
+              and signal.SIGALRM not in signal.pthread_sigmask(signal.SIG_BLOCK,set()),
+              "Dedicated launcher must own an unused unblocked expiry signal/timer")
+
+
 class OwnedNormalHosts:
     """Retains actual child handles, exact kernel generations and finite scope; no broad process selectors."""
     def __init__(self, context, launcher_environment, specs, dotnet_executable, dotnet_sha256, minimum_guard_bytes):
@@ -95,6 +107,8 @@ class OwnedNormalHosts:
         self.dotnet=str(Path(dotnet_executable)); self.dotnet_hash=dotnet_sha256
         self.minimum_guard=minimum_guard_bytes; self.owned=[]; self.closed=False
         self.timer_owned=False
+        self.timer_paused=False
+        self.cleanup_failures=[]
 
     def __enter__(self):
         self.context.validate(self.environment,datetime.now(timezone.utc))
@@ -103,10 +117,9 @@ class OwnedNormalHosts:
                   "Exact normal hosted dotnet executable required")
         validate_specs(self.specs,self.context,self.minimum_guard,available_memory_bytes())
         for spec in self.specs: source_and_build(spec)
-        h.require(threading.current_thread() is threading.main_thread()
-                  and signal.getsignal(signal.SIGALRM) == signal.SIG_DFL
-                  and signal.getitimer(signal.ITIMER_REAL) == (0.0,0.0),
-                  "Dedicated launcher must own an unused expiry signal/timer")
+        for spec in self.specs:
+            if spec.owner != "File": tls.load_identity(spec.tls)
+        require_unused_expiry_signal()
         remaining=(h.instant(self.context.expires_utc)-datetime.now(timezone.utc)).total_seconds()
         h.require(remaining > 0,"Host owner lease expired before timer admission")
         signal.signal(signal.SIGALRM,self.expire)
@@ -122,7 +135,8 @@ class OwnedNormalHosts:
         raise h.AdmissionError("Owned normal-host lease expired; owned children closed")
 
     def start(self, owner):
-        h.require(not self.closed and not any(row[0].owner == owner for row in self.owned), "No duplicate host or closed scope reuse")
+        h.require(not self.closed and not self.cleanup_failures
+                  and not any(row[0].owner == owner for row in self.owned), "No duplicate host or failed/closed scope reuse")
         spec=next((spec for spec in self.specs if spec.owner == owner),None)
         h.require(spec is not None, "Unknown normal host")
         self.context.validate(self.environment,datetime.now(timezone.utc))
@@ -137,14 +151,12 @@ class OwnedNormalHosts:
                             "GITHUB_RUN_ATTEMPT":str(self.context.attempt),"C821_FIXTURE_RUN_ID":self.context.lease_id,
                             "C821_FIXTURE_EXPIRES_UTC":self.context.expires_utc,
                             "DOTNET_GCHeapHardLimit":format(spec.heap_limit_bytes,"x")})
-        host=spec.host_ip if spec.host_ip == "127.0.0.1" else "[::1]"
-        h.consumed(environment,"ASPNETCORE_URLS",f"http://{host}:{spec.host_port}")
+        tls.validate_configuration(spec)
+        if spec.owner != "File": tls.load_identity(spec.tls)
         # Only exact normal dotnet+DLL arguments; reviewed consumed environment carries all configuration.
-        process=subprocess.Popen([self.dotnet,spec.executable_dll],cwd=str(Path(spec.executable_dll).parent),
-                                 env=environment,stdin=subprocess.DEVNULL,start_new_session=False)
-        row=[spec,process,None,datetime.now(timezone.utc).isoformat()]
-        self.owned.append(row)  # Track the child before any further observation can fail.
         try:
+            row=self.spawn_owned(spec,environment)
+            process=row[1]
             deadline=time.monotonic()+2
             while True:
                 h.require(process.poll() is None, "Normal host exited during startup")
@@ -153,6 +165,18 @@ class OwnedNormalHosts:
                     h.require(time.monotonic() < deadline,"Kernel startup observation deadline expired"); time.sleep(0.01)
             h.require(os.readlink(f"/proc/{process.pid}/exe") == self.dotnet, "Started normal executable differs")
             self.context.validate(self.environment,datetime.now(timezone.utc))
+            # Bounded retry permits startup latency, never adopts another process's listener.
+            readiness_deadline=time.monotonic()+15
+            while True:
+                try:
+                    readiness=tls.admit_readiness(spec,process,row[2],self.dotnet,self.context,self.environment,
+                                                  budget=min(5,max(0,readiness_deadline-time.monotonic())))
+                    break
+                except (OSError,h.AdmissionError):
+                    h.require(process.poll() is None and time.monotonic() < readiness_deadline,
+                              "Actual normal listener/TLS readiness failed before finite deadline")
+                    self.context.validate(self.environment,datetime.now(timezone.utc))
+                    time.sleep(0.05)
         except BaseException:
             self.close()
             raise
@@ -160,11 +184,29 @@ class OwnedNormalHosts:
                 "sourceSha":spec.source_sha,"sourceTree":spec.source_tree,"executableDll":spec.executable_dll,
                 "executableSha256":spec.executable_sha256,"dotnetExecutable":self.dotnet,"dotnetSha256":self.dotnet_hash,
                 "hostIp":spec.host_ip,"hostPort":spec.host_port,"expiresUtc":self.context.expires_utc,
-                "heapLimitBytes":spec.heap_limit_bytes,"persistentData":False}
+                "heapLimitBytes":spec.heap_limit_bytes,"persistentData":False,**readiness}
+
+    def spawn_owned(self,spec,environment):
+        # Defer the owner's expiry signal only across child-handle acquisition
+        # and ledger handoff. Restoring the original mask delivers any pending
+        # expiry after the exact child is tracked, without resetting its lease.
+        previous=signal.pthread_sigmask(signal.SIG_BLOCK,{signal.SIGALRM})
+        try:
+            process=subprocess.Popen([self.dotnet,spec.executable_dll],cwd=str(Path(spec.executable_dll).parent),
+                                     env=environment,stdin=subprocess.DEVNULL,start_new_session=False)
+            row=[spec,process,None,datetime.now(timezone.utc).isoformat()]
+            self.owned.append(row)
+            return row
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK,previous)
 
     def close(self):
         if self.closed: return
-        self.release_timer()
+        # Prevent signal re-entry during bounded cleanup, but retain the expiry
+        # handler until every child has actually exited.
+        if self.timer_owned and not self.timer_paused:
+            signal.setitimer(signal.ITIMER_REAL,0)
+            self.timer_paused=True
         failures=[]
         for spec,process,start_ticks,_ in reversed(self.owned):
             try:
@@ -190,15 +232,24 @@ class OwnedNormalHosts:
             except BaseException as error:
                 failures.append((spec.owner,process.pid,type(error).__name__))
         self.closed=not failures
+        self.cleanup_failures=failures
+        if self.closed:
+            self.release_timer()
+        elif self.timer_owned:
+            # Cleanup retries do not extend the admitted service lease. Handles,
+            # exact generations and the original expiry remain retained; an
+            # uncertain process is never signalled merely to satisfy expiry.
+            signal.setitimer(signal.ITIMER_REAL,5)
+            self.timer_paused=False
         h.require(not failures,"Owned normal host cleanup incomplete; retain exact ownership/expiry evidence")
 
     def __exit__(self,exception_type,exception,traceback):
-        try: self.close()
-        finally: self.release_timer()
+        self.close()
         return False
 
     def release_timer(self):
         if self.timer_owned:
-            signal.setitimer(signal.ITIMER_REAL,0)
+            if not self.timer_paused: signal.setitimer(signal.ITIMER_REAL,0)
             signal.signal(signal.SIGALRM,signal.SIG_DFL)
             self.timer_owned=False
+            self.timer_paused=False
