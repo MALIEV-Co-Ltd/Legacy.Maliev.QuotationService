@@ -141,72 +141,155 @@ def verify_audit_configuration(raw):
     require(hashlib.sha256(raw).hexdigest() == AUDIT_CONFIG_SHA256)
 
 
+GRAPH_REJECTION_CATEGORIES = ('GraphEntryRejected', 'RequestedRangeTypeRejected', 'RequestedRangeSyntaxRejected', 'AdmissionArgumentTypesRejected', 'SourceDirectClassificationRejected', 'AssetsVersionRejected', 'AssetsProjectIdentityRejected', 'AssetsOriginalFrameworkRejected', 'AssetsRestoreFrameworkRejected', 'ProjectReferenceInventoryRejected', 'ProjectReferenceIdentityRejected', 'AssetsProjectFrameworkRejected', 'AssetsDirectDependencyShapeRejected', 'AssetsDirectClassificationRejected', 'SourceDirectDuplicateRejected', 'AssetsSourceDirectInventoryRejected', 'AssetsSourceDirectRangeRejected', 'LockVersionRejected', 'LockFrameworkRejected', 'LockDependencyShapeRejected', 'LockDependencyTypeRejected', 'LockDirectDuplicateRejected', 'LockAssetsDirectInventoryRejected', 'LockSourceDirectRangeRejected', 'LockResolvedVersionRejected', 'AssetsLibraryShapeRejected', 'AssetsLibraryTypeRejected', 'LockAssetsPackageInventoryRejected', 'ImportedSourceDigestRejected', 'SevenLockOwnerInventoryRejected', 'ProjectSourceDigestRejected', 'SourcePackageClassificationRejected', 'SameRunLockDigestRejected', 'GlobalAuditedPackageClosureRejected')
+GRAPH_REJECTION_ROLES = ("Graph", *AUDIT_GRAPH)
+GRAPH_ROLE = "Graph"
+GRAPH_POINT = "GraphEntryRejected"
+
+class GraphRejected(RuntimeError):
+    def __init__(self, role, category, kind):
+        require(role in GRAPH_REJECTION_ROLES and category in GRAPH_REJECTION_CATEGORIES)
+        require(kind in ("PredicateRejected", "DataAccessRejected"))
+        self.role = role
+        self.category = category
+        self.kind = kind
+        super().__init__("graph contract rejected")
+
+
+def graph_point(category):
+    global GRAPH_POINT
+    require(category in GRAPH_REJECTION_CATEGORIES)
+    GRAPH_POINT = category
+
+
+def graph_require(value, category):
+    graph_point(category)
+    if not value:
+        raise GraphRejected(GRAPH_ROLE, category, "PredicateRejected")
+
+
+def graph_role(role):
+    global GRAPH_ROLE
+    require(role in GRAPH_REJECTION_ROLES)
+    GRAPH_ROLE = role
+    graph_point("GraphEntryRejected")
+
+
+def graph_guard(function):
+    def guarded(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except GraphRejected:
+            raise
+        except Exception:
+            # No key, path, payload, exception type or exception string leaves private memory.
+            raise GraphRejected(GRAPH_ROLE, GRAPH_POINT, "DataAccessRejected") from None
+    return guarded
+
+
+@graph_guard
 def requested_range(value):
-    require(type(value) is str)
+    graph_point('RequestedRangeTypeRejected')
+    graph_require(type(value) is str, 'RequestedRangeTypeRejected')
     value = value.replace(" ", "")
     if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", value):
         return "[" + value + ",)"
-    require(re.fullmatch(r"\[[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?,(?:[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)?\)", value) is not None)
+    graph_point('RequestedRangeSyntaxRejected')
+    graph_require(re.fullmatch(r"\[[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?,(?:[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?)?\)", value) is not None, 'RequestedRangeSyntaxRejected')
     return value
 
 
+@graph_guard
 def admit_project_assets(assets, lock, expected_path, package_free, expected_references, expected_dependencies):
-    require(type(package_free) is bool and type(expected_references) is set)
-    require(type(expected_dependencies) is dict and (not expected_dependencies) == package_free)
-    require(type(assets) is dict and type(assets.get("version")) is int and assets["version"] == 3)
+    graph_point('AdmissionArgumentTypesRejected')
+    graph_require(type(package_free) is bool and type(expected_references) is set, 'AdmissionArgumentTypesRejected')
+    graph_point('SourceDirectClassificationRejected')
+    graph_require(type(expected_dependencies) is dict and (not expected_dependencies) == package_free, 'SourceDirectClassificationRejected')
+    graph_point('AssetsVersionRejected')
+    graph_require(type(assets) is dict and type(assets.get("version")) is int and assets["version"] == 3, 'AssetsVersionRejected')
     project = assets["project"]
     restore = project["restore"]
-    require(restore["projectPath"] == expected_path and restore["projectUniqueName"] == expected_path)
-    require(restore["originalTargetFrameworks"] == ["net10.0"])
-    require(type(restore["frameworks"]) is dict and set(restore["frameworks"]) == {"net10.0"})
+    graph_point('AssetsProjectIdentityRejected')
+    graph_require(restore["projectPath"] == expected_path and restore["projectUniqueName"] == expected_path, 'AssetsProjectIdentityRejected')
+    graph_point('AssetsOriginalFrameworkRejected')
+    graph_require(restore["originalTargetFrameworks"] == ["net10.0"], 'AssetsOriginalFrameworkRejected')
+    graph_point('AssetsRestoreFrameworkRejected')
+    graph_require(type(restore["frameworks"]) is dict and set(restore["frameworks"]) == {"net10.0"}, 'AssetsRestoreFrameworkRejected')
     references = restore["frameworks"]["net10.0"].get("projectReferences", {})
-    require(type(references) is dict and set(references) == expected_references)
-    require(all(type(value) is dict and value.get("projectPath") == key for key, value in references.items()))
-    require(type(project["frameworks"]) is dict and set(project["frameworks"]) == {"net10.0"})
+    graph_point('ProjectReferenceInventoryRejected')
+    graph_require(type(references) is dict and set(references) == expected_references, 'ProjectReferenceInventoryRejected')
+    graph_point('ProjectReferenceIdentityRejected')
+    graph_require(all(type(value) is dict and value.get("projectPath") == key for key, value in references.items()), 'ProjectReferenceIdentityRejected')
+    graph_point('AssetsProjectFrameworkRejected')
+    graph_require(type(project["frameworks"]) is dict and set(project["frameworks"]) == {"net10.0"}, 'AssetsProjectFrameworkRejected')
     dependencies = project["frameworks"]["net10.0"].get("dependencies", {})
-    require(type(dependencies) is dict and all(type(key) is str and type(value) is dict for key, value in dependencies.items()))
-    require((not dependencies) == package_free)
+    graph_point('AssetsDirectDependencyShapeRejected')
+    graph_require(type(dependencies) is dict and all(type(key) is str and type(value) is dict for key, value in dependencies.items()), 'AssetsDirectDependencyShapeRejected')
+    graph_point('AssetsDirectClassificationRejected')
+    graph_require((not dependencies) == package_free, 'AssetsDirectClassificationRejected')
     expected_ranges = {key.casefold(): value for key, value in expected_dependencies.items()}
-    require(len(expected_ranges) == len(expected_dependencies))
-    require({key.casefold() for key in dependencies} == set(expected_ranges) and len(dependencies) == len(expected_ranges))
-    require(all(requested_range(value["version"]) == requested_range(expected_ranges[key.casefold()]) for key, value in dependencies.items()))
-    require(type(lock) is dict and type(lock.get("version")) is int and lock["version"] in (1, 2))
-    require(type(lock["dependencies"]) is dict and set(lock["dependencies"]) == {"net10.0"})
+    graph_point('SourceDirectDuplicateRejected')
+    graph_require(len(expected_ranges) == len(expected_dependencies), 'SourceDirectDuplicateRejected')
+    graph_point('AssetsSourceDirectInventoryRejected')
+    graph_require({key.casefold() for key in dependencies} == set(expected_ranges) and len(dependencies) == len(expected_ranges), 'AssetsSourceDirectInventoryRejected')
+    graph_point('AssetsSourceDirectRangeRejected')
+    graph_require(all(requested_range(value["version"]) == requested_range(expected_ranges[key.casefold()]) for key, value in dependencies.items()), 'AssetsSourceDirectRangeRejected')
+    graph_point('LockVersionRejected')
+    graph_require(type(lock) is dict and type(lock.get("version")) is int and lock["version"] in (1, 2), 'LockVersionRejected')
+    graph_point('LockFrameworkRejected')
+    graph_require(type(lock["dependencies"]) is dict and set(lock["dependencies"]) == {"net10.0"}, 'LockFrameworkRejected')
     locked = lock["dependencies"]["net10.0"]
-    require(type(locked) is dict and all(type(key) is str and type(value) is dict for key, value in locked.items()))
-    require(all(value.get("type") in ("Direct", "Transitive", "Project") for value in locked.values()))
+    graph_point('LockDependencyShapeRejected')
+    graph_require(type(locked) is dict and all(type(key) is str and type(value) is dict for key, value in locked.items()), 'LockDependencyShapeRejected')
+    graph_point('LockDependencyTypeRejected')
+    graph_require(all(value.get("type") in ("Direct", "Transitive", "Project") for value in locked.values()), 'LockDependencyTypeRejected')
     direct = {key.casefold() for key, value in locked.items() if value["type"] == "Direct"}
-    require(len(direct) == sum(value["type"] == "Direct" for value in locked.values()))
-    require(direct == {key.casefold() for key in dependencies} and len(direct) == len(dependencies))
-    require(all(requested_range(value["requested"]) == requested_range(expected_ranges[key.casefold()]) for key, value in locked.items() if value["type"] == "Direct"))
+    graph_point('LockDirectDuplicateRejected')
+    graph_require(len(direct) == sum(value["type"] == "Direct" for value in locked.values()), 'LockDirectDuplicateRejected')
+    graph_point('LockAssetsDirectInventoryRejected')
+    graph_require(direct == {key.casefold() for key in dependencies} and len(direct) == len(dependencies), 'LockAssetsDirectInventoryRejected')
+    graph_point('LockSourceDirectRangeRejected')
+    graph_require(all(requested_range(value["requested"]) == requested_range(expected_ranges[key.casefold()]) for key, value in locked.items() if value["type"] == "Direct"), 'LockSourceDirectRangeRejected')
     packages = set()
     for name, value in locked.items():
         if value["type"] != "Project":
-            require(type(value.get("resolved")) is str and bool(value["resolved"]))
+            graph_point('LockResolvedVersionRejected')
+            graph_require(type(value.get("resolved")) is str and bool(value["resolved"]), 'LockResolvedVersionRejected')
             packages.add(name.casefold() + "/" + value["resolved"].casefold())
     libraries = assets["libraries"]
-    require(type(libraries) is dict and all(type(key) is str and type(value) is dict for key, value in libraries.items()))
-    require(all(value.get("type") in ("package", "project") for value in libraries.values()))
+    graph_point('AssetsLibraryShapeRejected')
+    graph_require(type(libraries) is dict and all(type(key) is str and type(value) is dict for key, value in libraries.items()), 'AssetsLibraryShapeRejected')
+    graph_point('AssetsLibraryTypeRejected')
+    graph_require(all(value.get("type") in ("package", "project") for value in libraries.values()), 'AssetsLibraryTypeRejected')
     actual_packages = {key.casefold() for key, value in libraries.items() if value["type"] == "package"}
-    require(actual_packages == packages and len(actual_packages) == sum(value["type"] == "package" for value in libraries.values()))
+    graph_point('LockAssetsPackageInventoryRejected')
+    graph_require(actual_packages == packages and len(actual_packages) == sum(value["type"] == "package" for value in libraries.values()), 'LockAssetsPackageInventoryRejected')
     return packages
 
 
+@graph_guard
 def admit_audit_graph(root, locks):
-    require(all(digest(root / path) == expected for path, expected in AUDIT_GRAPH_SOURCE_INPUTS.items()))
+    graph_role("Graph")
+    graph_point('ImportedSourceDigestRejected')
+    graph_require(all(digest(root / path) == expected for path, expected in AUDIT_GRAPH_SOURCE_INPUTS.items()), 'ImportedSourceDigestRejected')
     projects = {name: root / item["path"] for name, item in AUDIT_GRAPH.items()}
     expected_locks = {str(path.parent.joinpath("packages.lock.json").relative_to(root)) for path in projects.values()}
-    require(set(locks) == expected_locks and len(expected_locks) == 7)
+    graph_point('SevenLockOwnerInventoryRejected')
+    graph_require(set(locks) == expected_locks and len(expected_locks) == 7, 'SevenLockOwnerInventoryRejected')
     packages = {}
     records = {}
     for name, item in AUDIT_GRAPH.items():
+        graph_role(name)
         path = projects[name]
-        require(path.is_file() and digest(path) == item["sha256"])
+        graph_point('ProjectSourceDigestRejected')
+        graph_require(path.is_file() and digest(path) == item["sha256"], 'ProjectSourceDigestRejected')
         xml = ET.fromstring(path.read_bytes())
         source_references = [element for element in xml.iter() if element.tag == "PackageReference"]
-        require((not source_references) == item["packageFree"])
+        graph_point('SourcePackageClassificationRejected')
+        graph_require((not source_references) == item["packageFree"], 'SourcePackageClassificationRejected')
         lock_path = path.parent / "packages.lock.json"
-        require(digest(lock_path) == locks[str(lock_path.relative_to(root))])
+        graph_point('SameRunLockDigestRejected')
+        graph_require(digest(lock_path) == locks[str(lock_path.relative_to(root))], 'SameRunLockDigestRejected')
         assets_path = path.parent / "obj/project.assets.json"
         assets = strict_json(assets_path.read_bytes())
         lock = strict_json(lock_path.read_bytes())
@@ -215,8 +298,10 @@ def admit_audit_graph(root, locks):
         records[name] = {"projectSourceSha256": item["sha256"], "assetsSha256": digest(assets_path),
                          "sameRunLockSha256": digest(lock_path), "packageFree": item["packageFree"],
                          "packageCount": len(packages[name]), "framework": "net10.0"}
+    graph_role("Graph")
     covered = set().union(*(packages[name] for name, item in AUDIT_GRAPH.items() if not item["packageFree"]))
-    require(all(value <= covered for value in packages.values()))
+    graph_point('GlobalAuditedPackageClosureRejected')
+    graph_require(all(value <= covered for value in packages.values()), 'GlobalAuditedPackageClosureRejected')
     return records
 
 
@@ -448,6 +533,10 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except GraphRejected as rejection:
+        print(json.dumps({"QualificationFailed": True, "FailedStage": ACTIVE_STAGE, "GraphRole": rejection.role,
+                          "GraphRejectionCategory": rejection.category, "GraphFailureKind": rejection.kind}), flush=True)
+        sys.exit(1)
     except AuditRejected as rejection:
         # Category values are a fixed public vocabulary, never actual JSON/configuration values.
         print(json.dumps({"QualificationFailed": True, "FailedStage": ACTIVE_STAGE, "AuditRejectionCategory": rejection.category, **rejection.evidence}), flush=True)
