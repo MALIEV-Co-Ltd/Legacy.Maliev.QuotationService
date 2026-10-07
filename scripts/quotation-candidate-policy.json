@@ -8,8 +8,8 @@
   "sourceFiles": [
     {
       "path": ".github/workflows/_build-and-test.yml",
-      "sha256": "d47edd6550852c95c42257db4cc860d3b6bb8a30cf061159f565cc3efb0b987c",
-      "bytes": 12715
+      "sha256": "ff27569788b38372f8f141b093561a2f8d2e307b88c3641dfaaceae58470a7d2",
+      "bytes": 12784
     },
     {
       "path": "Legacy.Maliev.QuotationService.Api/Authorization/QuotationIamComposition.cs",
@@ -375,7 +375,12 @@
       "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceCapabilityHttpTests.cs",
       "sha256": "abc2591e9a27b0702014b5e18090c511d3b115cf3ed516918604e5770dcff69f",
       "bytes": 57215
+    },
+    {
+      "path": "scripts/c821-focused-inventory.json",
+      "sha256": "d70e3006ead4436cb5c6a4f18a08b380443ce59e2e90cac0335ec9c2b8d5e928",
+      "bytes": 14419
     }
   ],
-  "manifestSha256": "7c1462ee382cc40ea3f192384b5163d743ae276ad03aa35abee19bc5e339e46c"
+  "manifestSha256": "3cd829ffd130729d41c09488551c69e0e22e4c1c031371c7ded432f85a499d4e"
 }

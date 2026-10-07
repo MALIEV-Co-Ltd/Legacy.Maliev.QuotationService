@@ -108,7 +108,7 @@ def validate_capsule(manifest_bytes, capsule_bytes, policy):
         if type(row["bytes"]) is not int or not 0 < row["bytes"] <= MAX_FILE_BYTES:
             raise ValueError("invalid file size")
         expected[path] = row
-    if len(expected) != 74 or sum(row["bytes"] for row in expected.values()) > MAX_EXPANDED_BYTES:
+    if len(expected) != 75 or sum(row["bytes"] for row in expected.values()) > MAX_EXPANDED_BYTES:
         raise ValueError("invalid expanded inventory")
     files = {}
     with zipfile.ZipFile(io.BytesIO(capsule_bytes)) as archive:
