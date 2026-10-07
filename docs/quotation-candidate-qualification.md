@@ -27,6 +27,12 @@ assembly and execution identities. The known nonserializable `Claim[]` member
 theory can expand during execution: its reviewed source hash and ten-row inventory
 are pinned separately. Other unknown discovery expansions fail closed. Audit
 evidence must cover the exact solution project paths and their `net10.0` frameworks.
+The trusted transport checks both solution and catalogue audits independently:
+literal integer schema version, transitive vulnerable scope, reviewed actual feeds,
+empty well-formed affected-package collections and empty retained stderr are
+required. Catalogue restore feeds must match the genuine local package builder and
+nuget.org; the hosted package cache starts fresh. The frozen candidate ZIP stays
+unchanged when these transport checks are tightened.
 
 Jobs have finite timeouts, read-only repository permissions and a 4096 MiB memory
 admission guard. They use disposable hosted workspaces and start no detached

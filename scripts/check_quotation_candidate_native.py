@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shlex
 import uuid
 import xml.etree.ElementTree as ET
 
@@ -122,14 +123,25 @@ def validate_trx(data, discovered, assembly, delayed=None):
         raise ValueError("suite entries/results identity mismatch")
 
 
-def validate_audit(report, expected_projects):
-    if report.get("version") != 1 or not isinstance(report.get("projects"), list):
+def validate_audit(report, expected_projects, allowed_sources=None):
+    allowed_sources = allowed_sources or {"https://api.nuget.org/v3/index.json"}
+    if type(report.get("version")) is not int or report["version"] != 1 or not isinstance(report.get("projects"), list):
         raise ValueError("missing resolved audit graph")
+    parameters = report.get("parameters")
+    if not isinstance(parameters, str) or not {"--vulnerable", "--include-transitive"} <= set(shlex.split(parameters)):
+        raise ValueError("audit must include vulnerable transitive package scope")
+    sources = report.get("sources")
+    if not isinstance(sources, list) or not sources or any(not isinstance(source, str) or not source for source in sources):
+        raise ValueError("missing/malformed actual audit sources")
+    sources = [source.rstrip("/") for source in sources]
+    if len(sources) != len(set(sources)) or not set(sources) <= allowed_sources or "https://api.nuget.org/v3/index.json" not in sources:
+        raise ValueError("unexpected or unavailable vulnerability feed")
     def check(node):
         if isinstance(node, dict):
             for key, value in node.items():
-                if key in ("vulnerabilities", "errors", "problems") and value:
-                    raise ValueError("audit has findings or unavailable evidence")
+                if key in ("topLevelPackages", "transitivePackages", "vulnerabilities", "errors", "problems", "warnings"):
+                    if not isinstance(value, list) or value:
+                        raise ValueError("audit has affected rows, malformed collections or unavailable evidence")
                 check(value)
         elif isinstance(node, list):
             for child in node:
@@ -141,17 +153,28 @@ def validate_audit(report, expected_projects):
         frameworks = project.get("frameworks")
         if not isinstance(path, str) or not path or not isinstance(frameworks, list) or len(frameworks) != 1:
             raise ValueError("audit project/framework missing")
-        if frameworks[0].get("framework") != "net10.0":
+        if not isinstance(frameworks[0], dict) or frameworks[0].get("framework") != "net10.0":
             raise ValueError("audit framework identity mismatch")
         actual.append(Path(path).resolve())
     if len(actual) != len(set(actual)) or set(actual) != set(expected_projects):
         raise ValueError("audit project graph differs from exact solution")
 
 
+def validate_restore_sources(assets, expected):
+    sources = assets.get("project", {}).get("restore", {}).get("sources")
+    if not isinstance(sources, dict) or {source.rstrip("/") for source in sources} != expected:
+        raise ValueError("resolved restore feed set differs from reviewed source graph")
+
+
+def validate_empty_stderr(path):
+    if not path.is_file() or path.stat().st_size:
+        raise ValueError("missing or nonempty audit stderr evidence")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--candidate", type=Path, required=True)
-    parser.add_argument("--phase", choices=("suite", "audit"), required=True)
+    parser.add_argument("--phase", choices=("suite", "audit", "catalogue-audit"), required=True)
     args = parser.parse_args()
     root = args.candidate.resolve(strict=True)
     if args.phase == "suite":
@@ -171,11 +194,27 @@ def main():
             discovery = discovery_names((directory / (name + ".discovery.log")).read_text())
             validate_trx((directory / (name + ".trx")).read_bytes(), discovery, name, delayed.get(name))
         print("All four actual test projects match original compiled discovery and passed completely.")
-    else:
+    elif args.phase == "audit":
         solution = xml((root / "Legacy.Maliev.QuotationService.slnx").read_bytes())
         expected = [(root / p.attrib["Path"]).resolve() for p in solution.findall("Project")]
+        stderr = root / "TestResults/CandidateNative/package-audit.stderr.log"
+        validate_empty_stderr(stderr)
+        for project in expected:
+            assets = json.loads((project.parent / "obj/project.assets.json").read_text())
+            validate_restore_sources(assets, {"https://api.nuget.org/v3/index.json"})
         validate_audit(json.loads((root / "TestResults/CandidateNative/package-audit.json").read_text()), expected)
         print("Exact solution project/net10.0 vulnerability graph has no findings or unavailable evidence.")
+    else:
+        project = root / "tooling/Quotation.PermissionRegistration.Tests/Quotation.PermissionRegistration.Tests.csproj"
+        local_feed = str(root / ".catalogue-build/packages")
+        assets = json.loads((project.parent / "obj/project.assets.json").read_text())
+        allowed = {"https://api.nuget.org/v3/index.json", local_feed}
+        validate_restore_sources(assets, allowed)
+        directory = root / "TestResults/QuotationCatalogue"
+        stderr = directory / "trusted-vulnerability-audit.stderr.log"
+        validate_empty_stderr(stderr)
+        validate_audit(json.loads((directory / "trusted-vulnerability-audit.json").read_text()), [project.resolve()], allowed)
+        print("Exact catalogue project/net10.0 audit and genuine restore feeds have no affected rows or unavailable evidence.")
 
 
 if __name__ == "__main__":

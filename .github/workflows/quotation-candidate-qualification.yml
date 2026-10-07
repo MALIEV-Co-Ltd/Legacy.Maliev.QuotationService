@@ -52,6 +52,7 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
       MSBUILDDISABLENODEREUSE: '1'
+      NUGET_PACKAGES: ${{ github.workspace }}/.candidate-nuget/packages
     steps:
       - name: Check out protected transport
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -131,7 +132,17 @@ jobs:
             echo 'Existing SDK/test worker blocks new native allocation.' >&2
             exit 1
           fi
+          if [[ -e "$NUGET_PACKAGES" ]]; then
+            echo 'Existing package cache blocks fresh genuine source qualification.' >&2
+            exit 1
+          fi
           bash scripts/run_quotation_catalogue_ci.sh
+          GITHUB_ACTIONS=true IamServiceSourceRoot="$PWD/.catalogue-build/IAM" \
+            dotnet list tooling/Quotation.PermissionRegistration.Tests/Quotation.PermissionRegistration.Tests.csproj \
+            package --vulnerable --include-transitive --no-restore --format json --output-version 1 \
+            > TestResults/QuotationCatalogue/trusted-vulnerability-audit.json \
+            2> TestResults/QuotationCatalogue/trusted-vulnerability-audit.stderr.log
+          python3 -B ../scripts/check_quotation_candidate_native.py --candidate "$PWD" --phase catalogue-audit
       - name: Build first and qualify affected suite and raw coverage floors
         working-directory: candidate
         run: bash ../scripts/run_quotation_candidate_native.sh

@@ -4,6 +4,7 @@ from pathlib import Path
 import unittest
 import uuid
 import xml.etree.ElementTree as ET
+import tempfile
 
 spec = importlib.util.spec_from_file_location("native_gate", Path(__file__).parents[1] / "check_quotation_candidate_native.py")
 gate = importlib.util.module_from_spec(spec)
@@ -11,9 +12,31 @@ spec.loader.exec_module(gate)
 
 
 class NativeEvidenceTests(unittest.TestCase):
+    def test_actual_restore_feeds_must_match_reviewed_graph(self):
+        feed = "https://api.nuget.org/v3/index.json"
+        assets = {"project": {"restore": {"sources": {feed: {}}}}}
+        gate.validate_restore_sources(assets, {feed})
+        for value in ({}, None, [], {"https://other.invalid/index.json": {}}):
+            bad = copy.deepcopy(assets)
+            bad["project"]["restore"]["sources"] = value
+            with self.subTest(sources=value), self.assertRaises(ValueError):
+                gate.validate_restore_sources(bad, {feed})
+
+    def test_audit_stderr_is_required_and_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "audit.stderr.log"
+            with self.assertRaises(ValueError):
+                gate.validate_empty_stderr(path)
+            path.write_bytes(b"")
+            gate.validate_empty_stderr(path)
+            path.write_bytes(b"warning: vulnerability feed unavailable")
+            with self.assertRaises(ValueError):
+                gate.validate_empty_stderr(path)
+
     def test_exact_project_and_framework_audit(self):
         path = Path("exact.csproj").resolve()
-        report = {"version": 1, "projects": [{"path": str(path), "frameworks": [{"framework": "net10.0"}]}]}
+        report = {"version": 1, "parameters": "--vulnerable --include-transitive", "sources": ["https://api.nuget.org/v3/index.json"],
+                  "projects": [{"path": str(path), "frameworks": [{"framework": "net10.0"}]}]}
         gate.validate_audit(report, [path])
         for change in ("missing", "other", "duplicate", "framework", "problems", "vulnerabilities"):
             bad = copy.deepcopy(report)
@@ -28,6 +51,34 @@ class NativeEvidenceTests(unittest.TestCase):
             else:
                 bad[change] = ["unavailable or unsafe"]
             with self.subTest(change=change), self.assertRaises(ValueError):
+                gate.validate_audit(bad, [path])
+        for value in (True, False, "1", 1.0, None):
+            bad = copy.deepcopy(report)
+            bad["version"] = value
+            with self.subTest(version=value), self.assertRaises(ValueError):
+                gate.validate_audit(bad, [path])
+        for key in ("topLevelPackages", "transitivePackages"):
+            for value in ([{"id": "affected-package", "resolvedVersion": "1.0.0"}], {}, None, False, ""):
+                bad = copy.deepcopy(report)
+                bad["projects"][0]["frameworks"][0][key] = value
+                with self.subTest(collection=key, value=value), self.assertRaises(ValueError):
+                    gate.validate_audit(bad, [path])
+        for location in ("root", "framework"):
+            for value in (["NU1900 audit unavailable"], {}, None, False, ""):
+                bad = copy.deepcopy(report)
+                target = bad if location == "root" else bad["projects"][0]["frameworks"][0]
+                target["warnings"] = value
+                with self.subTest(warnings=location, value=value), self.assertRaises(ValueError):
+                    gate.validate_audit(bad, [path])
+        for value in ([], None, "https://api.nuget.org/v3/index.json", ["https://unreviewed.invalid/index.json"]):
+            bad = copy.deepcopy(report)
+            bad["sources"] = value
+            with self.subTest(sources=value), self.assertRaises(ValueError):
+                gate.validate_audit(bad, [path])
+        for value in (None, "--include-transitive", "--vulnerable"):
+            bad = copy.deepcopy(report)
+            bad["parameters"] = value
+            with self.subTest(parameters=value), self.assertRaises(ValueError):
                 gate.validate_audit(bad, [path])
 
     def test_original_discovery_must_be_complete_and_unique(self):
