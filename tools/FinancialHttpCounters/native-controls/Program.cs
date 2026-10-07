@@ -102,9 +102,24 @@ static async Task<bool> ExerciseAsync(string dotnet, string host, bool injectSet
         using (var health = await http.GetAsync("/health", budget.Token)) health.EnsureSuccessStatusCode();
         for (int attempt = 0; ; attempt++)
         {
-            collector.CheckReader();
-            bool canary; lock (collector.Gate) canary = collector.State.HealthCanaries > 0 && collector.State.Heartbeats > 0;
-            if (canary) break;
+            try { collector.CheckReader(); }
+            catch (InvalidDataException)
+            {
+                NativeDiagnostics.ReaderFault(collector.ReaderFault);
+                throw;
+            }
+            bool healthSeen, heartbeatSeen;
+            lock (collector.Gate)
+            {
+                healthSeen = collector.State.HealthCanaries > 0;
+                heartbeatSeen = collector.State.Heartbeats > 0;
+            }
+            if (healthSeen && heartbeatSeen) break;
+            if (attempt >= 100)
+            {
+                NativeDiagnostics.Mark(healthSeen ? NativeControl.CanaryMissingHeartbeat
+                    : heartbeatSeen ? NativeControl.CanaryMissingHealth : NativeControl.CanaryMissingBoth);
+            }
             CounterState.Require(attempt < 100, "Native diagnostic canary not dispatched");
             await Task.Delay(100, budget.Token);
         }
@@ -203,6 +218,24 @@ internal static class NativeDiagnostics
 {
     internal static bool EmissionFailed { get; private set; }
 
+    internal static void ReaderFault(ReaderFaultCategory category)
+    {
+        Mark(category switch
+        {
+            ReaderFaultCategory.ParserSetup => NativeControl.ReaderParserSetup,
+            ReaderFaultCategory.ProcessIdentity => NativeControl.ReaderProcessIdentity,
+            ReaderFaultCategory.ListenerSchema => NativeControl.ReaderListenerSchema,
+            ReaderFaultCategory.BridgeSchema => NativeControl.ReaderBridgeSchema,
+            ReaderFaultCategory.ProjectionArguments => NativeControl.ReaderProjectionArguments,
+            ReaderFaultCategory.CounterState => NativeControl.ReaderCounterState,
+            ReaderFaultCategory.ParserRead => NativeControl.ReaderParserRead,
+            ReaderFaultCategory.ParserCompletion => NativeControl.ReaderParserCompletion,
+            ReaderFaultCategory.StreamCompletion => NativeControl.ReaderStreamCompletion,
+            ReaderFaultCategory.Cancelled => NativeControl.ReaderCancelled,
+            _ => NativeControl.ReaderUnknown
+        });
+    }
+
     internal static void Mark(NativeControl control)
     {
         // Fixed strings only; diagnostic failure never skips owned-resource cleanup.
@@ -248,6 +281,20 @@ internal static class NativeDiagnostics
             NativeControl.CodecBegin => "{\"NativeControl\":\"CodecBegin\"}",
             NativeControl.CodecResult => "{\"NativeControl\":\"CodecResult\"}",
             NativeControl.Receipt => "{\"NativeControl\":\"Receipt\"}",
+            NativeControl.ReaderParserSetup => "{\"NativeControl\":\"ReaderParserSetup\"}",
+            NativeControl.ReaderProcessIdentity => "{\"NativeControl\":\"ReaderProcessIdentity\"}",
+            NativeControl.ReaderListenerSchema => "{\"NativeControl\":\"ReaderListenerSchema\"}",
+            NativeControl.ReaderBridgeSchema => "{\"NativeControl\":\"ReaderBridgeSchema\"}",
+            NativeControl.ReaderProjectionArguments => "{\"NativeControl\":\"ReaderProjectionArguments\"}",
+            NativeControl.ReaderCounterState => "{\"NativeControl\":\"ReaderCounterState\"}",
+            NativeControl.ReaderParserRead => "{\"NativeControl\":\"ReaderParserRead\"}",
+            NativeControl.ReaderParserCompletion => "{\"NativeControl\":\"ReaderParserCompletion\"}",
+            NativeControl.ReaderStreamCompletion => "{\"NativeControl\":\"ReaderStreamCompletion\"}",
+            NativeControl.ReaderCancelled => "{\"NativeControl\":\"ReaderCancelled\"}",
+            NativeControl.ReaderUnknown => "{\"NativeControl\":\"ReaderUnknown\"}",
+            NativeControl.CanaryMissingHeartbeat => "{\"NativeControl\":\"CanaryMissingHeartbeat\"}",
+            NativeControl.CanaryMissingHealth => "{\"NativeControl\":\"CanaryMissingHealth\"}",
+            NativeControl.CanaryMissingBoth => "{\"NativeControl\":\"CanaryMissingBoth\"}",
             _ => null
         };
         if (marker is null) { EmissionFailed = true; return; }
@@ -297,5 +344,19 @@ internal enum NativeControl
     FaultResult,
     CodecBegin,
     CodecResult,
-    Receipt
+    Receipt,
+    ReaderParserSetup,
+    ReaderProcessIdentity,
+    ReaderListenerSchema,
+    ReaderBridgeSchema,
+    ReaderProjectionArguments,
+    ReaderCounterState,
+    ReaderParserRead,
+    ReaderParserCompletion,
+    ReaderStreamCompletion,
+    ReaderCancelled,
+    ReaderUnknown,
+    CanaryMissingHeartbeat,
+    CanaryMissingHealth,
+    CanaryMissingBoth
 }

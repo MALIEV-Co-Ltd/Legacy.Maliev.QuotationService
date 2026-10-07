@@ -56,4 +56,21 @@ var decoded = CounterState.DecodeArguments(new object[] { new Dictionary<string,
 Check(decoded["Id"] == "private-id");
 using var bytes = new BudgetStream(new MemoryStream([1, 2, 3]), 2, CancellationToken.None);
 Reject(() => bytes.ReadExactly(new byte[3]));
+// Decoder mutations exercise rejected wire structures rather than supplied counters.
+Reject(() => CounterState.DecodeArguments("private-unstructured-value"));
+Reject(() => CounterState.DecodeArguments(new object[9]));
+Reject(() => CounterState.DecodeArguments(new object[] { null! }));
+Reject(() => CounterState.DecodeArguments(new object[] { new object() }));
+Reject(() => CounterState.DecodeArguments(new object[] { new Dictionary<string, object> { ["Key"] = "Id" } }));
+Reject(() => CounterState.DecodeArguments(new object[] { new Dictionary<string, object> { ["Key"] = 1, ["Value"] = "private" } }));
+Reject(() => CounterState.DecodeArguments(new object[] { new Dictionary<string, object> { ["Key"] = "Id", ["Value"] = 1 } }));
+Reject(() => CounterState.DecodeArguments(new object[] { new Dictionary<string, object> { ["Key"] = new string('k', 33), ["Value"] = "private" } }));
+Reject(() => CounterState.DecodeArguments(new object[] { new Dictionary<string, object> { ["Key"] = "Id", ["Value"] = new string('v', 4097) } }));
+Reject(() => CounterState.DecodeArguments(new object[]
+{
+    new Dictionary<string, object> { ["Key"] = "Id", ["Value"] = "private-a" },
+    new Dictionary<string, object> { ["Key"] = "Id", ["Value"] = "private-b" }
+}));
+var nullProjection = CounterState.DecodeArguments(new object[] { new Dictionary<string, object> { ["Key"] = "Status", ["Value"] = null! } });
+Check(nullProjection["Status"] == "");
 Console.WriteLine(JsonSerializer.Serialize(new { ControlledCasesPassed = controls, HostedEventPipeWitness = false, GenuineEightHostFinancialAccepted = false }));

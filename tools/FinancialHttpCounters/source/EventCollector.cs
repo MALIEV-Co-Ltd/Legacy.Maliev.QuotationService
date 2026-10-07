@@ -26,6 +26,8 @@ public sealed class EventCollector : IAsyncDisposable
     private CancellationTokenSource lifetime;
     private bool stopAttempted;
     private bool stopUncertain;
+    private int readerFault;
+    public ReaderFaultCategory ReaderFault => (ReaderFaultCategory)Volatile.Read(ref readerFault);
 
     public EventCollector(ProcessPin pin, Uri document, Uri file, CancellationToken token)
     {
@@ -53,32 +55,54 @@ public sealed class EventCollector : IAsyncDisposable
         stream = new BudgetStream(session.EventStream, 64 * 1024 * 1024, lifetime.Token);
         reader = Task.Factory.StartNew(() =>
         {
-            using var source = new EventPipeEventSource(stream);
-            source.Dynamic.All += entry =>
+            ReaderFaultCategory stage = ReaderFaultCategory.ParserSetup;
+            try
             {
-                CounterState.Require(entry.ProcessID == Pin.Pid, "Actual EventPipe stream PID differs");
-                lock (Gate)
+                stage = ReaderFaultCategory.ParserSetup;
+                using var source = new EventPipeEventSource(stream);
+                source.Dynamic.All += entry =>
                 {
-                    if (entry.ProviderName == "System.Runtime" && entry.EventName == "EventCounters")
-                    { State.Heartbeat(); return; }
-                    if (entry.ProviderName != "Microsoft-Diagnostics-DiagnosticSource") return;
-                    if ((int)entry.ID == 10)
+                    stage = ReaderFaultCategory.ProcessIdentity;
+                    CounterState.Require(entry.ProcessID == Pin.Pid, "Actual EventPipe stream PID differs");
+                    lock (Gate)
                     {
-                        CounterState.Require(entry.PayloadNames.SequenceEqual(new[] { "SourceName" }), "Listener metadata schema changed");
-                        State.Listener((string)entry.PayloadValue(0)); return;
+                        if (entry.ProviderName == "System.Runtime" && entry.EventName == "EventCounters")
+                        { State.Heartbeat(); stage = ReaderFaultCategory.ParserRead; return; }
+                        if (entry.ProviderName != "Microsoft-Diagnostics-DiagnosticSource") { stage = ReaderFaultCategory.ParserRead; return; }
+                        if ((int)entry.ID == 10)
+                        {
+                            stage = ReaderFaultCategory.ListenerSchema;
+                            CounterState.Require(entry.PayloadNames.SequenceEqual(new[] { "SourceName" }), "Listener metadata schema changed");
+                            State.Listener((string)entry.PayloadValue(0)); stage = ReaderFaultCategory.ParserRead; return;
+                        }
+                        stage = ReaderFaultCategory.BridgeSchema;
+                        CounterState.Require((int)entry.ID == 2 && entry.PayloadNames.SequenceEqual(new[] { "SourceName", "EventName", "Arguments" }),
+                            "DiagnosticSource bridge schema changed");
+                        stage = ReaderFaultCategory.ProjectionArguments;
+                        var arguments = CounterState.DecodeArguments(entry.PayloadValue(2));
+                        stage = ReaderFaultCategory.CounterState;
+                        State.Record((string)entry.PayloadValue(0), (string)entry.PayloadValue(1),
+                            arguments, entry.TimeStamp.ToUniversalTime());
+                        stage = ReaderFaultCategory.ParserRead;
                     }
-                    CounterState.Require((int)entry.ID == 2 && entry.PayloadNames.SequenceEqual(new[] { "SourceName", "EventName", "Arguments" }),
-                        "DiagnosticSource bridge schema changed");
-                    State.Record((string)entry.PayloadValue(0), (string)entry.PayloadValue(1),
-                        CounterState.DecodeArguments(entry.PayloadValue(2)), entry.TimeStamp.ToUniversalTime());
-                }
-            };
-            CounterState.Require(source.Process(), "EventPipe parser did not finish");
-            Lost = source.EventsLost;
-            // Check the owned stream itself has a real EOF after parser completion.
-            CounterState.Require(stream.Read(new byte[1], 0, 1) == 0 && stream.SawEof && Lost == 0,
-                "Complete EOF and zero sequence-reported event loss required");
-            Drained = true;
+                };
+                stage = ReaderFaultCategory.ParserRead;
+                bool processed = source.Process();
+                stage = ReaderFaultCategory.ParserCompletion;
+                CounterState.Require(processed, "EventPipe parser did not finish");
+                Lost = source.EventsLost;
+                stage = ReaderFaultCategory.StreamCompletion;
+                // Check the owned stream itself has a real EOF after parser completion.
+                CounterState.Require(stream.Read(new byte[1], 0, 1) == 0 && stream.SawEof && Lost == 0,
+                    "Complete EOF and zero sequence-reported event loss required");
+                Drained = true;
+            }
+            catch (Exception error)
+            {
+                Volatile.Write(ref readerFault, (int)(error is OperationCanceledException
+                    ? ReaderFaultCategory.Cancelled : stage));
+                throw;
+            }
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
@@ -159,4 +183,20 @@ public sealed class BudgetStream(Stream inner, long maximum, CancellationToken t
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
     public override void SetLength(long value) => throw new NotSupportedException();
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+}
+
+// Constant operation categories only: no exception types/text or trace values.
+public enum ReaderFaultCategory
+{
+    None,
+    ParserSetup,
+    ProcessIdentity,
+    ListenerSchema,
+    BridgeSchema,
+    ProjectionArguments,
+    CounterState,
+    ParserRead,
+    ParserCompletion,
+    StreamCompletion,
+    Cancelled
 }
