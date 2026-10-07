@@ -15,8 +15,14 @@ gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
 
 
-def packet(mutate=None):
+def packet(mutate=None, scope=None):
     files = {f"scripts/source-{n}.txt": f"raw-{n}\r\n".encode() for n in range(75)}
+    if scope == "admission-race":
+        files = {path: b"raw\r\n" for path in (
+            "Legacy.Maliev.QuotationService.Data/QuotationRepositories.cs",
+            "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceCapabilityHttpTests.cs",
+            "scripts/c821-focused-inventory.json",
+        )}
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as archive:
         for path, data in files.items():
@@ -32,11 +38,47 @@ def packet(mutate=None):
          "capsuleBytes": len(capsule), "capsuleSha256": gate.sha256(capsule)}
     raw = json.dumps(m).encode()
     policy = {k: copy.deepcopy(m[k]) for k in ("acceptedBase", "sourcePins", "sourceFiles")}
+    if scope is not None:
+        m["qualificationScope"] = scope
+        policy["qualificationScope"] = scope
+        raw = json.dumps(m).encode()
     policy["manifestSha256"] = gate.sha256(raw)
     return raw, capsule, policy, files
 
 
 class TransportTests(unittest.TestCase):
+    def test_admission_scope_accepts_only_exact_three_paths(self):
+        raw, capsule, policy, files = packet(scope="admission-race")
+        _, actual = gate.validate_capsule(raw, capsule, policy)
+        self.assertEqual(files, actual)
+        for replacement in ("other.cs", "scripts/source-0.txt"):
+            m, p = json.loads(raw), copy.deepcopy(policy)
+            m["sourceFiles"][0]["path"] = replacement
+            p["sourceFiles"] = copy.deepcopy(m["sourceFiles"])
+            changed = json.dumps(m).encode()
+            p["manifestSha256"] = gate.sha256(changed)
+            with self.subTest(replacement=replacement), self.assertRaisesRegex(ValueError, "expanded inventory"):
+                gate.validate_capsule(changed, capsule, p)
+
+    def test_full_scope_cannot_consume_three_file_capsule(self):
+        raw, capsule, policy, _ = packet(scope="admission-race")
+        m = json.loads(raw)
+        del m["qualificationScope"]
+        del policy["qualificationScope"]
+        raw = json.dumps(m).encode()
+        policy["manifestSha256"] = gate.sha256(raw)
+        with self.assertRaisesRegex(ValueError, "expanded inventory"):
+            gate.validate_capsule(raw, capsule, policy)
+
+    def test_unknown_or_mismatched_scope_is_denied(self):
+        raw, capsule, policy, _ = packet(scope="unknown")
+        with self.assertRaisesRegex(ValueError, "unknown qualification scope"):
+            gate.validate_capsule(raw, capsule, policy)
+        raw, capsule, policy, _ = packet(scope="admission-race")
+        policy["qualificationScope"] = "full-candidate"
+        with self.assertRaisesRegex(ValueError, "qualification scope mismatch"):
+            gate.validate_capsule(raw, capsule, policy)
+
     def test_raw_crlf_exact_readback(self):
         raw, capsule, policy, files = packet()
         _, actual = gate.validate_capsule(raw, capsule, policy)

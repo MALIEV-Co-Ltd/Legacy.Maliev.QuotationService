@@ -108,7 +108,20 @@ def validate_capsule(manifest_bytes, capsule_bytes, policy):
         if type(row["bytes"]) is not int or not 0 < row["bytes"] <= MAX_FILE_BYTES:
             raise ValueError("invalid file size")
         expected[path] = row
-    if len(expected) != 75 or sum(row["bytes"] for row in expected.values()) > MAX_EXPANDED_BYTES:
+    scope = policy.get("qualificationScope", "full-candidate")
+    if m.get("qualificationScope", "full-candidate") != scope:
+        raise ValueError("qualification scope mismatch")
+    if scope == "full-candidate":
+        valid_inventory = len(expected) == 75
+    elif scope == "admission-race":
+        valid_inventory = set(expected) == {
+            "Legacy.Maliev.QuotationService.Data/QuotationRepositories.cs",
+            "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceCapabilityHttpTests.cs",
+            "scripts/c821-focused-inventory.json",
+        }
+    else:
+        raise ValueError("unknown qualification scope")
+    if not valid_inventory or sum(row["bytes"] for row in expected.values()) > MAX_EXPANDED_BYTES:
         raise ValueError("invalid expanded inventory")
     files = {}
     with zipfile.ZipFile(io.BytesIO(capsule_bytes)) as archive:
