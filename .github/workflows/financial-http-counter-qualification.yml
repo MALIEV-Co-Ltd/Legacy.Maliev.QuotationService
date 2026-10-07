@@ -53,7 +53,7 @@ jobs:
           # NuGet JSON v1 schema checked against primary ListPackageJsonRenderer/GetReportParameters:
           # https://github.com/NuGet/NuGet.Client/blob/fa1508b1123e9d1d86a39cd702f969d3db242884/src/NuGet.Core/NuGet.CommandLine.XPlat/ListPackage/ListPackageJsonRenderer.cs
           # Empty top-level arrays and omitted transitive arrays are the documented clean vulnerable report.
-          SOURCE_INVENTORY = [{'path': 'controls/FinancialHttpCounters.Controls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'controls/Program.cs', 'rawSha256': '6ab9f96662edcdaf3157e5d06302ed406ab9cbaa67e9c18e2baceac9e7de98c7'}, {'path': 'descriptor-provenance.json', 'rawSha256': '475008becd77ae3555fcf6ddad4bc18406bdf563441c74af4d7fdb9511778da3'}, {'path': 'native-controls/AdmissionNativeControls.cs', 'rawSha256': '3f9475e136234dabd77aef916d2ea4a810bf0f5b688d10cf4fc9288e5acc782d'}, {'path': 'native-controls/FinancialHttpCounters.NativeControls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'native-controls/Program.cs', 'rawSha256': 'a2fa61169653c8575db645a988b9bbb26959f15ef042d90d0f35009c27db5392'}, {'path': 'README.md', 'rawSha256': '4d3820d800d257c97a4c87aeef595930e5a8ba9f2768c7a6d3546034871625aa'}, {'path': 'source/CounterState.cs', 'rawSha256': 'f47257546fa7cc1df99f023068a10446f12890d5a404ba227901612a13faa158'}, {'path': 'source/DescriptorBoundFrontFile.cs', 'rawSha256': '79e6c218c9776888e86cf7fc92ed3f16b8e26058b91df86ab5e2166441e9b185'}, {'path': 'source/DescriptorBoundOutput.cs', 'rawSha256': 'b6c1d45b958db1362c784b64154fdd552711639d5fb5f065a273dd4f9fe974ac'}, {'path': 'source/EventCollector.cs', 'rawSha256': 'feecc76366cdb2c892b649b2eb396bcd6e2e02556b2f050b3a404d27bc71fbfb'}, {'path': 'source/FinancialHttpCounters.csproj', 'rawSha256': '5254ec772153643963d71a2b03d76b8dcc230f9a4a69978d5c7bc6367a8423f9'}, {'path': 'source/ProcessAdmission.cs', 'rawSha256': '53473f8d9497b37d4efafde158b8712eab06fde8a8832c6679652b41fddb374c'}, {'path': 'source/Program.cs', 'rawSha256': 'bb227e581745a355c8df6e3bba50c6cd29d0222d72b5ea073a2266de6c4ea461'}, {'path': 'source-provenance.json', 'rawSha256': '5e66670d9469696a85d14bb74b5e89a2080fa19d59f94662aa708f54a49a4a62'}, {'path': 'witness-host/FinancialHttpCounters.WitnessHost.csproj', 'rawSha256': '25e9385fa7053264d6b20be455942ad1548a587fc006e017350d193d6a1a36b4'}, {'path': 'witness-host/Program.cs', 'rawSha256': 'be6dddd2461f1077ff0832859bd8c63bd28ed6ef2d995fc5054556481ddd775e'}]
+          SOURCE_INVENTORY = [{'path': 'controls/FinancialHttpCounters.Controls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'controls/Program.cs', 'rawSha256': '6ab9f96662edcdaf3157e5d06302ed406ab9cbaa67e9c18e2baceac9e7de98c7'}, {'path': 'descriptor-provenance.json', 'rawSha256': '475008becd77ae3555fcf6ddad4bc18406bdf563441c74af4d7fdb9511778da3'}, {'path': 'native-controls/AdmissionNativeControls.cs', 'rawSha256': 'dfa0bd6ebdd7ff770b5a4c6463d71835c112761a54510998cf5600e266c4efe6'}, {'path': 'native-controls/FinancialHttpCounters.NativeControls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'native-controls/Program.cs', 'rawSha256': '819a3cd9e8d3c2478806cc4a11279d79ce3a57ffb7be33e1d62422b418934319'}, {'path': 'README.md', 'rawSha256': '4d3820d800d257c97a4c87aeef595930e5a8ba9f2768c7a6d3546034871625aa'}, {'path': 'source/CounterState.cs', 'rawSha256': 'f47257546fa7cc1df99f023068a10446f12890d5a404ba227901612a13faa158'}, {'path': 'source/DescriptorBoundFrontFile.cs', 'rawSha256': '79e6c218c9776888e86cf7fc92ed3f16b8e26058b91df86ab5e2166441e9b185'}, {'path': 'source/DescriptorBoundOutput.cs', 'rawSha256': 'b6c1d45b958db1362c784b64154fdd552711639d5fb5f065a273dd4f9fe974ac'}, {'path': 'source/EventCollector.cs', 'rawSha256': 'feecc76366cdb2c892b649b2eb396bcd6e2e02556b2f050b3a404d27bc71fbfb'}, {'path': 'source/FinancialHttpCounters.csproj', 'rawSha256': '5254ec772153643963d71a2b03d76b8dcc230f9a4a69978d5c7bc6367a8423f9'}, {'path': 'source/ProcessAdmission.cs', 'rawSha256': '53473f8d9497b37d4efafde158b8712eab06fde8a8832c6679652b41fddb374c'}, {'path': 'source/Program.cs', 'rawSha256': 'bb227e581745a355c8df6e3bba50c6cd29d0222d72b5ea073a2266de6c4ea461'}, {'path': 'source-provenance.json', 'rawSha256': '5e66670d9469696a85d14bb74b5e89a2080fa19d59f94662aa708f54a49a4a62'}, {'path': 'witness-host/FinancialHttpCounters.WitnessHost.csproj', 'rawSha256': '25e9385fa7053264d6b20be455942ad1548a587fc006e017350d193d6a1a36b4'}, {'path': 'witness-host/Program.cs', 'rawSha256': 'be6dddd2461f1077ff0832859bd8c63bd28ed6ef2d995fc5054556481ddd775e'}]
           PROJECTS = (
               'source/FinancialHttpCounters.csproj',
               'controls/FinancialHttpCounters.Controls.csproj',
@@ -239,6 +239,41 @@ jobs:
               return codes, [{'Source': path, 'Line': line, 'Column': column, 'Code': code}
                              for path, line, column, code in sorted(locations)[:64]]
 
+          NATIVE_CONTROL_ORDER = ('Context', 'AdmissionBegin', 'AdmissionRootCreate', 'AdmissionFifoCreate', 'AdmissionFifoReject', 'AdmissionDeviceReject', 'AdmissionDirectoryReject', 'AdmissionPrivateFileCreate', 'AdmissionSymlinkReplacement', 'AdmissionSymlinkRecovery', 'AdmissionSameBytesReplacement', 'AdmissionReplacementRecovery', 'AdmissionModeReject', 'AdmissionExpiredReject', 'AdmissionOutputPrepare', 'AdmissionRedirectedOutput', 'AdmissionReplacedOutput', 'AdmissionPositiveOutput', 'AdmissionCleanup', 'CallerPaths', 'FaultBegin', 'WitnessReserve', 'WitnessConfigure', 'WitnessBirth', 'WitnessSetup', 'WitnessInjectedFailure', 'WitnessCleanup', 'FaultResult', 'CodecBegin', 'WitnessReserve', 'WitnessConfigure', 'WitnessBirth', 'WitnessSetup', 'WitnessReaders', 'WitnessReadiness', 'WitnessPin', 'WitnessCollectorStart', 'WitnessCanary', 'WitnessCompletion', 'WitnessReplay', 'WitnessDrain', 'WitnessCounters', 'WitnessCleanup', 'CodecResult', 'Receipt')
+          NATIVE_MARKER_LINES = {json.dumps({'NativeControl': control}, separators=(',', ':')).encode('ascii'): control
+                                 for control in frozenset(NATIVE_CONTROL_ORDER)}
+
+          def native_control_projection(raw, succeeded=False):
+              require(type(raw) is bytes and len(raw) <= 4 * 1024 * 1024 and type(succeeded) is bool)
+              markers = []; unknown = malformed = False
+              for line in raw.splitlines():
+                  if line in NATIVE_MARKER_LINES:
+                      markers.append(NATIVE_MARKER_LINES[line]); require(len(markers) <= 128)
+                  elif line.strip():
+                      unknown = True
+                      if line.startswith(b'{"NativeControl"'): malformed = True
+              observed = tuple(markers)
+              valid_orders = {NATIVE_CONTROL_ORDER[:index] for index in range(len(NATIVE_CONTROL_ORDER) + 1)}
+              # Failure unwinds through the existing admission/fault/codec finally blocks.
+              # A cleanup marker means entered cleanup, never verified cleanup or acceptance.
+              for index in range(1, len(NATIVE_CONTROL_ORDER)):
+                  prefix = NATIVE_CONTROL_ORDER[:index]
+                  if index <= NATIVE_CONTROL_ORDER.index('AdmissionCleanup'):
+                      if prefix[-1] != 'AdmissionCleanup': valid_orders.add(prefix + ('AdmissionCleanup',))
+                  elif NATIVE_CONTROL_ORDER.index('FaultBegin') < index <= NATIVE_CONTROL_ORDER.index('FaultResult'):
+                      if prefix[-1] != 'WitnessCleanup': valid_orders.add(prefix + ('WitnessCleanup',))
+                  elif NATIVE_CONTROL_ORDER.index('CodecBegin') < index <= NATIVE_CONTROL_ORDER.index('CodecResult'):
+                      if prefix[-1] != 'WitnessCleanup': valid_orders.add(prefix + ('WitnessCleanup',))
+              accepted = bool(markers) and not malformed and observed in valid_orders
+              if succeeded:
+                  canonical = b''.join(json.dumps({'NativeControl': control}, separators=(',', ':')).encode('ascii') + b'\n'
+                                       for control in NATIVE_CONTROL_ORDER)
+                  require(accepted and observed == NATIVE_CONTROL_ORDER and not unknown and raw == canonical)
+              return {'NativeMarkerProtocolAccepted': accepted, 'NativeMarkerCount': len(markers),
+                      'NativeControlsObserved': markers[-8:] if accepted else [],
+                      'NativeLastControl': markers[-1] if accepted and markers else None,
+                      'NativeLastOperation': next((x for x in reversed(markers) if x not in ('AdmissionCleanup', 'WitnessCleanup')), None) if accepted else None}
+
           def run(argv, cwd, seconds, stderr_must_be_empty=True, stage="supervisor-control", project=None):
               global LAST_CLEANUP
               LAST_CLEANUP = None
@@ -266,10 +301,14 @@ jobs:
                       if status is not None: break
                       time.sleep(0.01)
                   code = status.si_status if status.si_code == os.CLD_EXITED else -status.si_status
-                  if code != 0 or (stderr_must_be_empty and error.strip()):
+                  if stage == 'native' and code == 0:
+                      native_control_projection(bytes(error), succeeded=True)
+                  if code != 0 or (stderr_must_be_empty and error.strip() and stage != 'native'):
                       codes, locations = public_diagnostics(bytes(output + b'\n' + error), cwd, stage)
-                      print(json.dumps({'QualificationStage': stage, 'Project': project, 'OwnedCommandExitCode': code,
-                                        'DiagnosticCodes': codes, 'SourceDiagnostics': locations}), file=sys.stderr)
+                      diagnostics = {'QualificationStage': stage, 'Project': project, 'OwnedCommandExitCode': code,
+                                     'DiagnosticCodes': codes, 'SourceDiagnostics': locations}
+                      if stage == 'native': diagnostics.update(native_control_projection(bytes(error)))
+                      print(json.dumps(diagnostics), file=sys.stderr)
                       raise Refused()
                   require(re.search(rb'\b(?:warning|error)\s+(?:NU|CS|MSB|CA)[0-9]+', output, re.I) is None)
                   return bytes(output)
