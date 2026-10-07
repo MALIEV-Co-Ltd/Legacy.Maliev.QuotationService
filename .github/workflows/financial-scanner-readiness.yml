@@ -3,6 +3,8 @@ name: Financial fixture readiness
 on:
   pull_request:
     branches: [main, develop, staging]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -14,6 +16,7 @@ concurrency:
 
 jobs:
   scanner-readiness:
+    if: github.event_name != 'pull_request' || (github.event.pull_request.number == 127 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'codex/financial-hosted-acceptance-20261007')
     env:
       FINANCIAL_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     runs-on: ubuntu-latest
@@ -42,6 +45,7 @@ jobs:
           retention-days: 7
 
   native-start-observer:
+    if: github.event_name != 'pull_request' || (github.event.pull_request.number == 127 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'codex/financial-hosted-acceptance-20261007')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
