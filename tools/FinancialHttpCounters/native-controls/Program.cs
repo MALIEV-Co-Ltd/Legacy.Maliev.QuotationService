@@ -142,8 +142,20 @@ static async Task<bool> ExerciseAsync(string dotnet, string host, bool injectSet
         NativeDiagnostics.Mark(NativeControl.WitnessCounters);
         var first = NativeDiagnostics.FinalizeWindow(collector.State, before, completion, TimeSpan.FromMilliseconds(250));
         var second = NativeDiagnostics.FinalizeWindow(collector.State, completion, after, TimeSpan.FromMilliseconds(250));
-        NativeDiagnostics.RequirePredicate(first["AccountingInvoiceRenderPost"].Started == 1 && first["AccountingFileUploadPost"].Started == 1
-            && first["AccountingOtherUploadBoundaryMethod"].Started == 1 && second.Values.All(x => x.Started == 0), "Actual native POST/DELETE/replay decoding differs", NativeControl.ExpectedEffectCounts);
+        try
+        {
+            NativeDiagnostics.RequirePredicate(first["AccountingInvoiceRenderPost"].Started == 1 && first["AccountingFileUploadPost"].Started == 1
+                && first["AccountingOtherUploadBoundaryMethod"].Started == 1 && second.Values.All(x => x.Started == 0), "Actual native POST/DELETE/replay decoding differs", NativeControl.ExpectedEffectCounts);
+        }
+        catch (InvalidDataException)
+        {
+            // Fixed equality flags only, derived from the same actual finalized counts.
+            NativeDiagnostics.EffectEquality(first["AccountingInvoiceRenderPost"].Started == 1,
+                first["AccountingFileUploadPost"].Started == 1,
+                first["AccountingOtherUploadBoundaryMethod"].Started == 1,
+                second.Values.All(x => x.Started == 0));
+            throw;
+        }
         NativeDiagnostics.RequirePredicate(collector.Drained && collector.Lost == 0 && (await ProcessAdmission.KernelAsync(witness.Pid, budget.Token)).Ticks == processPin.KernelStartTicks
             && witness.NativeStartUtcTicks == processPin.NativeStartUtcTicks && !witness.HasExited, "Actual witness generation/drain differs", NativeControl.GenerationDrain);
         passed = true;
@@ -201,6 +213,24 @@ internal static class NativeDiagnostics
             Mark(category);
             throw;
         }
+    }
+
+    internal static void EffectEquality(bool invoiceRenderEqualsOne, bool fileUploadEqualsOne,
+        bool otherUploadMethodEqualsOne, bool replayAllZero)
+    {
+        // Exactly one failure-only record; never counts, identities or trace payloads.
+        try
+        {
+            Console.Error.WriteLine(JsonSerializer.Serialize(new
+            {
+                NativeEffectEquality = true,
+                InvoiceRenderEqualsOne = invoiceRenderEqualsOne,
+                FileUploadEqualsOne = fileUploadEqualsOne,
+                OtherUploadMethodEqualsOne = otherUploadMethodEqualsOne,
+                ReplayAllZero = replayAllZero
+            }));
+        }
+        catch (Exception) { EmissionFailed = true; }
     }
 
     internal static void ReaderFault(ReaderFaultCategory category)

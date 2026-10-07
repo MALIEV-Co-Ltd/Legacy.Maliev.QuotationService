@@ -53,7 +53,7 @@ jobs:
           # NuGet JSON v1 schema checked against primary ListPackageJsonRenderer/GetReportParameters:
           # https://github.com/NuGet/NuGet.Client/blob/fa1508b1123e9d1d86a39cd702f969d3db242884/src/NuGet.Core/NuGet.CommandLine.XPlat/ListPackage/ListPackageJsonRenderer.cs
           # Empty top-level arrays and omitted transitive arrays are the documented clean vulnerable report.
-          SOURCE_INVENTORY = [{'path': 'README.md', 'rawSha256': '4d3820d800d257c97a4c87aeef595930e5a8ba9f2768c7a6d3546034871625aa'}, {'path': 'controls/FinancialHttpCounters.Controls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'controls/Program.cs', 'rawSha256': '7e2502c918f7df8453b77c0ed5a13ce3e5a8b1279ed6727b3a101c7fd2f9a501'}, {'path': 'descriptor-provenance.json', 'rawSha256': '475008becd77ae3555fcf6ddad4bc18406bdf563441c74af4d7fdb9511778da3'}, {'path': 'helper-controls/HelperHostedControls.csproj', 'rawSha256': 'b80e57f135ffd22216a0d7439e089e8f1e92f8fe0b48d6a8f9cea71f19d5e057'}, {'path': 'helper-controls/Program.cs', 'rawSha256': '1b353b259d141711a62829ddfee092e52413c30cedd2cdf1fd0373c99350a70b'}, {'path': 'helper-controls/fixture_git.py', 'rawSha256': '628703d47e3c02a74ed4f119164cc1b20d13b0a1f2c6de14422a173d7d074637'}, {'path': 'native-controls/AdmissionNativeControls.cs', 'rawSha256': 'dfa0bd6ebdd7ff770b5a4c6463d71835c112761a54510998cf5600e266c4efe6'}, {'path': 'native-controls/FinancialHttpCounters.NativeControls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'native-controls/Program.cs', 'rawSha256': '0c83e4a01d30c0f9bed211b2f2e7b82c183b452e1bb21fa4edc6db8915af2bdf'}, {'path': 'native-controls/WitnessLease.cs', 'rawSha256': '14785041e6c39dcd0e33972c767ce271f4c75727153b5db42977d4e64e41e9ed'}, {'path': 'native-controls/WitnessLifecycleControls.cs', 'rawSha256': '5f8706a7152d46bb3422a611c1eb87b1f3dd2ca2ae6112229ae2e58243ba5419'}, {'path': 'source-provenance.json', 'rawSha256': '5e66670d9469696a85d14bb74b5e89a2080fa19d59f94662aa708f54a49a4a62'}, {'path': 'source/CounterState.cs', 'rawSha256': '14dd422b0eb8cf63b5ab3cc8cc6c220aa88c6323c517321b2392525d03d16c6a'}, {'path': 'source/DescriptorBoundFrontFile.cs', 'rawSha256': '79e6c218c9776888e86cf7fc92ed3f16b8e26058b91df86ab5e2166441e9b185'}, {'path': 'source/DescriptorBoundOutput.cs', 'rawSha256': 'b6c1d45b958db1362c784b64154fdd552711639d5fb5f065a273dd4f9fe974ac'}, {'path': 'source/EventCollector.cs', 'rawSha256': '02e6a9472e735ba6d4f7d0166258f57435310c58829217c0c198acc9754282aa'}, {'path': 'source/FinancialHttpCounters.csproj', 'rawSha256': '5254ec772153643963d71a2b03d76b8dcc230f9a4a69978d5c7bc6367a8423f9'}, {'path': 'source/NativeWitnessAccess.cs', 'rawSha256': 'b73b4e725d926eb08e4caa5b03ab21febef6a7f713b7ffca0bef6acd37852cea'}, {'path': 'source/ProcessAdmission.cs', 'rawSha256': '349a504e0b206037fc721ccc96cc0972602e6c9eacc7d6942954874256e37aec'}, {'path': 'source/Program.cs', 'rawSha256': 'bb227e581745a355c8df6e3bba50c6cd29d0222d72b5ea073a2266de6c4ea461'}, {'path': 'witness-host/FinancialHttpCounters.WitnessHost.csproj', 'rawSha256': '25e9385fa7053264d6b20be455942ad1548a587fc006e017350d193d6a1a36b4'}, {'path': 'witness-host/Program.cs', 'rawSha256': 'be6dddd2461f1077ff0832859bd8c63bd28ed6ef2d995fc5054556481ddd775e'}]
+          SOURCE_INVENTORY = [{'path': 'README.md', 'rawSha256': '4d3820d800d257c97a4c87aeef595930e5a8ba9f2768c7a6d3546034871625aa'}, {'path': 'controls/FinancialHttpCounters.Controls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'controls/Program.cs', 'rawSha256': '7e2502c918f7df8453b77c0ed5a13ce3e5a8b1279ed6727b3a101c7fd2f9a501'}, {'path': 'descriptor-provenance.json', 'rawSha256': '475008becd77ae3555fcf6ddad4bc18406bdf563441c74af4d7fdb9511778da3'}, {'path': 'helper-controls/HelperHostedControls.csproj', 'rawSha256': 'b80e57f135ffd22216a0d7439e089e8f1e92f8fe0b48d6a8f9cea71f19d5e057'}, {'path': 'helper-controls/Program.cs', 'rawSha256': '1b353b259d141711a62829ddfee092e52413c30cedd2cdf1fd0373c99350a70b'}, {'path': 'helper-controls/fixture_git.py', 'rawSha256': '628703d47e3c02a74ed4f119164cc1b20d13b0a1f2c6de14422a173d7d074637'}, {'path': 'native-controls/AdmissionNativeControls.cs', 'rawSha256': 'dfa0bd6ebdd7ff770b5a4c6463d71835c112761a54510998cf5600e266c4efe6'}, {'path': 'native-controls/FinancialHttpCounters.NativeControls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'native-controls/Program.cs', 'rawSha256': '19fb0ca455f9a2d0decf73a51f5ebdba78f42228271223ea7bf3fb03c786156e'}, {'path': 'native-controls/WitnessLease.cs', 'rawSha256': '14785041e6c39dcd0e33972c767ce271f4c75727153b5db42977d4e64e41e9ed'}, {'path': 'native-controls/WitnessLifecycleControls.cs', 'rawSha256': '5f8706a7152d46bb3422a611c1eb87b1f3dd2ca2ae6112229ae2e58243ba5419'}, {'path': 'source-provenance.json', 'rawSha256': '5e66670d9469696a85d14bb74b5e89a2080fa19d59f94662aa708f54a49a4a62'}, {'path': 'source/CounterState.cs', 'rawSha256': '14dd422b0eb8cf63b5ab3cc8cc6c220aa88c6323c517321b2392525d03d16c6a'}, {'path': 'source/DescriptorBoundFrontFile.cs', 'rawSha256': '79e6c218c9776888e86cf7fc92ed3f16b8e26058b91df86ab5e2166441e9b185'}, {'path': 'source/DescriptorBoundOutput.cs', 'rawSha256': 'b6c1d45b958db1362c784b64154fdd552711639d5fb5f065a273dd4f9fe974ac'}, {'path': 'source/EventCollector.cs', 'rawSha256': '02e6a9472e735ba6d4f7d0166258f57435310c58829217c0c198acc9754282aa'}, {'path': 'source/FinancialHttpCounters.csproj', 'rawSha256': '5254ec772153643963d71a2b03d76b8dcc230f9a4a69978d5c7bc6367a8423f9'}, {'path': 'source/NativeWitnessAccess.cs', 'rawSha256': 'b73b4e725d926eb08e4caa5b03ab21febef6a7f713b7ffca0bef6acd37852cea'}, {'path': 'source/ProcessAdmission.cs', 'rawSha256': '349a504e0b206037fc721ccc96cc0972602e6c9eacc7d6942954874256e37aec'}, {'path': 'source/Program.cs', 'rawSha256': 'bb227e581745a355c8df6e3bba50c6cd29d0222d72b5ea073a2266de6c4ea461'}, {'path': 'witness-host/FinancialHttpCounters.WitnessHost.csproj', 'rawSha256': '25e9385fa7053264d6b20be455942ad1548a587fc006e017350d193d6a1a36b4'}, {'path': 'witness-host/Program.cs', 'rawSha256': 'be6dddd2461f1077ff0832859bd8c63bd28ed6ef2d995fc5054556481ddd775e'}]
           PROJECTS = (
               'source/FinancialHttpCounters.csproj',
               'controls/FinancialHttpCounters.Controls.csproj',
@@ -246,15 +246,109 @@ jobs:
           NATIVE_MARKER_LINES = {json.dumps({'NativeControl': control}, separators=(',', ':')).encode('ascii'): control
                                  for control in frozenset(NATIVE_CONTROL_ORDER + NATIVE_FAILURE_ONLY + NATIVE_WINDOW_FAILURE_ONLY)}
 
+          NATIVE_EFFECT_EQUALITY_KEYS = ('NativeEffectEquality', 'InvoiceRenderEqualsOne', 'FileUploadEqualsOne', 'OtherUploadMethodEqualsOne', 'ReplayAllZero')
+
+          def native_effect_equality_line(line):
+              value = parse(line, 145)
+              require(type(value) is dict and set(value) == set(NATIVE_EFFECT_EQUALITY_KEYS)
+                      and all(type(value[key]) is bool for key in NATIVE_EFFECT_EQUALITY_KEYS)
+                      and value['NativeEffectEquality'] is True
+                      and not all(value[key] for key in NATIVE_EFFECT_EQUALITY_KEYS[1:]))
+              require(json.dumps({key: value[key] for key in NATIVE_EFFECT_EQUALITY_KEYS}, separators=(',', ':')).encode('ascii') == line)
+              return value
+
+          def native_effect_equality_parser_controls():
+              positive = negative = privacy = 0
+              def encoded(markers):
+                  return b''.join(json.dumps({'NativeControl': marker}, separators=(',', ':')).encode('ascii') + b'\n' for marker in markers)
+              prefix = NATIVE_CONTROL_ORDER[:NATIVE_CONTROL_ORDER.index('WitnessCounters') + 1] + ('ExpectedEffectCounts',)
+              before = encoded(prefix)
+              cleanup = encoded(('WitnessCleanup',))
+              def refused(raw, success=False):
+                  nonlocal negative
+                  if success:
+                      rejected = False
+                      try: native_control_projection(raw, succeeded=True)
+                      except Refused: rejected = True
+                      require(rejected)
+                  else:
+                      result = native_control_projection(raw)
+                      require(not result['NativeMarkerProtocolAccepted'] and result['NativeControlsObserved'] == []
+                              and not set(NATIVE_EFFECT_EQUALITY_KEYS).intersection(result))
+                  negative += 1
+              canonical = encoded(NATIVE_CONTROL_ORDER)
+              require(native_control_projection(canonical, succeeded=True)['NativeMarkerProtocolAccepted']); positive += 1
+              for bits in range(15):
+                  value = {'NativeEffectEquality': True}
+                  value.update({key: bool(bits & (1 << index)) for index, key in enumerate(NATIVE_EFFECT_EQUALITY_KEYS[1:])})
+                  line = json.dumps(value, separators=(',', ':')).encode('ascii')
+                  require(len(line) <= 145 and native_effect_equality_line(line) == value)
+                  for tail in (b'', cleanup):
+                      raw = before + line + b'\n' + tail
+                      result = native_control_projection(raw)
+                      require(result['NativeMarkerProtocolAccepted'] and result['NativeLastOperation'] == 'ExpectedEffectCounts'
+                              and all(result[key] is value[key] for key in NATIVE_EFFECT_EQUALITY_KEYS))
+                      positive += 1
+                      refused(raw, success=True)
+                  for position in range(len(NATIVE_CONTROL_ORDER) + 1):
+                      refused(encoded(NATIVE_CONTROL_ORDER[:position]) + line + b'\n')
+                  for other in NATIVE_FAILURE_ONLY + NATIVE_WINDOW_FAILURE_ONLY:
+                      if other == 'ExpectedEffectCounts': continue
+                      refused(encoded(prefix[:-1] + (other,)) + line + b'\n' + cleanup)
+                  for raw in (before + line + b'\n' + line + b'\n' + cleanup,
+                              before + cleanup + line + b'\n', before + line + b'\n' + cleanup + line + b'\n',
+                              before + b'private-opaque-value\n' + line + b'\n' + cleanup,
+                              before + b'\n' + line + b'\n' + cleanup,
+                              before + b' \n' + line + b'\n' + cleanup,
+                              before + b'\t\n' + line + b'\n' + cleanup,
+                              before + line + b'\n' + encoded(('CodecResult',)),
+                              canonical + line + b'\n'):
+                      refused(raw)
+                  for key in NATIVE_EFFECT_EQUALITY_KEYS:
+                      changed = value.copy(); del changed[key]
+                      refused(before + json.dumps(changed, separators=(',', ':')).encode() + b'\n' + cleanup)
+                      for replacement in (int(value[key]), None, 'private-opaque-value'):
+                          changed = value.copy(); changed[key] = replacement
+                          refused(before + json.dumps(changed, separators=(',', ':')).encode() + b'\n' + cleanup)
+                  changed = value.copy(); changed['NativeEffectEquality'] = False
+                  refused(before + json.dumps(changed, separators=(',', ':')).encode() + b'\n' + cleanup)
+                  for extra in ({'Private': '/private/path'}, {'Count': 987654}):
+                      changed = value.copy(); changed.update(extra)
+                      raw = before + json.dumps(changed, separators=(',', ':')).encode() + b'\n' + cleanup
+                      refused(raw); require('private' not in json.dumps(native_control_projection(raw)) and '987654' not in json.dumps(native_control_projection(raw))); privacy += 1
+                  for changed in (b' ' + line, line.replace(b':', b': ', 1),
+                                  line.replace(b'"NativeEffectEquality":true', b'"NativeEffectEquality":true,"NativeEffectEquality":true'),
+                                  json.dumps(dict(reversed(list(value.items()))), separators=(',', ':')).encode(),
+                                  line + b' ' * 146):
+                      refused(before + changed + b'\n' + cleanup)
+                  result = native_control_projection(before + line + b'\n' + cleanup + b'private-opaque-value /private/path token-value\n')
+                  require(result['NativeMarkerProtocolAccepted'] and 'private' not in json.dumps(result) and 'token-value' not in json.dumps(result)); privacy += 1
+                  refused(before + line + b'\n' + cleanup + canonical, success=True)
+              all_true = json.dumps({key: True for key in NATIVE_EFFECT_EQUALITY_KEYS}, separators=(',', ':')).encode()
+              refused(before + all_true + b'\n' + cleanup)
+              return {'NativeEffectEqualityParserPositiveCases': positive, 'NativeEffectEqualityParserNegativeCases': negative,
+                      'NativeEffectEqualityPrivacyCases': privacy, 'MaximumEqualityLineBytes': 145,
+                      'ActualCounterEqualityValuesKnown': False, 'LocalNativeExecution': False,
+                      'NativeEventPipeCodecAccepted': False, 'GenuineEightHostFinancialAccepted': False}
+
           def native_control_projection(raw, succeeded=False):
               require(type(raw) is bytes and len(raw) <= 4 * 1024 * 1024 and type(succeeded) is bool)
               markers = []; unknown = malformed = False
+              equality = None; previous_line = None
+              equality_prefix = NATIVE_CONTROL_ORDER[:NATIVE_CONTROL_ORDER.index('WitnessCounters') + 1] + ('ExpectedEffectCounts',)
               for line in raw.splitlines():
                   if line in NATIVE_MARKER_LINES:
                       markers.append(NATIVE_MARKER_LINES[line]); require(len(markers) <= 128)
+                  elif any(key.encode('ascii') in line for key in NATIVE_EFFECT_EQUALITY_KEYS):
+                      try:
+                          require(equality is None and tuple(markers) == equality_prefix
+                                  and previous_line == b'{"NativeControl":"ExpectedEffectCounts"}')
+                          equality = native_effect_equality_line(line)
+                      except (Refused, ValueError, TypeError, KeyError): malformed = True
                   elif line.strip():
                       unknown = True
                       if line.startswith(b'{"NativeControl"'): malformed = True
+                  previous_line = line
               observed = tuple(markers)
               valid_orders = {NATIVE_CONTROL_ORDER[:index] for index in range(len(NATIVE_CONTROL_ORDER) + 1)}
               # Failure unwinds through the existing admission/fault/codec finally blocks.
@@ -279,14 +373,17 @@ jobs:
                   valid_orders.add(counter_prefix + (category,))
                   valid_orders.add(counter_prefix + (category, 'WitnessCleanup'))
               accepted = bool(markers) and not malformed and observed in valid_orders
+              if equality is not None: accepted = accepted and observed in (equality_prefix, equality_prefix + ('WitnessCleanup',))
               if succeeded:
                   canonical = b''.join(json.dumps({'NativeControl': control}, separators=(',', ':')).encode('ascii') + b'\n'
                                        for control in NATIVE_CONTROL_ORDER)
                   require(accepted and observed == NATIVE_CONTROL_ORDER and not unknown and raw == canonical)
-              return {'NativeMarkerProtocolAccepted': accepted, 'NativeMarkerCount': len(markers),
+              result = {'NativeMarkerProtocolAccepted': accepted, 'NativeMarkerCount': len(markers),
                       'NativeControlsObserved': markers[-8:] if accepted else [],
                       'NativeLastControl': markers[-1] if accepted and markers else None,
                       'NativeLastOperation': next((x for x in reversed(markers) if x not in ('AdmissionCleanup', 'WitnessCleanup')), None) if accepted else None}
+              if accepted and equality is not None: result.update(equality)
+              return result
 
           def native_failure_marker_controls():
               positive = negative = privacy = 0
@@ -673,6 +770,8 @@ jobs:
               print(json.dumps(native_window_parser_receipt), flush=True)
               native_lifecycle_parser_receipt = native_lifecycle_parser_controls()
               print(json.dumps(native_lifecycle_parser_receipt), flush=True)
+              native_equality_parser_receipt = native_effect_equality_parser_controls()
+              print(json.dumps(native_equality_parser_receipt), flush=True)
               source = workspace / 'tools/FinancialHttpCounters'; exact_sources(source)
               # Isolate the four projects from unrelated repository/user build configuration.
               with tempfile.TemporaryDirectory(prefix='financial-http-codec-', dir=os.environ['RUNNER_TEMP']) as owned:
@@ -750,7 +849,7 @@ jobs:
                       target = public / 'locks' / relative; target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(raw)
                   (public / 'qualification.json').write_text(json.dumps({'SourceHead': head, 'RunId': os.environ['GITHUB_RUN_ID'],
                       'RunAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'SdkVersion': sdk, 'AuditJsonV1ProjectsAccepted': len(PROJECTS),
-                      'AuditParserControls': parser_receipt, 'NativeFailureMarkerParserControls': native_failure_parser_receipt, 'NativeWindowMarkerParserControls': native_window_parser_receipt, 'NativeLifecycleReceiptParserControls': native_lifecycle_parser_receipt, 'ActualNativeLifecycleControlCasesPassed': len(native_lifecycle_receipts), 'OwnedSupervisorControls': supervisor_receipt, 'LockedRestoreRepeated': True,
+                      'AuditParserControls': parser_receipt, 'NativeFailureMarkerParserControls': native_failure_parser_receipt, 'NativeWindowMarkerParserControls': native_window_parser_receipt, 'NativeLifecycleReceiptParserControls': native_lifecycle_parser_receipt, 'NativeEffectEqualityParserControls': native_equality_parser_receipt, 'ActualNativeLifecycleControlCasesPassed': len(native_lifecycle_receipts), 'OwnedSupervisorControls': supervisor_receipt, 'LockedRestoreRepeated': True,
                       'NuGetLockSha256': {p: hashlib.sha256(raw).hexdigest() for p, raw in locks.items()},
                       'SourceAdmissionAccepted': False, 'SelectedHostCountersAccepted': False, 'GenuineEightHostFinancialAccepted': False,
                       'SmtpNoSendProven': False, 'SocketNoSendProven': False}, sort_keys=True) + '\n')
