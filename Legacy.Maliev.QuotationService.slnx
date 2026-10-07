@@ -10,4 +10,6 @@
   <Project Path="tools/HostedStorageFrontHost/HostedStorageFrontHost.csproj" />
   <Project Path="tools/HostedStorageFront.Tests/HostedStorageFront.Tests.csproj" />
   <Project Path="tools/FinancialCompletionEvidence.Tests/FinancialCompletionEvidence.Tests.csproj" />
+  <Project Path="tools/HostedProcessStartObserver/HostedProcessStartObserver.csproj" />
+  <Project Path="tools/HostedProcessStartObserver.Tests/HostedProcessStartObserver.Tests.csproj" />
 </Solution>

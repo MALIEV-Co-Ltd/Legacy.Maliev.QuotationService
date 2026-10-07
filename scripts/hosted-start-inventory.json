@@ -1,0 +1,98 @@
+{
+  "ActualHostStartObservationTests": {
+    "normalizedSourceSha256": "20fb5cb97fb8bd3a44081977de3336f1d6b88d8872cf27924cb31c341462183f",
+    "source": "tools/HostedProcessStartObserver/ActualHostStartObservationTests.cs",
+    "methods": {
+      "ActualUtcValueIsPreservedWithoutRoundingOrEventTime": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ForeignOrChangedTargetKernelIdentityRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ChangedStartTimeAndNonUtcStartRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "FutureStartAndExpiredLeaseRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "KernelParserRetainsGenerationDespiteCommParentheses": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "KernelParserRejectsWrongPidDeadAndTruncatedStat": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "FullEnvironmentFingerprintIgnoresOrderingButDetectsAnyValueChange": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "RepeatedEnvironmentKeysAndMalformedEntriesRejected": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "InvalidRoleParentPidOrLeaseRejectedBeforeResourceRead": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "PublicObservationContainsOnlyIdentityStartPathsAndHashes": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      }
+    }
+  },
+  "FrontStartObservationTests": {
+    "normalizedSourceSha256": "5c256f86e6c591a08c97b5aacc7b276be68b3d443131ee599de20f7cad019c19",
+    "source": "tools/HostedProcessStartObserver/FrontStartObservationTests.cs",
+    "methods": {
+      "FrontUsesOnlyExactThirdProfileArgument": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "NormalHostsRetainTwoArgumentContract": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "FrontCannotOmitItsProfile": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "FrontPreservesActualUtcAndKernelGenerationChecks": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      }
+    }
+  }
+}
