@@ -55,5 +55,5 @@ Reject(() => CounterState.DecodeArguments(new object[] { new Dictionary<string, 
 var decoded = CounterState.DecodeArguments(new object[] { new Dictionary<string, object> { ["Key"] = "Id", ["Value"] = "private-id" } });
 Check(decoded["Id"] == "private-id");
 using var bytes = new BudgetStream(new MemoryStream([1, 2, 3]), 2, CancellationToken.None);
-Reject(() => bytes.Read(new byte[3], 0, 3));
+Reject(() => bytes.ReadExactly(new byte[3]));
 Console.WriteLine(JsonSerializer.Serialize(new { ControlledCasesPassed = controls, HostedEventPipeWitness = false, GenuineEightHostFinancialAccepted = false }));
