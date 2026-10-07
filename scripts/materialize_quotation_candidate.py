@@ -113,6 +113,10 @@ def validate_capsule(manifest_bytes, capsule_bytes, policy):
         raise ValueError("qualification scope mismatch")
     if scope == "full-candidate":
         valid_inventory = len(expected) == 75
+    elif scope == "fixture-corrected":
+        valid_inventory = len(expected) == 76 and (
+            "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationWorkloadTokenLifecycleHttpTests.cs" in expected
+        )
     elif scope == "admission-race":
         valid_inventory = set(expected) == {
             "Legacy.Maliev.QuotationService.Data/QuotationRepositories.cs",

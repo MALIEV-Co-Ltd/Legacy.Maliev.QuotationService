@@ -17,6 +17,8 @@ spec.loader.exec_module(gate)
 
 def packet(mutate=None, scope=None):
     files = {f"scripts/source-{n}.txt": f"raw-{n}\r\n".encode() for n in range(75)}
+    if scope == "fixture-corrected":
+        files["Legacy.Maliev.QuotationService.Tests/Controllers/QuotationWorkloadTokenLifecycleHttpTests.cs"] = b"raw\r\n"
     if scope == "admission-race":
         files = {path: b"raw\r\n" for path in (
             "Legacy.Maliev.QuotationService.Data/QuotationRepositories.cs",
@@ -47,6 +49,48 @@ def packet(mutate=None, scope=None):
 
 
 class TransportTests(unittest.TestCase):
+    def test_fixture_scope_accepts_76_bound_files(self):
+        raw, capsule, policy, files = packet(scope="fixture-corrected")
+        _, actual = gate.validate_capsule(raw, capsule, policy)
+        self.assertEqual(files, actual)
+        self.assertEqual(76, len(actual))
+
+    def test_fixture_scope_requires_lifecycle_source(self):
+        raw, capsule, policy, _ = packet(scope="fixture-corrected")
+        m = json.loads(raw)
+        m["sourceFiles"][-1]["path"] = "scripts/other.txt"
+        policy["sourceFiles"] = copy.deepcopy(m["sourceFiles"])
+        changed = json.dumps(m).encode()
+        policy["manifestSha256"] = gate.sha256(changed)
+        with self.assertRaisesRegex(ValueError, "expanded inventory"):
+            gate.validate_capsule(changed, capsule, policy)
+
+    def test_fixture_scope_cannot_drop_or_add_an_inventory_entry(self):
+        for extra in (False, True):
+            raw, capsule, policy, _ = packet(scope="fixture-corrected")
+            m = json.loads(raw)
+            if extra:
+                row = copy.deepcopy(m["sourceFiles"][0])
+                row["path"] = "scripts/extra.txt"
+                m["sourceFiles"].append(row)
+            else:
+                m["sourceFiles"].pop(0)
+            policy["sourceFiles"] = copy.deepcopy(m["sourceFiles"])
+            changed = json.dumps(m).encode()
+            policy["manifestSha256"] = gate.sha256(changed)
+            with self.subTest(extra=extra), self.assertRaisesRegex(ValueError, "expanded inventory"):
+                gate.validate_capsule(changed, capsule, policy)
+
+    def test_full_scope_cannot_consume_fixture_capsule(self):
+        raw, capsule, policy, _ = packet(scope="fixture-corrected")
+        m = json.loads(raw)
+        del m["qualificationScope"]
+        del policy["qualificationScope"]
+        raw = json.dumps(m).encode()
+        policy["manifestSha256"] = gate.sha256(raw)
+        with self.assertRaisesRegex(ValueError, "expanded inventory"):
+            gate.validate_capsule(raw, capsule, policy)
+
     def test_admission_scope_accepts_only_exact_three_paths(self):
         raw, capsule, policy, files = packet(scope="admission-race")
         _, actual = gate.validate_capsule(raw, capsule, policy)
