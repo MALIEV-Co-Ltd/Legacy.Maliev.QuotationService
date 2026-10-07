@@ -17,6 +17,8 @@ import threading
 import time
 import uuid
 import selectors
+import ipaddress
+from scanner_loopback_relay import LoopbackRelay
 from types import SimpleNamespace
 from datetime import datetime, timezone
 
@@ -67,6 +69,8 @@ class Scanner:
         self.container_id = None
         self.image_id = None
         self.network_id = None
+        self.relay = None
+        self.backend_identity = None
         self.temp = None
         self.attempted = self.clean = self.infected = 0
         self.receipt = {"schemaVersion": 1, "runId": self.run_id, "imageReference": IMAGE,
@@ -224,16 +228,13 @@ class Scanner:
         state = diagnostic.get("state", {})
         if not diagnostic.get("observed") or state.get("Running") is not True or state.get("Paused") is not False or state.get("Restarting") is not False or type(state.get("Pid")) is not int or state["Pid"] <= 0:
             raise ValueError("Actual scanner container is not running immediately after start")
-        self.receipt["stage"] = "observe-loopback-publication"
-        try:
-            binding = self.docker("port", self.container_id, "3310/tcp")
-        except Exception:
-            self.startup_diagnostic()
-            raise
-        match = re.fullmatch(r"127\.0\.0\.1:([0-9]+)", binding)
-        if not match:
-            raise ValueError("Scanner endpoint escaped loopback")
-        self.port = int(match[1])
+        self.receipt["containerGeneration"] = {"createdUtc": diagnostic["createdUtc"], "startedUtc": state["StartedAt"]}
+        self.receipt["stage"] = "start-owned-loopback-relay"
+        self.validate_backend_endpoint()
+        self.relay = LoopbackRelay(self.validate_backend_endpoint)
+        self.port = self.relay.endpoint[1]
+        self.receipt["loopbackRelay"] = {**self.relay.identity, "backend": self.backend_identity,
+                                         "dockerPortPublicationObserved": False, "ownedInProcess": True}
         container = json.loads(self.docker("inspect", self.container_id))[0]
         if container["Image"] != self.image_id or container["Id"] != self.container_id or not container["HostConfig"]["ReadonlyRootfs"]:
             raise ValueError("Runtime image or immutable root policy differs")
@@ -302,6 +303,33 @@ class Scanner:
     def counters(self):
         return {"attempted": self.attempted, "clean": self.clean, "infected": self.infected}
 
+    def validate_backend_endpoint(self):
+        container = json.loads(self.docker("inspect", self.container_id, timeout=3))[0]
+        network = json.loads(self.docker("network", "inspect", self.network_id, timeout=3))[0]
+        generation = self.receipt["containerGeneration"]
+        state = container.get("State", {})
+        if container.get("Id") != self.container_id or container.get("Image") != self.image_id or container.get("Created") != generation["createdUtc"] or state.get("StartedAt") != generation["startedUtc"] or state.get("Running") is not True or state.get("Paused") is not False or state.get("Restarting") is not False or container.get("Config", {}).get("Labels", {}).get("financial.acceptance.run") != self.run_id:
+            raise ValueError("Relay backend container ownership or generation differs")
+        networks = container.get("NetworkSettings", {}).get("Networks", {})
+        if len(networks) != 1 or container.get("HostConfig", {}).get("NetworkMode") != self.network_id:
+            raise ValueError("Relay backend has foreign network attachment")
+        attached = next(iter(networks.values()))
+        if attached.get("NetworkID") != self.network_id or network.get("Id") != self.network_id or network.get("Internal") is not True or network.get("Driver") != "bridge" or network.get("Labels", {}).get("financial.acceptance.run") != self.run_id:
+            raise ValueError("Relay requires the exact owned internal bridge")
+        endpoint = network.get("Containers", {}).get(self.container_id, {})
+        host = attached.get("IPAddress", "")
+        address = ipaddress.IPv4Address(host)
+        if str(address) != host or address.is_unspecified or address.is_multicast or address.is_loopback or address.is_link_local or str(ipaddress.IPv4Interface(endpoint.get("IPv4Address", "")).ip) != host or endpoint.get("EndpointID") != attached.get("EndpointID") or not re.fullmatch(r"[0-9a-f]{64}", attached.get("EndpointID", "")):
+            raise ValueError("Relay backend IP/endpoint ownership differs")
+        subnets = [ipaddress.ip_network(row["Subnet"]) for row in network.get("IPAM", {}).get("Config", []) if row.get("Subnet")]
+        if not any(subnet.version == 4 and address in subnet for subnet in subnets):
+            raise ValueError("Relay backend IP is outside the owned network subnet")
+        identity = {"containerId": self.container_id, "networkId": self.network_id, "endpointId": attached["EndpointID"], "host": host, "port": 3310, **generation}
+        if self.backend_identity is not None and self.backend_identity != identity:
+            raise ValueError("Relay measured backend identity changed")
+        self.backend_identity = identity
+        return host, 3310
+
     def startup_diagnostic(self):
         """Observe only the exact owned synthetic container; never replace admission."""
         diagnostic = {"containerId": self.container_id, "observedUtc": datetime.now(timezone.utc).isoformat()}
@@ -363,13 +391,17 @@ class Scanner:
                     raise ValueError("Container generation changed; cleanup refused")
                 owned = True
                 self.docker("stop", "--time", "5", self.container_id)
+                stopped = json.loads(self.docker("inspect", self.container_id))[0]
+                if stopped.get("Id") != self.container_id or stopped.get("State", {}).get("Running") is not False:
+                    raise ValueError("Exact stopped scanner state was not observed")
+                self.receipt["stoppedContainerObserved"] = True
             except Exception as error:
                 errors.append(type(error).__name__)
             if owned:
-                if self.port:
+                if self.port and self.receipt.get("stoppedContainerObserved"):
                     try:
                         self.command(b"PING", timeout=1)
-                    except OSError:
+                    except (OSError, ValueError):
                         self.receipt.setdefault("controls", {})["unavailableAfterStop"] = True
                     except Exception as error:
                         errors.append(type(error).__name__)
@@ -384,6 +416,13 @@ class Scanner:
                 remaining = self.docker("ps", "-a", "--filter", "name=^/" + self.name + "$", "--format", "{{.Names}}")
                 if remaining:
                     errors.append("OwnedContainerRemains")
+            except Exception as error:
+                errors.append(type(error).__name__)
+        if self.relay:
+            try:
+                self.receipt["loopbackRelay"] = {**self.receipt.get("loopbackRelay", {}), **self.relay.close()}
+                if not self.receipt["loopbackRelay"]["cleanupVerified"]:
+                    errors.append("OwnedRelayCleanupUncertain")
             except Exception as error:
                 errors.append(type(error).__name__)
         if self.receipt.get("derivedImage"):

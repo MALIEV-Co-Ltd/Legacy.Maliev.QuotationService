@@ -21,49 +21,49 @@ public sealed class ActualHostStartObservationTests
     [Fact]
     public void ForeignOrChangedTargetKernelIdentityRejected()
     {
-        var started=Now.UtcDateTime.AddSeconds(-5);
+        var started = Now.UtcDateTime.AddSeconds(-5);
         foreach (var wrong in new[] { new ActualHostStartObservation.KernelIdentity(31, 10, 40), new(30, 11, 40), new(30, 10, 41) })
-            Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ValidateReobservations(Request(), new(30,10,40), wrong, started, started, Now));
+            Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ValidateReobservations(Request(), new(30, 10, 40), wrong, started, started, Now));
     }
 
     [Fact]
     public void ChangedStartTimeAndNonUtcStartRejected()
     {
-        var started=Now.UtcDateTime.AddSeconds(-5);
-        Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ValidateReobservations(Request(), new(30,10,40), new(30,10,40), started, started.AddTicks(1), Now));
-        Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ValidateReobservations(Request(), new(30,10,40), new(30,10,40), DateTime.SpecifyKind(started,DateTimeKind.Unspecified), started, Now));
+        var started = Now.UtcDateTime.AddSeconds(-5);
+        Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ValidateReobservations(Request(), new(30, 10, 40), new(30, 10, 40), started, started.AddTicks(1), Now));
+        Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ValidateReobservations(Request(), new(30, 10, 40), new(30, 10, 40), DateTime.SpecifyKind(started, DateTimeKind.Unspecified), started, Now));
     }
 
     [Fact]
     public void FutureStartAndExpiredLeaseRejected()
     {
-        Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ValidateReobservations(Request(), new(30,10,40), new(30,10,40), Now.UtcDateTime.AddSeconds(1), Now.UtcDateTime.AddSeconds(1), Now));
-        Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ValidateReobservations(Request() with { ExpiresUtc=Now }, new(30,10,40), new(30,10,40), Now.UtcDateTime.AddSeconds(-1), Now.UtcDateTime.AddSeconds(-1), Now));
+        Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ValidateReobservations(Request(), new(30, 10, 40), new(30, 10, 40), Now.UtcDateTime.AddSeconds(1), Now.UtcDateTime.AddSeconds(1), Now));
+        Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ValidateReobservations(Request() with { ExpiresUtc = Now }, new(30, 10, 40), new(30, 10, 40), Now.UtcDateTime.AddSeconds(-1), Now.UtcDateTime.AddSeconds(-1), Now));
     }
 
     [Fact]
     public void KernelParserRetainsGenerationDespiteCommParentheses()
     {
-        var tail=new[] { "S","10" }.Concat(Enumerable.Repeat("0",17)).Concat(["40"]);
-        Assert.Equal(new ActualHostStartObservation.KernelIdentity(30,10,40),
-            ActualHostStartObservation.ParseStat(Encoding.ASCII.GetBytes("30 (normal (host) name) "+string.Join(' ',tail)),30));
+        var tail = new[] { "S", "10" }.Concat(Enumerable.Repeat("0", 17)).Concat(["40"]);
+        Assert.Equal(new ActualHostStartObservation.KernelIdentity(30, 10, 40),
+            ActualHostStartObservation.ParseStat(Encoding.ASCII.GetBytes("30 (normal (host) name) " + string.Join(' ', tail)), 30));
     }
 
     [Fact]
     public void KernelParserRejectsWrongPidDeadAndTruncatedStat()
     {
-        foreach (var text in new[] { "31 (host) S 10", "30 (host) Z 10 "+string.Join(' ',Enumerable.Repeat("40",18)), "30 (host) S 10" })
-            Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ParseStat(Encoding.ASCII.GetBytes(text),30));
+        foreach (var text in new[] { "31 (host) S 10", "30 (host) Z 10 " + string.Join(' ', Enumerable.Repeat("40", 18)), "30 (host) S 10" })
+            Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ParseStat(Encoding.ASCII.GetBytes(text), 30));
     }
 
     [Fact]
     public void FullEnvironmentFingerprintIgnoresOrderingButDetectsAnyValueChange()
     {
-        var first=new Dictionary<string,string> { ["B"]="two", ["A"]="one" };
-        var second=new Dictionary<string,string> { ["A"]="one", ["B"]="two" };
-        Assert.Equal(ActualHostStartObservation.EnvironmentDigest(first),ActualHostStartObservation.EnvironmentDigest(second));
-        second["B"]="changed";
-        Assert.NotEqual(ActualHostStartObservation.EnvironmentDigest(first),ActualHostStartObservation.EnvironmentDigest(second));
+        var first = new Dictionary<string, string> { ["B"] = "two", ["A"] = "one" };
+        var second = new Dictionary<string, string> { ["A"] = "one", ["B"] = "two" };
+        Assert.Equal(ActualHostStartObservation.EnvironmentDigest(first), ActualHostStartObservation.EnvironmentDigest(second));
+        second["B"] = "changed";
+        Assert.NotEqual(ActualHostStartObservation.EnvironmentDigest(first), ActualHostStartObservation.EnvironmentDigest(second));
     }
 
     [Fact]
@@ -78,13 +78,13 @@ public sealed class ActualHostStartObservationTests
     {
         foreach (var request in new[] { Request() with { Owner="Synthetic" }, Request() with { ExpiresUtc=Now },
             Request() with { Parent=Request().Parent with { Pid=30 } }, Request() with { KernelStartTicks=0 } })
-            Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ValidateRequest(request,Now));
+            Assert.Throws<InvalidDataException>(() => ActualHostStartObservation.ValidateRequest(request, Now));
     }
 
     [Fact]
     public void PublicObservationContainsOnlyIdentityStartPathsAndHashes()
     {
-        string[] expected=["Owner","Pid","StartedUtc","KernelStartTicks","Executable","ExecutableSha256","ExecutableDll","DllSha256"];
-        Assert.Equal(expected.Order(StringComparer.Ordinal),typeof(HostStartObservation).GetProperties().Select(value=>value.Name).Order(StringComparer.Ordinal));
+        string[] expected = ["Owner", "Pid", "StartedUtc", "KernelStartTicks", "Executable", "ExecutableSha256", "ExecutableDll", "DllSha256"];
+        Assert.Equal(expected.Order(StringComparer.Ordinal), typeof(HostStartObservation).GetProperties().Select(value => value.Name).Order(StringComparer.Ordinal));
     }
 }

@@ -1,6 +1,6 @@
 {
   "ActualHostStartObservationTests": {
-    "normalizedSourceSha256": "c975ecb069a732376227a41f402dc8aac42bf5a666d1a1c326056d25d59667f1",
+    "normalizedSourceSha256": "20fb5cb97fb8bd3a44081977de3336f1d6b88d8872cf27924cb31c341462183f",
     "source": "tools/HostedProcessStartObserver/ActualHostStartObservationTests.cs",
     "methods": {
       "ActualUtcValueIsPreservedWithoutRoundingOrEventTime": {

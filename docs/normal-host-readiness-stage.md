@@ -2,8 +2,10 @@
 
 The exact reviewed parent-lifecycle v1 implementation is reused in
 `tools/InvoiceCompletionProducerAcceptance/companion` and
-`tools/HostedProcessStartObserver`. The packet's fourteen files are byte-identical
-to the original source-readback receipt. The observer project continues to link
+`tools/HostedProcessStartObserver`. The fourteen imported files match the original receipt after Git LF normalization.
+The immutable raw receipt remains provenance; Git stores normalized bytes.
+This successor applies the hosted formatter's whitespace corrections only to
+Program.cs and the observation tests. The observer project continues to link
 the existing ChildStartObservation and producer project. Native build and hosted
 execution are still required.
 

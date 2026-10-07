@@ -131,6 +131,7 @@ class ScannerTests(unittest.TestCase):
         scanner.receipt["resources"] = [{"name": scanner.name}]
         observed = {"Id": "a" * 64, "Name": "/" + scanner.name, "Image": scanner.image_id,
                     "Created": datetime.now(timezone.utc).isoformat(),
+                    "State": {"Running": False},
                     "Config": {"Labels": {"financial.acceptance.run": scanner.run_id}}}
         calls = []
         census = iter(["a" * 64, ""])

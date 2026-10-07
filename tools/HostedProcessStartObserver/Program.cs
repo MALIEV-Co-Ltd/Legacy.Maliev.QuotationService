@@ -27,7 +27,8 @@ try
     RequireUnique(document.RootElement);
     var request = document.Deserialize<HostStartRequest>(new JsonSerializerOptions
     {
-        RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true,
+        RespectRequiredConstructorParameters = true,
+        RespectNullableAnnotations = true,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     }) ?? throw new InvalidDataException("Observation input missing.");
     Console.WriteLine(JsonSerializer.Serialize(await ActualHostStartObservation.ObserveAsync(request, lifetime.Token)));
