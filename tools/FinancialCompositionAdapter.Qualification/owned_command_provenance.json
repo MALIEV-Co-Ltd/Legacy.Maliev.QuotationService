@@ -1,0 +1,50 @@
+{
+  "ProducerAdapterHead": "149583cb62b0119a94ca508628c265445cc2b5e9",
+  "ProducerCounterHead": "6c6b0a5f76d8ae5d0ced85819ffc93f20ab74833",
+  "SourceGitReadOnlySha256": "349a504e0b206037fc721ccc96cc0972602e6c9eacc7d6942954874256e37aec",
+  "BaselineSha256": {
+    "counter-6c6.yml": "98dcea342d0f3f6215d65b0aa0da1e79fcd0f2abd2f4ed6dc545d827682d64b1",
+    "counter-supervisor-excerpt.py": "c25b3b68e8f1e51c24339cd6f1166bd3f67f2543de579d41f5a0eb90cbfc51a8",
+    "qualify-149.py": "9af39be532b30869960d546d10c4d6869aa2bdc04c5015d01e5e688a1b276025",
+    "source-git-349a.cs": "349a504e0b206037fc721ccc96cc0972602e6c9eacc7d6942954874256e37aec"
+  },
+  "ReusedPatterns": [
+    "unreaped-owned-leader-generation-fence",
+    "same-session-census",
+    "selector-private-pipe-capture",
+    "finite-independent-cleanup-attempts",
+    "no-signal-after-leader-reap"
+  ],
+  "NarrowImprovements": [
+    "before-buffer-extension-byte-cap",
+    "bounded-proc-enumeration",
+    "retained-pidfd-wrapper",
+    "explicit-kernel-waitpid-no-ECHILD-success-fallback",
+    "independent-stream-recovery-and-close-attempts",
+    "retain-incomplete-readers",
+    "sticky-quarantine-one-recovery",
+    "no-uncertain-raw-fd-close-retry",
+    "serialized-admission"
+  ],
+  "CounterHostedCoverageNotTransferred": [
+    "SourceGit-four-case-slice",
+    "native-five-lifecycle-cases",
+    "all-descendant-ownership"
+  ],
+  "ConfiguredPerStreamBytes": 8388608,
+  "ConfiguredCleanupSeconds": 5,
+  "MaximumCleanupRecoveryAttempts": 1,
+  "MaximumCommandsPerSupervisor": 256,
+  "KernelCpuMemoryCapsObserved": false,
+  "IndependentFdCensusAccepted": false,
+  "UnsupportedBoundaries": [
+    "opaque-Popen-partial-birth-or-blocked-constructor",
+    "escaped-session-descendants",
+    "opaque-selector-constructor-partial-resource",
+    "unassociated-pidfd-open-allocation-failure",
+    "parent-process-death"
+  ],
+  "ActualHostedControlProof": false,
+  "GeneralSourceGitCleanupAccepted": false,
+  "FinancialEightAccepted": false
+}

@@ -8,6 +8,9 @@ import sys
 import copy
 import re
 import xml.etree.ElementTree as ET
+import types
+import signal
+import time
 
 AUDIT_GRAPH = {'IamDomain': {'path': '.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.IAMService/Maliev.IAMService.Domain/Maliev.IAMService.Domain.csproj', 'sha256': '0aec8d23fc31d062753209091db0c1b51aef9b67e0ed3626bf0dee66e38dc118', 'packageFree': True, 'references': [], 'directPackages': {}}, 'IamApplication': {'path': '.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.IAMService/Maliev.IAMService.Application/Maliev.IAMService.Application.csproj', 'sha256': '213e27a03edf02477c105ac518a5118529a6b7f889b66dd9409eeadaacdbdbf5', 'packageFree': False, 'references': ['IamDomain', 'Messaging', 'AspireDefaults'], 'directPackages': {'MassTransit': '[8.5.8, 9.0.0)', 'Microsoft.AspNetCore.Cryptography.KeyDerivation': '10.0.5', 'Microsoft.Extensions.Caching.Abstractions': '10.0.5', 'Microsoft.Extensions.Configuration.Abstractions': '10.0.7', 'Microsoft.Extensions.Logging.Abstractions': '10.0.7', 'Microsoft.Extensions.Configuration.Binder': '10.0.5', 'Microsoft.IdentityModel.Tokens': '8.16.0', 'System.IdentityModel.Tokens.Jwt': '8.16.0', 'Microsoft.AspNetCore.WebUtilities': '10.0.5', 'StackExchange.Redis': '2.12.1'}}, 'IamInfrastructure': {'path': '.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.IAMService/Maliev.IAMService.Infrastructure/Maliev.IAMService.Infrastructure.csproj', 'sha256': 'acc757189230122c3f1ec15f8733d264c899472dd16f59038367d2a1a4a25f24', 'packageFree': False, 'references': ['IamApplication'], 'directPackages': {'Npgsql.EntityFrameworkCore.PostgreSQL': '10.0.1', 'Microsoft.EntityFrameworkCore.Design': '10.0.5'}}, 'AspireDefaults': {'path': '.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.Aspire/Maliev.Aspire.ServiceDefaults/Maliev.Aspire.ServiceDefaults.csproj', 'sha256': 'b7b211fe3c424ed49336fb830f2f76b0b1f9323853fd28250d83ddd2a3d4d8f8', 'packageFree': False, 'references': ['Messaging'], 'directPackages': {'AspNetCore.HealthChecks.Rabbitmq': '9.0.0', 'AspNetCore.HealthChecks.Redis': '9.0.0', 'Microsoft.Extensions.Http.Resilience': '10.4.0', 'Microsoft.Extensions.ServiceDiscovery': '10.4.0', 'OpenTelemetry.Exporter.OpenTelemetryProtocol': '1.15.3', 'OpenTelemetry.Exporter.Prometheus.AspNetCore': '1.14.0-beta.1', 'OpenTelemetry.Extensions.Hosting': '1.15.3', 'OpenTelemetry.Instrumentation.AspNetCore': '1.15.1', 'OpenTelemetry.Instrumentation.Http': '1.15.1', 'OpenTelemetry.Instrumentation.Runtime': '1.15.1', 'MassTransit.RabbitMQ': '[8.5.8, 9.0.0)', 'MassTransit.Abstractions': '[8.5.8, 9.0.0)', 'Microsoft.Extensions.Caching.StackExchangeRedis': '10.0.5', 'Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore': '10.0.5', 'Npgsql.EntityFrameworkCore.PostgreSQL': '10.0.1', 'Microsoft.AspNetCore.Authentication.JwtBearer': '10.0.5', 'System.IdentityModel.Tokens.Jwt': '8.16.0', 'Microsoft.AspNetCore.OpenApi': '10.0.5', 'Microsoft.OpenApi': '2.7.5', 'Scalar.AspNetCore': '2.13.10', 'Asp.Versioning.Mvc.ApiExplorer': '8.1.1'}}, 'Messaging': {'path': '.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.MessagingContracts/generated/csharp/Maliev.MessagingContracts.csproj', 'sha256': '08089949de3ba41e6d62771b09563d018719f9d34a1f3bfc634e460efa2d7007', 'packageFree': True, 'references': [], 'directPackages': {}}, 'Adapter': {'path': 'tools/FinancialCompositionAdapter/FinancialCompositionAdapter.csproj', 'sha256': '911d16013f0bd904f0815f8bb2985d153beb03ed64d7fa9e8cfadd904ef461bc', 'packageFree': True, 'references': ['IamApplication', 'IamInfrastructure'], 'directPackages': {}}, 'Controls': {'path': 'tools/FinancialCompositionAdapter.Controls/AdapterCompileControls.csproj', 'sha256': '84ee70cb4a70d11a2c6f31725cdd11c1a5abcb04ea6963cce91147b19d7fb336', 'packageFree': True, 'references': ['Adapter', 'IamApplication', 'IamInfrastructure'], 'directPackages': {}}}
 AUDIT_GRAPH_SOURCE_INPUTS = {'.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.IAMService/Directory.Build.props': '75382c0f97e85f1d3789ffa5e4483e374ee8fe625fc062bdb055d096fae9e6b4', '.adapter-dependencies/AcceptedAuth/.genuine-iam-source/Maliev.Aspire/Directory.Build.props': '0984531cdb437001ea6bc73eaabfd9472f88f12510ecbd7c90dcd14130775574'}
@@ -404,20 +407,154 @@ def audit_parser_controls():
         require(refused)
     return {"positive": 2, "negative": len(negatives)}
 
+# Only peer-reviewed immutable helper bytes may execute. Checked before first import/Git/SDK command.
+OWNED_COMMAND_HASHES = {
+    "owned_command.py": "427f68ef6a78c9b6428bda39b93be782188ed398fd748ad69dc562f02868f993",
+    "owned_command_controls.py": "351a9ae3b600a0c8400dd4d91d21c9b3bcce9f047e9cd7b67d77e211bb1c949e",
+    "owned_command_provenance.json": "30304942ffe1ed4aef386e2a8a2c3d06665424187b0c32f94b7c7d5e8860bda9",
+}
+MANIFEST_DESTINATIONS = ('tools/FinancialCompositionAdapter/FinancialCompositionAdapter.csproj', 'tools/FinancialCompositionAdapter/OrdinaryOpaquePrincipalEnrollment.cs', 'tools/FinancialCompositionAdapter/OwnedBusinessSchema.cs', 'tools/FinancialCompositionAdapter/PinnedBusinessSchemas.g.cs', 'tools/FinancialCompositionAdapter/SourceCatalogueAdmission.cs', 'docs/financial-composition-adapter-source.md', 'tools/FinancialCompositionAdapter/provenance/exact-producer-inventory.json', 'tools/FinancialCompositionAdapter/provenance/caller-phase-contract.json', 'tools/FinancialCompositionAdapter.Controls/AdapterCompileControls.csproj', 'tools/FinancialCompositionAdapter.Controls/Program.cs', 'tools/FinancialCompositionAdapter.Qualification/qualify.py', 'docs/financial-composition-adapter-qualification.md', '.github/workflows/financial-composition-compile.yml', 'tools/FinancialCompositionAdapter.Qualification/owned_command.py', 'tools/FinancialCompositionAdapter.Qualification/owned_command_controls.py', 'tools/FinancialCompositionAdapter.Qualification/owned_command_provenance.json', 'tools/FinancialCompositionAdapter.Qualification/owned_command_fixture.py', 'tools/FinancialCompositionAdapter.Qualification/owned_command_hosted_controls.py')
+OWNED_COMMAND = None
+OWNED_COMMAND_SUPERVISOR = None
+OWNED_COMMAND_OBSERVATIONS = 0
+COMMAND_REFUSALS = frozenset(("ownership-or-budget", "command-or-setup", "cleanup-quarantined", "command-exit"))
+CLEANUP_TRUE_FIELDS = ("BirthAttempted", "ProcessAssociated", "RetainedPidfdBound", "OriginalLeaderReaped",
+    "OwnedSessionAbsent", "StdoutEof", "StderrEof", "StdoutClosed", "StderrClosed", "SelectorClosed", "PidfdClosed",
+    "HeldResourceConditionsSatisfied", "ActualLinuxBackendUsed", "SameSessionCleanupVerified")
+CLEANUP_FALSE_FIELDS = ("CleanupOriginallyFailed", "BirthAssociationUnproved", "EscapedSessionDescendantsAccepted",
+    "KernelResourceCapsObserved", "IndependentFdCensusAccepted")
+
+
+def bootstrap_owned_commands(root, manifest):
+    global OWNED_COMMAND, OWNED_COMMAND_SUPERVISOR
+    require(OWNED_COMMAND is None and OWNED_COMMAND_SUPERVISOR is None)
+    require(type(manifest) is dict and type(manifest.get("files")) is list)
+    files = manifest["files"]
+    require(len(files) == len(MANIFEST_DESTINATIONS))
+    require(all(type(row) is dict and set(row) == {"destination", "bytes", "sha256", "gitBlob"} for row in files))
+    require(len({row["destination"] for row in files}) == len(files)
+            and {row["destination"] for row in files} == set(MANIFEST_DESTINATIONS))
+    verified = {}
+    for row in files:
+        require(type(row["bytes"]) is int and 0 < row["bytes"] <= 1024 * 1024)
+        path = root / row["destination"]
+        with path.open("rb") as stream:
+            raw = stream.read(row["bytes"] + 1)
+        require(len(raw) == row["bytes"] and hashlib.sha256(raw).hexdigest() == row["sha256"])
+        require(hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest() == row["gitBlob"])
+        verified[row["destination"]] = raw
+    directory = "tools/FinancialCompositionAdapter.Qualification/"
+    for name, expected in OWNED_COMMAND_HASHES.items():
+        require(hashlib.sha256(verified[directory + name]).hexdigest() == expected)
+    # Execute the held verified bytes, rather than reopening a mutable module after checking it.
+    name = "qualified_adapter_owned_command"
+    require(name not in sys.modules)
+    module = types.ModuleType(name)
+    module.__file__ = str(root / directory / "owned_command.py")
+    sys.modules[name] = module
+    try:
+        exec(compile(verified[directory + "owned_command.py"], module.__file__, "exec"), module.__dict__)
+    except Exception:
+        sys.modules.pop(name, None)
+        raise RuntimeError("owned command source admission") from None
+    OWNED_COMMAND = module
+    OWNED_COMMAND_SUPERVISOR = module.CommandSupervisor()
+
+
+def require_original_command_cleanup(value):
+    require(type(value) is dict and set(value) == set(CLEANUP_TRUE_FIELDS + CLEANUP_FALSE_FIELDS))
+    require(all(value[key] is True for key in CLEANUP_TRUE_FIELDS))
+    require(all(value[key] is False for key in CLEANUP_FALSE_FIELDS))
+
+
 
 def run(arguments, *, cwd=None, timeout=180, env=None):
-    # No Docker, native hosts or background SDK servers; each command is awaited.
+    global OWNED_COMMAND_OBSERVATIONS
+    require(OWNED_COMMAND is not None and OWNED_COMMAND_SUPERVISOR is not None)
     try:
-        result = subprocess.run(arguments, cwd=cwd, env=env, capture_output=True, timeout=timeout, check=False)
-    except subprocess.TimeoutExpired:
-        print(json.dumps({"QualificationStage": ACTIVE_STAGE, "FailureKind": "command-timeout"}), flush=True)
-        raise
+        result = OWNED_COMMAND_SUPERVISOR.capture(arguments, cwd=cwd, env=env, timeout=timeout)
+    except OWNED_COMMAND.CommandRefused as refusal:
+        require(type(refusal.kind) is str and refusal.kind in COMMAND_REFUSALS)
+        print(json.dumps({"QualificationStage": ACTIVE_STAGE, "FailureKind": "owned-command-refused",
+                          "RefusalKind": refusal.kind}), flush=True)
+        raise RuntimeError("owned command refused") from None
+    require_original_command_cleanup(result.cleanup)
+    require(type(result.stdout) is bytes and type(result.stderr) is bytes and type(result.returncode) is int)
     require(len(result.stdout) <= 8 * 1024 * 1024 and len(result.stderr) <= 8 * 1024 * 1024)
+    OWNED_COMMAND_OBSERVATIONS += 1
     if result.returncode != 0:
         projection = public_diagnostics(result.stdout + b"\n" + result.stderr, pathlib.Path.cwd().resolve(), ACTIVE_STAGE)
         print(json.dumps({"QualificationStage": ACTIVE_STAGE, "FailureKind": "command-exit", **projection}), flush=True)
     require(result.returncode == 0)
     return result.stdout
+
+
+def settle_failed_command_owner():
+    # Recovery cannot erase the primary qualification failure or authorize another command.
+    supervisor = OWNED_COMMAND_SUPERVISOR
+    if supervisor is None or supervisor.quarantine is None:
+        return True, {"HelperQuarantinePresent": False, "HelperRecoveryAttempted": False,
+                      "HelperPhysicalRecoveryVerified": False}
+    attempted = False
+    receipt = None
+    try:
+        if not supervisor.quarantine.recovery_attempted:
+            attempted = True
+            receipt = supervisor.retry_quarantined_cleanup()
+        else:
+            receipt = supervisor.last_cleanup
+    except BaseException:
+        try:
+            receipt = supervisor.last_cleanup
+        except BaseException:
+            receipt = None
+    # Physical release is narrower than command acceptance: original failure remains sticky true.
+    physical = (type(receipt) is dict and set(receipt) == set(CLEANUP_TRUE_FIELDS + CLEANUP_FALSE_FIELDS)
+                and all(receipt[key] is True for key in CLEANUP_TRUE_FIELDS)
+                and receipt["CleanupOriginallyFailed"] is True
+                and all(receipt[key] is False for key in CLEANUP_FALSE_FIELDS if key != "CleanupOriginallyFailed"))
+    return physical, {"HelperQuarantinePresent": True, "HelperRecoveryAttempted": attempted,
+                      "HelperPhysicalRecoveryVerified": physical}
+
+
+def public_failure_projection(value):
+    # Public logging must never obstruct independent resource finalization/retention.
+    try:
+        print(json.dumps(value), flush=True)
+    except BaseException:
+        pass
+
+
+def retain_unsettled_owner(supervisor):
+    # Keep original objects reachable until external bounded runner cancellation. No voluntary exit,
+    # second recovery, new command or broad kill. Forced parent death is explicitly unsupported.
+    retained_owner = supervisor
+    for value in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(value, lambda *_: None)
+        except BaseException:
+            pass
+    while True:
+        try:
+            time.sleep(1)
+        except BaseException:
+            # Interrupted waits/public streams cannot discard the uncertain original lease.
+            continue
+
+
+def failed_exit_with_owner_fence():
+    try:
+        may_exit, observation = settle_failed_command_owner()
+    except BaseException:
+        may_exit = OWNED_COMMAND_SUPERVISOR is None
+        observation = {"HelperQuarantinePresent": not may_exit, "HelperRecoveryAttempted": False,
+                       "HelperPhysicalRecoveryVerified": False}
+    try:
+        public_failure_projection({"QualificationFailed": True, **observation})
+    finally:
+        if not may_exit:
+            retain_unsettled_owner(OWNED_COMMAND_SUPERVISOR)
+    sys.exit(1)
 
 
 def verify_materializer_identity(accepted, materializer, manifest):
@@ -443,7 +580,9 @@ def verify_materializer_identity(accepted, materializer, manifest):
 def main():
     root = pathlib.Path.cwd().resolve()
     parser_controls = audit_parser_controls()
-    manifest = json.loads((root / "tools/FinancialCompositionAdapter.Qualification/source-manifest.json").read_text())
+    with (root / "tools/FinancialCompositionAdapter.Qualification/source-manifest.json").open("rb") as stream:
+        manifest = strict_json(stream.read(1024 * 1024 + 1))
+    bootstrap_owned_commands(root, manifest)
     event = json.loads(pathlib.Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     pr = event["pull_request"]
     require(type(event["number"]) is int and event["number"] > 0 and pr["number"] == event["number"])
@@ -539,6 +678,10 @@ def main():
                "acceptedFixtureCommit": FIXTURE_COMMIT, "acceptedFixtureRun": 37655912717, "sourceArchives": archives,
                "materializerIdentity": materializer_identity,
                "sameRunLockDigests": locks, "auditOnlyConfigSha256": AUDIT_CONFIG_SHA256, "auditedGraphOwners": graph_records, "auditedGraphOwnerCount": 7, "committedLockAcceptance": False, "assemblySha256": assemblies, "auditParserControls": parser_controls,
+               "ownedCommandCleanup": {"ObservedCommands": OWNED_COMMAND_OBSERVATIONS,
+                   "ActualLinuxBackendUsed": True, "HeldResourceConditionsSatisfied": True, "CleanupOriginallyFailed": False,
+                   "EscapedSessionDescendantsAccepted": False, "IndependentFdCensusAccepted": False,
+                   "KernelResourceCapsObserved": False, "GeneralSourceGitCleanupAccepted": False},
                "compileControls": actual, "compiled": True, "originalRuntimeDiRegistrationSourceWitness": True,
                "originalRuntimeDiHostStarted": False, "physicalBusinessSchemaAccepted": False, "principalEnrollmentAccepted": False,
                "catalogueRegistrationAccepted": False, "fileSigningAccepted": False, "financialEightAccepted": False}
@@ -553,14 +696,19 @@ if __name__ == "__main__":
     try:
         main()
     except GraphRejected as rejection:
-        print(json.dumps({"QualificationFailed": True, "FailedStage": ACTIVE_STAGE, "GraphRole": rejection.role,
-                          "GraphRejectionCategory": rejection.category, "GraphFailureKind": rejection.kind}), flush=True)
-        sys.exit(1)
+        try:
+            public_failure_projection({"QualificationFailed": True, "FailedStage": ACTIVE_STAGE, "GraphRole": rejection.role,
+                                       "GraphRejectionCategory": rejection.category, "GraphFailureKind": rejection.kind})
+        finally:
+            failed_exit_with_owner_fence()
     except AuditRejected as rejection:
-        # Category values are a fixed public vocabulary, never actual JSON/configuration values.
-        print(json.dumps({"QualificationFailed": True, "FailedStage": ACTIVE_STAGE, "AuditRejectionCategory": rejection.category, **rejection.evidence}), flush=True)
-        sys.exit(1)
-    except Exception:
-        # No exception payload, configuration, archive contents or compiler output in public logs.
-        print(json.dumps({"QualificationFailed": True, "FailedStage": ACTIVE_STAGE}), flush=True)
-        sys.exit(1)
+        try:
+            public_failure_projection({"QualificationFailed": True, "FailedStage": ACTIVE_STAGE,
+                                       "AuditRejectionCategory": rejection.category, **rejection.evidence})
+        finally:
+            failed_exit_with_owner_fence()
+    except BaseException:
+        try:
+            public_failure_projection({"QualificationFailed": True, "FailedStage": ACTIVE_STAGE})
+        finally:
+            failed_exit_with_owner_fence()
