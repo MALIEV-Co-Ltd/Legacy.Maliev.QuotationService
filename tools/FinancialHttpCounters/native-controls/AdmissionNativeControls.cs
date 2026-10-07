@@ -26,11 +26,17 @@ internal static class AdmissionNativeControls
             await Reject(async t => { _ = await ProcessAdmission.BoundedFileAsync(root, 4096, t); });
             string original = Path.Combine(root, "original"), moved = Path.Combine(root, "moved");
             await File.WriteAllTextAsync(original, "owned synthetic input"); File.SetUnixFileMode(original, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            await Reject(async t => { _ = await ProcessAdmission.BoundedFileAsync(original, 4096, t, privateOwner: true,
-                afterOpen: () => { File.Move(original, moved); File.CreateSymbolicLink(original, fifo); }); });
+            await Reject(async t =>
+            {
+                _ = await ProcessAdmission.BoundedFileAsync(original, 4096, t, privateOwner: true,
+                    afterOpen: () => { File.Move(original, moved); File.CreateSymbolicLink(original, fifo); });
+            });
             File.Delete(original); File.Move(moved, original);
-            await Reject(async t => { _ = await ProcessAdmission.BoundedFileAsync(original, 4096, t, afterOpen: () =>
-                { File.Move(original, moved); File.WriteAllText(original, "owned synthetic input"); }); });
+            await Reject(async t =>
+            {
+                _ = await ProcessAdmission.BoundedFileAsync(original, 4096, t, afterOpen: () =>
+                    { File.Move(original, moved); File.WriteAllText(original, "owned synthetic input"); });
+            });
             File.Delete(original); File.Move(moved, original); File.SetUnixFileMode(original, UnixFileMode.UserRead | UnixFileMode.GroupRead);
             await Reject(async t => { _ = await ProcessAdmission.BoundedFileAsync(original, 4096, t, privateOwner: true); });
             using (var cancelled = new CancellationTokenSource())
