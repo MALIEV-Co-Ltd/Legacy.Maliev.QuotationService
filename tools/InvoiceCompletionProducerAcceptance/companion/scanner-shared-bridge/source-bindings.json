@@ -36,14 +36,14 @@
     {
       "name": "owned_storage_backend",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/owned_storage_backend.py",
-      "sha256": "0d60b0f718cdcb9b855b45dff814a1f99ef2b794a8f7f2a0559d1319474c7ec5",
-      "length": 12910
+      "sha256": "31cf581588ebd6ec2c374c899f4c21431d6f6a79c41afb2babd17ba0e12cb939",
+      "length": 24416
     },
     {
       "name": "storage_owner_command",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/storage_owner_command.py",
-      "sha256": "f91b5f7ec7db47407a37d047ca67db6687b7a5946d0ad835ef6d382df79c9219",
-      "length": 1973
+      "sha256": "5d063f59ad00c8071e962ebfe34651e343f5c1e2ae6add58cc9a72f837dc1d09",
+      "length": 2722
     },
     {
       "name": "pinned_image_oracle",
@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "8213d1e1a84f833fcd310f45614d6ab628fc02dac13df8b1432615c7e8076313",
-      "length": 46202
+      "sha256": "7a989f6779eb05edaac0720e160d23b32b4f64e5ea362e42a0e7a8e59a701554",
+      "length": 52536
     }
   ],
   "rawControls": {
@@ -180,5 +180,7 @@
   "storageObserverDiagnosticBase": "d8a5a7999de099b92ccf801a26ddf4f0969d09db",
   "storageObserverDiagnosticScope": "47fixed original sites;S43+command4;actual heldloader retained original class births/code/globals/nestedconstants captured beforeactors;storage-observe only;14falsefields;no policychange/no actualpredicate cause",
   "storageListenerCardinalityBase": "b5d3bf97ae20acb7d848da5ce986bcc9160e989f",
-  "storageListenerCardinalityScope": "Only original IPv4 selected-port wildcard LISTEN cardinality partition zero vs nonzero!=1;sameexactoneaccepted/AdmissionError/literal/oneRequire/CLIorder;noTCP6admission/noactualzeroinference"
+  "storageListenerCardinalityScope": "Only original IPv4 selected-port wildcard LISTEN cardinality partition zero vs nonzero!=1;sameexactoneaccepted/AdmissionError/literal/oneRequire/CLIorder;noTCP6admission/noactualzeroinference",
+  "storageZeroEvidenceBase": "882aa1bad5b7345accd25ce7884bbdb72a365a8b",
+  "storageZeroEvidenceScope": "Original zero FIRST retained;thirteen subordinate readonly calls/shared<=min30secLeaseRemaining;noIPv4admission/cleanup/HTTP/eighttransfer"
 }

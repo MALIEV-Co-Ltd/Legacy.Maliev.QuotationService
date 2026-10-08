@@ -935,7 +935,7 @@ class StorageListenerCardinalityControls(unittest.TestCase):
 
     def test_original_source_cardinality_partition_preserves_outcomes_and_one_require(self):
         import ast,types,sys
-        source=HELD_OBSERVER_SOURCES['storage'];self.assertEqual(source.count(self.SPLIT.encode()),1)
+        source=HELD_OBSERVER_SOURCES['storage'];source=source.replace(ZERO_INSTRUMENTED.encode(),ZERO_ORIGINAL.encode());self.assertEqual(source.count(self.SPLIT.encode()),1)
         storage=types.ModuleType('cardinality_original_storage')
         with patch.dict(sys.modules,{storage.__name__:storage}):exec(compile(source,'<held-source>','exec'),storage.__dict__)
         functions=[]
@@ -964,7 +964,7 @@ class StorageListenerCardinalityControls(unittest.TestCase):
         tree=ast.parse(HELD_OBSERVER_SOURCES['storage']);fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='observe')
         branch=next(n for n in fn.body if isinstance(n,ast.If) and ast.unparse(n.test)=='len(inodes) == 0')
         self.assertEqual(len(branch.body),1);self.assertEqual(len(branch.orelse),1)
-        zero,nonzero=branch.body[0].value,branch.orelse[0].value
+        zero,nonzero=branch.body[0].body[0].value,branch.orelse[0].value
         self.assertEqual(ast.unparse(zero.args[0]),'False');self.assertEqual(ast.unparse(nonzero.args[0]),'len(inodes) == 1')
         self.assertEqual(zero.args[1].value,nonzero.args[1].value)
         self.assertEqual(zero.args[1].value,'One exact backend listener required')
@@ -975,12 +975,258 @@ class StorageListenerCardinalityControls(unittest.TestCase):
 
     def test_entire_observer_source_restores_by_only_cardinality_guard_recomposition(self):
         import ast
-        current=HELD_OBSERVER_SOURCES['storage'];original=current.replace(self.SPLIT.encode(),self.ORIGINAL.encode())
+        current=HELD_OBSERVER_SOURCES['storage'].replace(ZERO_INSTRUMENTED.encode(),ZERO_ORIGINAL.encode());original=current.replace(self.SPLIT.encode(),self.ORIGINAL.encode())
         old=ast.parse(original);new=ast.parse(current)
         oldfn=next(n for n in old.body if isinstance(n,ast.FunctionDef) and n.name=='observe')
         newfn=next(n for n in new.body if isinstance(n,ast.FunctionDef) and n.name=='observe')
         oldcalls=[ast.unparse(n) for n in ast.walk(oldfn) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in ('execute','snapshots','ticks','refresh')]
         newcalls=[ast.unparse(n) for n in ast.walk(newfn) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in ('execute','snapshots','ticks','refresh')]
         self.assertEqual(oldcalls,newcalls)
-        self.assertNotIn(b'/proc/1/net/tcp6',current)
+        self.assertIn(b'/proc/1/net/tcp6',current)
         self.assertEqual(len(current)-len(original),len(self.SPLIT.encode())-len(self.ORIGINAL.encode()))
+
+ZERO_ORIGINAL = "    if len(inodes) == 0:\n        require(False, 'One exact backend listener required')\n"
+ZERO_INSTRUMENTED = "    if len(inodes) == 0:\n        try:\n            require(False, 'One exact backend listener required')\n        except AdmissionError as zero_error:\n            import pair_failure_diagnostic as diagnostic\n            diagnostic.failure(zero_error)\n            _zero_listener_evidence(lease, storage_command, zero_error)\n            raise\n"
+
+class ZeroListenerEvidenceControls(unittest.TestCase):
+    def source_model(self):
+        return StorageObserverSiteControls().model()
+
+    def fixture(self, s):
+        from datetime import datetime, timezone, timedelta
+        now=datetime.now(timezone.utc)
+        stamp=lambda v:v.isoformat().replace('+00:00','Z')
+        lease=s.Lease('a'*64,'b'*64,'c'*64,'123','1','d'*40,
+            'c821-11111111-2222-3333-4444-555555555555',stamp(now-timedelta(seconds=60)),
+            stamp(now+timedelta(seconds=60)),stamp(now-timedelta(seconds=50)),
+            stamp(now-timedelta(seconds=40)),stamp(now-timedelta(seconds=50)),
+            '172.19.0.2',4443,'e'*64,4567)
+        host=dict(NetworkMode=lease.network_id,ReadonlyRootfs=True,Privileged=False,CapDrop=['ALL'],CapAdd=None,
+            SecurityOpt=['no-new-privileges:true'],PidMode='',IpcMode='private',CgroupnsMode='private',
+            RestartPolicy={'Name':'no'},AutoRemove=False,Memory=128*1024**2,NanoCpus=500000000,
+            Binds=None,Devices=None,Tmpfs=None,PortBindings=None)
+        container=dict(Id=lease.container_id,Created=lease.created,Image=s.IMAGE_ID,RestartCount=0,
+            State=dict(Running=True,Paused=False,Restarting=False,StartedAt=lease.started,Pid=12),
+            Config=dict(Image=s.IMAGE,Volumes=None,Entrypoint=['/bin/fake-gcs-server'],Cmd=lease.arguments(),
+                Env=['PATH=/bin'],Labels=lease.labels('storage')),HostConfig=host,Mounts=[],
+            NetworkSettings=dict(Ports={'4443/tcp':None},Networks={'exact':dict(NetworkID=lease.network_id,IPAddress=lease.bridge_ip)}))
+        image=dict(Id=s.IMAGE_ID,RepoDigests=[s.IMAGE],Config=dict(Env=['PATH=/bin'],Volumes=None))
+        network=dict(Id=lease.network_id,Created=lease.network_created,Internal=True,Driver='bridge',EnableIPv6=False,
+            Scope='local',Labels=lease.labels(),Containers={lease.container_id:{},lease.scanner_id:{}},IPAM={'Config':[{'Subnet':'172.19.0.0/24'}]})
+        scanner=dict(Id=lease.scanner_id,Created=lease.created,State=dict(Running=True,Paused=False,Restarting=False,StartedAt=lease.started,Pid=13),
+            Config=dict(Labels=lease.labels('scanner')),NetworkSettings=dict(Networks={'exact':dict(NetworkID=lease.network_id)}))
+        return lease,container,image,network,scanner
+
+    def evidence(self, s, case='single', fault_at=None, audit=None, mutation=None):
+        import json,copy
+        lease,container,image,network,scanner=self.fixture(s);calls=[] if audit is None else audit;reads={}
+        def runner(args, maximum, *, absolute_deadline):
+            calls.append((tuple(args),maximum,absolute_deadline))
+            if len(calls)==fault_at:raise s.AdmissionError('MODELED PRIVATE FAILURE')
+            if args[1:3] in (['container','inspect'],['network','inspect'],['image','inspect']):
+                obj={lease.container_id:container,lease.scanner_id:scanner,lease.network_id:network,s.IMAGE_ID:image}[args[3]]
+                obj=copy.deepcopy(obj)
+                if mutation is not None:mutation(len(calls),args,obj)
+                if case=='changed-pid' and len(calls)>10 and args[3]==lease.container_id:obj['State']['Pid']=14
+                if case=='foreign-census':network['Containers']['f'*64]={}
+                return json.dumps([obj]).encode()
+            tail=tuple(args[3:]);reads[tail]=reads.get(tail,0)+1
+            if tail==('cat','/proc/1/stat'):
+                tick=4568 if case=='initial-tick' or (case=='changed-tick' and reads[tail]>1) else lease.kernel_ticks
+                return ('1 (server) S '+' '.join(['0']*18+[str(tick)])).encode()
+            if tail==('ls','-l','/proc/1/fd'):
+                inode='999' if case=='unowned' or (case=='changed-fd' and reads[tail]>1) else '777'
+                value=f'lrwx------ 1 root root 64 Oct 8 12:00 3 -> socket:[{inode}]\n'
+                if case=='malformed-fd':value='PRIVATE socket:[777]\n'
+                return value.encode()
+            if tail[0]=='cat' and tail[1] in ('/proc/1/net/tcp','/proc/1/net/tcp6'):
+                v6=tail[1].endswith('tcp6');width=32 if v6 else 8
+                header='sl local_address rem_address st tx_queue rx_queue tr tm->when retrnsmt uid timeout inode\n'
+                if case=='malformed-table' and v6:return b'PRIVATE INVALID\n'
+                count=0 if (not v6 and case!='later-ipv4') or case=='absent' else (2 if case=='multiple' and v6 else 1)
+                row=f'0: {"0"*width}:{lease.port:04X} {"0"*width}:0000 0A 0 0 0 0 0 777\n'
+                if case=='wrong-port':row=row.replace(f':{lease.port:04X}',':0001')
+                if case=='wrong-state':row=row.replace(' 0A ',' 01 ')
+                return (header+row*count).encode()
+            self.fail('Unexpected modeled command')
+        return s._zero_listener_evidence(lease,runner),calls
+
+    def test_tcp6_evidence_never_admits_and_uses_one_deadline_thirteen_commands(self):
+        d,s,c,b=self.source_model();clause,calls=self.evidence(s)
+        self.assertEqual(clause,'zero-ipv4-tcp6-single-init-owned-stable')
+        self.assertEqual(len(calls),13);self.assertEqual(len({row[2] for row in calls}),1)
+        self.assertTrue(all(row[1]<=262144 for row in calls))
+        self.assertIsNone(d.FIRST);self.assertIsNone(d.LISTENER_EVIDENCE)
+
+    def test_absence_multiple_wrong_binding_and_fd_generation_have_fixed_refusals(self):
+        d,s,c,b=self.source_model()
+        for case,expected in [('absent','no-selected-tcp6-listener'),('multiple','multiple-tcp6-listeners'),
+            ('wrong-port','no-selected-tcp6-listener'),('wrong-state','no-selected-tcp6-listener'),
+            ('unowned','tcp6-fd-unowned'),('changed-fd','tcp6-fd-unowned'),('changed-pid','generation-changed'),
+            ('changed-tick','generation-changed'),('later-ipv4','later-ipv4-present')]:
+            with self.subTest(case=case):self.assertEqual(self.evidence(s,case)[0],'zero-ipv4-'+expected)
+
+    def test_parser_and_original_census_failures_stop_without_evidence_registration(self):
+        d,s,c,b=self.source_model()
+        for case in ('malformed-table','malformed-fd','foreign-census'):
+            with self.subTest(case=case),self.assertRaises(s.AdmissionError):self.evidence(s,case)
+        self.assertIsNone(d.LISTENER_EVIDENCE)
+
+    def test_each_original_command_failure_propagates_without_subsequent_commands(self):
+        d,s,c,b=self.source_model()
+        for index in range(1,14):
+            audit=[]
+            with self.subTest(index=index),self.assertRaises(s.AdmissionError):self.evidence(s,fault_at=index,audit=audit)
+            self.assertEqual(len(audit),index)
+        self.assertIsNone(d.LISTENER_EVIDENCE)
+
+    def test_deadline_type_expiration_and_late_success_refuse_before_or_after_original_runner(self):
+        import types,sys,time
+        d,s,c,b=self.source_model();births=[]
+        runner=types.ModuleType('scanner_docker_command')
+        runner.run_docker=lambda args,timeout:(births.append(timeout) or 'observed')
+        args=['docker','exec','a'*64,'cat','/proc/1/net/tcp6']
+        with patch.dict(sys.modules,{'scanner_docker_command':runner}):
+            for value in (True,float('nan'),float('inf'),-float('inf'),10**400,0,-1):
+                with self.subTest(value=type(value).__name__),self.assertRaises(b.BridgeRefused):c.storage_command(args,absolute_deadline=value)
+            self.assertEqual(births,[])
+            with patch.object(c.time,'monotonic',side_effect=[10.0,10.5]):
+                self.assertEqual(c.storage_command(args,absolute_deadline=11.0),b'observed')
+            self.assertEqual(births,[1.0])
+            with patch.object(c.time,'monotonic',side_effect=[10.0,11.0]),self.assertRaises(b.BridgeRefused):c.storage_command(args,absolute_deadline=11.0)
+            self.assertEqual(births,[1.0,1.0])
+            c.storage_command(['docker','exec','a'*64,'cat','/proc/1/net/tcp'])
+            self.assertEqual(births[-1],10)
+
+    def test_private_registration_refuses_caller_minted_metadata_and_keeps_fourteen_false_flags(self):
+        d,s,c,b=self.source_model();error=StorageObserverSiteControls().error(lambda:s.instant('PRIVATE'))
+        d.failure(error);first=d.FIRST
+        with self.assertRaises(ValueError):d.listener_evidence(error,'zero-ipv4-tcp6-single-init-owned-stable')
+        self.assertEqual(d.FIRST,first);self.assertIsNone(d.LISTENER_EVIDENCE)
+        d.bind('a'*40,'123',1,'b'*64,'pair');proof=d.projection();self.assertEqual(len(proof),14)
+        for key in ('pairAccepted','cleanupAccepted','fileRuntimeAccepted','genuineEightHostFinancialAccepted'):self.assertIs(proof[key],False)
+
+    def test_each_returned_object_uncertainty_stops_before_next_cli(self):
+        d,s,c,b=self.source_model()
+        cases=[(1,['Id'],'f'*64),(1,['RepoDigests'],[]),(1,['Config'],[]),
+            (2,['Id'],'f'*64),(2,['Created'],'UNKNOWN'),(2,['State','Pid'],0),
+            (2,['State','Running'],False),(2,['HostConfig','CapDrop'],[]),
+            (2,['HostConfig','Memory'],0),(2,['Config'],[]),
+            (3,['Id'],'f'*64),(3,['Created'],'UNKNOWN'),(3,['Internal'],False),
+            (3,['Containers'],{}),(3,['IPAM'],[]),
+            (4,['Id'],'f'*64),(4,['State','Running'],False),(4,['State','Pid'],0),
+            (4,['Config','Labels'],{})]
+        for expected,path,value in cases:
+            audit=[]
+            def mutate(index,args,obj):
+                if index!=expected:return
+                target=obj
+                for key in path[:-1]:target=target[key]
+                target[path[-1]]=value
+            with self.subTest(command=expected,path=path),self.assertRaises(s.AdmissionError):self.evidence(s,audit=audit,mutation=mutate)
+            self.assertEqual(len(audit),expected)
+        audit=[]
+        def change_pid(index,args,obj):
+            if index==11:obj['State']['Pid']=14
+        self.assertEqual(self.evidence(s,audit=audit,mutation=change_pid)[0],'zero-ipv4-generation-changed')
+        self.assertEqual(len(audit),11)
+        audit=[]
+        def change_ipam(index,args,obj):
+            if index==12:obj['IPAM']={'Config':[{'Subnet':'172.20.0.0/24'}]}
+        self.assertEqual(self.evidence(s,audit=audit,mutation=change_ipam)[0],'zero-ipv4-generation-changed')
+        self.assertEqual(len(audit),12)
+
+    def test_utc_mapping_latency_consumes_budget_and_late_early_return_refuses(self):
+        import time
+        from datetime import datetime
+        d,s,c,b=self.source_model();clock=[100.0];samples=[]
+        class DelayedUtc(datetime):
+            @classmethod
+            def now(cls,tz=None):
+                clock[0]=121.0
+                return datetime.now(tz)
+        def mono():samples.append(clock[0]);return clock[0]
+        with patch.object(s,'datetime',DelayedUtc),patch.object(time,'monotonic',side_effect=mono):
+            clause,calls=self.evidence(s)
+        self.assertEqual(clause,'zero-ipv4-tcp6-single-init-owned-stable');self.assertEqual(samples[0],100.0)
+        self.assertTrue(all(row[2]==130.0 for row in calls))
+        audit=[]
+        with patch.object(time,'monotonic',side_effect=[100.0,131.0]),self.assertRaises(s.AdmissionError):self.evidence(s,case='initial-tick',audit=audit)
+        self.assertEqual(len(audit),5)
+
+    def full_observe(self, case='single', fault_at=None, helper_substitution=None):
+        import copy,json,sys,types
+        d,s,c,b=self.source_model();lease,container,image,network,scanner=self.fixture(s)
+        if helper_substitution=='return':s._zero_listener_evidence=lambda *args:'zero-ipv4-tcp6-single-init-owned-stable'
+        if helper_substitution=='foreign-globals':s._zero_listener_evidence=types.FunctionType(s._zero_listener_evidence.__code__,dict(s.__dict__),argdefs=s._zero_listener_evidence.__defaults__)
+        calls=[];seen_zero=[];quarantine=[];extra_reads=0
+        handle=SimpleNamespace(network_id=lease.network_id,scanner_container_id=lease.scanner_id,
+            created_utc=lease.network_created,ownership_labels={'financial.acceptance.run':lease.lease_id[5:]},
+            context=SimpleNamespace(run_id=lease.run_id,attempt=1,file_sha=lease.file_sha,lease_id=lease.lease_id,
+                expires_utc=lease.expires,issued_utc=lease.issued))
+        handle.refresh=lambda:dict(networkId=lease.network_id,createdUtc=lease.network_created,scannerContainerId=lease.scanner_id,
+            internal=True,driver='bridge',ownershipLabels=handle.ownership_labels,members=sorted([lease.container_id,lease.scanner_id]))
+        runner=types.ModuleType('scanner_docker_command')
+        retained=object();failure=b.BridgeRefused('PRIVATE subordinate owner uncertainty')
+        def run(args,timeout):
+            nonlocal extra_reads
+            calls.append((tuple(args),timeout))
+            if d.FIRST is not None:
+                seen_zero.append(d.FIRST);extra_reads+=1
+                if extra_reads==fault_at:
+                    quarantine.append(retained)
+                    raise failure
+            if args[:2] in (['container','inspect'],['network','inspect'],['image','inspect']):
+                return json.dumps([{lease.container_id:container,lease.scanner_id:scanner,lease.network_id:network,s.IMAGE_ID:image}[args[2]]])
+            tail=tuple(args[2:])
+            if tail==('cat','/proc/1/stat'):return '1 (server) S '+' '.join(['0']*18+[str(lease.kernel_ticks)])
+            if tail==('readlink','/proc/1/exe'):return '/bin/fake-gcs-server'
+            if tail==('sha256sum','/proc/1/exe'):return lease.executable_sha+'  /proc/1/exe'
+            if tail==('cat','/proc/1/cmdline'):return '\0'.join(['/bin/fake-gcs-server',*lease.arguments()])+'\0'
+            if tail==('ls','-l','/proc/1/fd'):return 'lrwx------ 1 root root 64 Oct 8 12:00 3 -> socket:[777]\n'
+            if tail==('cat','/proc/1/net/tcp'):return 'sl local_address rem_address st tx_queue rx_queue tr tm->when retrnsmt uid timeout inode\n'
+            if tail==('cat','/proc/1/net/tcp6'):
+                if case=='malformed':return 'PRIVATE bad table'
+                return f'sl local_address rem_address st tx_queue rx_queue tr tm->when retrnsmt uid timeout inode\n0: {"0"*32}:{lease.port:04X} {"0"*32}:0000 0A 0 0 0 0 0 777\n'
+            self.fail('Unexpected full-observe modeled command')
+        runner.run_docker=run
+        with patch.dict(sys.modules,{'scanner_docker_command':runner,'storage_owner_command':c,'pair_failure_diagnostic':d}),patch.object(s.sys,'platform','linux'),patch.dict(s.os.environ,{'RUNNER_ENVIRONMENT':'github-hosted','GITHUB_RUN_ID':lease.run_id,'GITHUB_RUN_ATTEMPT':lease.attempt}):
+            try:s.observe(lease,handle,command_runner=c.storage_command)
+            except BaseException as error:observed=error
+            else:self.fail('Original IPv4 admission incorrectly passed')
+        return d,s,c,b,observed,seen_zero,quarantine,retained,failure,extra_reads
+
+    def test_actual_observe_records_original_zero_first_before_all_subordinate_reads(self):
+        d,s,c,b,error,seen,quarantine,retained,failure,count=self.full_observe()
+        self.assertIs(type(error),s.AdmissionError);self.assertEqual(error.args,('One exact backend listener required',))
+        self.assertEqual(count,13);self.assertTrue(all(row==d.FIRST for row in seen))
+        self.assertEqual(d.FIRST,('storage-observe','owner-refusal',d.LISTENER_ZERO_CLAUSE))
+        self.assertIs(d.LISTENER_EVIDENCE[0],error);self.assertEqual(quarantine,[])
+        d.bind('a'*40,'123',1,'b'*64,'pair');proof=d.projection()
+        self.assertEqual(proof['firstDenialClause'],'zero-ipv4-tcp6-single-init-owned-stable')
+        self.assertEqual(len(proof),14);self.assertTrue(all(proof[k] is False for k in ('pairAccepted','cleanupAccepted','fileRuntimeAccepted','genuineEightHostFinancialAccepted')))
+
+    def test_actual_subordinate_failure_identity_custody_and_first_refusal_survive_without_next_birth(self):
+        for index in range(1,14):
+            with self.subTest(index=index):
+                d,s,c,b,error,seen,quarantine,retained,failure,count=self.full_observe(fault_at=index)
+                self.assertIs(error,failure);self.assertEqual(count,index);self.assertEqual(quarantine,[retained])
+                self.assertTrue(all(row==d.FIRST for row in seen));self.assertIsNone(d.LISTENER_EVIDENCE)
+                d.failure(error);self.assertEqual(d.FIRST,('storage-observe','owner-refusal',d.LISTENER_ZERO_CLAUSE))
+                d.bind('a'*40,'123',1,'b'*64,'pair');self.assertEqual(d.projection()['firstDenialClause'],d.LISTENER_ZERO_CLAUSE)
+
+    def test_actual_malformed_observation_stops_and_preserves_original_first_without_minting_evidence(self):
+        d,s,c,b,error,seen,quarantine,retained,failure,count=self.full_observe(case='malformed')
+        self.assertIs(type(error),s.AdmissionError);self.assertEqual(count,8)
+        self.assertIsNone(d.LISTENER_EVIDENCE);d.failure(error)
+        self.assertEqual(d.FIRST,('storage-observe','owner-refusal',d.LISTENER_ZERO_CLAUSE))
+
+    def test_postcapture_helper_returns_cannot_mint_and_foreign_helper_globals_cannot_register(self):
+        for kind in ('return','foreign-globals'):
+            with self.subTest(kind=kind):
+                d,s,c,b,error,seen,quarantine,retained,failure,count=self.full_observe(helper_substitution=kind)
+                self.assertIsNone(d.LISTENER_EVIDENCE)
+                if kind=='return':self.assertEqual(count,0)
+                else:self.assertEqual(count,13);self.assertIs(type(error),ValueError)
+                d.bind('a'*40,'123',1,'b'*64,'pair')
+                self.assertEqual(d.projection()['firstDenialClause'],d.LISTENER_ZERO_CLAUSE)

@@ -140,6 +140,193 @@ def inspect(kind, handle, command_runner=command):
     return parsed[0]
 
 
+def _zero_listener_evidence(lease, runner, zero_error=None):
+    """Subordinate read-only evidence. NEVER satisfies original IPv4 admission."""
+    import time
+    started = time.monotonic()
+    remaining = (instant(lease.expires) - datetime.now(timezone.utc)).total_seconds()
+    if not remaining > 0:
+        raise AdmissionError('Listener evidence lease expired')
+    deadline = started + min(30.0, remaining)
+    calls = 0
+
+    def call(args, maximum=262144):
+        nonlocal calls
+        if calls == 14:
+            raise AdmissionError('Listener evidence command budget exhausted')
+        calls += 1
+        return runner(args, maximum, absolute_deadline=deadline)
+
+    def execution(*args):
+        return call(['docker', 'exec', lease.container_id, *args]).decode('ascii')
+
+    def snapshot(kind, handle):
+        value = json.loads(call(['docker', kind, 'inspect', handle]))
+        if type(value) is not list or len(value) != 1 or type(value[0]) is not dict:
+            raise AdmissionError('Listener evidence snapshot shape differs')
+        return value[0]
+
+    def generation(expected_pid=None, expected_ipam=None):
+        container = snapshot('container', lease.container_id)
+        checked_container(container)
+        if expected_pid is not None and container['State']['Pid'] != expected_pid:
+            return container, None, None
+        network = snapshot('network', lease.network_id)
+        checked_network(network)
+        if expected_ipam is not None and network['IPAM'] != expected_ipam:
+            return container, network, None
+        scanner = snapshot('container', lease.scanner_id)
+        checked_scanner(scanner)
+        return container, network, scanner
+
+    def start_ticks():
+        value = execution('cat', '/proc/1/stat')
+        fields = value[value.rfind(')') + 1:].split()
+        if not value.startswith('1 (') or len(fields) < 20 or fields[0] in ('Z', 'X', 'x') or not fields[19].isdigit():
+            raise AdmissionError('Listener evidence kernel stat differs')
+        return int(fields[19])
+
+    def fd_inodes():
+        lines = execution('ls', '-l', '/proc/1/fd').splitlines()
+        result, descriptors = {}, set()
+        for line in lines:
+            if line.startswith('total '):
+                continue
+            fields = line.split()
+            if len(fields) < 9 or len(fields) > 16 or not re.fullmatch('l[rwxstST-]{9}', fields[0]):
+                raise AdmissionError('Listener evidence descriptor row differs')
+            if not fields[-3].isdigit() or fields[-2] != '->' or fields[-3] in descriptors:
+                raise AdmissionError('Listener evidence descriptor identity differs')
+            descriptors.add(fields[-3])
+            if fields[-1].startswith('socket:'):
+                match = re.fullmatch(r'socket:\[([1-9][0-9]{0,19})\]', fields[-1])
+                if match is None:
+                    raise AdmissionError('Listener evidence socket target differs')
+                result[fields[-3]] = match[1]
+        return result
+
+    def listeners(path, address_width):
+        lines = execution('cat', path).splitlines()
+        if not lines or 'local_address' not in lines[0]:
+            raise AdmissionError('Listener evidence table header differs')
+        result = []
+        for line in lines[1:]:
+            fields = line.split()
+            if len(fields) < 10 or len(fields) > 32 or re.fullmatch('[0-9A-F]{' + str(address_width) + '}:[0-9A-F]{4}', fields[1]) is None:
+                raise AdmissionError('Listener evidence table row differs')
+            if fields[1] == '0' * address_width + f':{lease.port:04X}' and fields[3] == '0A':
+                if re.fullmatch('[1-9][0-9]{0,19}', fields[9]) is None:
+                    raise AdmissionError('Listener evidence socket inode differs')
+                result.append(fields[9])
+        return result
+
+    def scanner_generation(value):
+        state = value.get('State')
+        if type(state) is not dict or state.get('Running') is not True or state.get('Paused') is not False or state.get('Restarting') is not False or type(state.get('Pid')) is not int or state['Pid'] <= 0:
+            raise AdmissionError('Listener evidence scanner generation differs')
+        created, started = value.get('Created'), state.get('StartedAt')
+        instant(created)
+        instant(started)
+        return created, started, state['Pid']
+
+    def checked_image(value):
+        if (value.get('Id') != IMAGE_ID or type(value.get('Config')) is not dict
+                or type(value.get('RepoDigests')) is not list or IMAGE not in value['RepoDigests']
+                or value['Config'].get('Volumes')):
+            raise AdmissionError('Listener evidence immutable image differs')
+
+    def checked_container(container):
+        if any(type(container.get(name)) is not dict for name in ('State', 'Config', 'HostConfig', 'NetworkSettings')):
+            raise AdmissionError('Listener evidence container shape differs')
+        require(container.get('Id') == lease.container_id and container.get('Created') == lease.created, 'Storage generation differs')
+        state, config, host = container.get('State', {}), container.get('Config', {}), container.get('HostConfig', {})
+        require(state.get('Running') is True and state.get('Paused') is False and state.get('Restarting') is False
+                and state.get('StartedAt') == lease.started and type(state.get('Pid')) is int and state['Pid'] > 0
+                and container.get('RestartCount') == 0, 'Live storage generation required')
+        require(config.get('Image') == IMAGE and container.get('Image') == IMAGE_ID and image.get('Id') == IMAGE_ID
+                and IMAGE in (image.get('RepoDigests') or []), 'Reviewed immutable backend required')
+        require(not config.get('Volumes') and not image.get('Config', {}).get('Volumes'), 'Image VOLUME declarations denied')
+        require(config.get('Entrypoint') == ['/bin/fake-gcs-server'] and config.get('Cmd') == lease.arguments()
+                and config.get('Env') == image.get('Config', {}).get('Env'), 'Immutable process configuration differs')
+        require(labels_match(config.get('Labels'), lease.labels('storage')), 'Storage ownership differs')
+        require(host.get('NetworkMode') == lease.network_id and host.get('ReadonlyRootfs') is True and host.get('Privileged') is False
+                and host.get('CapDrop') == ['ALL'] and not host.get('CapAdd')
+                and 'no-new-privileges:true' in (host.get('SecurityOpt') or [])
+                and host.get('PidMode') == '' and host.get('IpcMode') == 'private' and host.get('CgroupnsMode') == 'private'
+                and host.get('RestartPolicy', {}).get('Name') == 'no' and host.get('AutoRemove') is False, 'Storage isolation differs')
+        require(type(host.get('Memory')) is int and 64*1024**2 <= host['Memory'] <= 1024**3
+                and type(host.get('NanoCpus')) is int and 0 < host['NanoCpus'] <= 2_000_000_000, 'Finite storage limits required')
+        require(not any(host.get(k) for k in ('Binds', 'Devices', 'Tmpfs', 'PortBindings')) and not container.get('Mounts'), 'Mount/publication denied')
+        settings = container.get('NetworkSettings', {})
+        require(not any(settings.get('Ports', {}).values()), 'Actual published storage endpoint denied')
+        attachments = list((settings.get('Networks') or {}).values())
+        require(len(attachments) == 1 and attachments[0].get('NetworkID') == lease.network_id
+                and attachments[0].get('IPAddress') == lease.bridge_ip, 'Storage bridge differs')
+
+    def checked_network(network):
+        if type(network.get('Containers')) is not dict or type(network.get('IPAM')) is not dict:
+            raise AdmissionError('Listener evidence network shape differs')
+        require(network.get('Id') == lease.network_id and network.get('Created') == lease.network_created
+                and network.get('Internal') is True and network.get('Driver') == 'bridge'
+                and network.get('EnableIPv6') is False and network.get('Scope') == 'local'
+                and labels_match(network.get('Labels'), {'financial.acceptance.run': lease.lease_id[5:]}), 'Owned internal network required')
+        require(set(network.get('Containers') or {}) == {lease.container_id, lease.scanner_id}, 'Exact two-resource census required')
+
+    def checked_scanner(scanner):
+        if type(scanner.get('Config')) is not dict or type(scanner.get('NetworkSettings')) is not dict:
+            raise AdmissionError('Listener evidence scanner shape differs')
+        require(scanner.get('Id') == lease.scanner_id and labels_match(scanner.get('Config', {}).get('Labels'), {'financial.acceptance.run': lease.lease_id[5:]}),
+                'Foreign scanner handle denied')
+        scanner_networks = list((scanner.get('NetworkSettings', {}).get('Networks') or {}).values())
+        require(len(scanner_networks) == 1 and scanner_networks[0].get('NetworkID') == lease.network_id, 'Scanner network differs')
+        scanner_generation(scanner)
+
+    def finish(clause):
+        if not time.monotonic() < deadline or not datetime.now(timezone.utc) < instant(lease.expires):
+            raise AdmissionError('Listener evidence classification expired')
+        if zero_error is not None:
+            import pair_failure_diagnostic as diagnostic
+            diagnostic.listener_evidence(zero_error, clause)
+        return clause
+
+    image = snapshot('image', IMAGE_ID)
+    checked_image(image)
+    before, network_before, scanner_before = generation()
+    validate_snapshots(lease, before, image, network_before, scanner_before, datetime.now(timezone.utc))
+    scanner_identity = scanner_generation(scanner_before)
+    ticks_before = start_ticks()
+    if ticks_before != lease.kernel_ticks:
+        return finish('zero-ipv4-generation-changed')
+    fd_before = fd_inodes()
+    tcp4 = listeners('/proc/1/net/tcp', 8)
+    if tcp4:
+        return finish('zero-ipv4-later-ipv4-present')
+    tcp6 = listeners('/proc/1/net/tcp6', 32)
+    if not tcp6:
+        return finish('zero-ipv4-no-selected-tcp6-listener')
+    if len(tcp6) != 1:
+        return finish('zero-ipv4-multiple-tcp6-listeners')
+    owning_before = {fd for fd, inode in fd_before.items() if inode == tcp6[0]}
+    if not owning_before:
+        return finish('zero-ipv4-tcp6-fd-unowned')
+    fd_after = fd_inodes()
+    owning_after = {fd for fd, inode in fd_after.items() if inode == tcp6[0]}
+    if owning_after != owning_before:
+        return finish('zero-ipv4-tcp6-fd-unowned')
+    ticks_after = start_ticks()
+    if ticks_after != ticks_before:
+        return finish('zero-ipv4-generation-changed')
+    after, network_after, scanner_after = generation(before['State']['Pid'], network_before['IPAM'])
+    if network_after is None or scanner_after is None:
+        return finish('zero-ipv4-generation-changed')
+    validate_snapshots(lease, after, image, network_after, scanner_after, datetime.now(timezone.utc))
+    if not time.monotonic() < deadline:
+        raise AdmissionError('Listener evidence deadline expired')
+    if scanner_generation(scanner_after) != scanner_identity:
+        return finish('zero-ipv4-generation-changed')
+    return finish('zero-ipv4-tcp6-single-init-owned-stable')
+
+
 def observe(lease, shared_scanner_network, command_runner=None):
     """Read-only native observation, available only in the admitted hosted Linux run.
 
@@ -201,7 +388,13 @@ def observe(lease, shared_scanner_network, command_runner=None):
             require(fields[9].isdigit() and int(fields[9]) > 0, 'Actual socket inode required')
             inodes.append(fields[9])
     if len(inodes) == 0:
-        require(False, 'One exact backend listener required')
+        try:
+            require(False, 'One exact backend listener required')
+        except AdmissionError as zero_error:
+            import pair_failure_diagnostic as diagnostic
+            diagnostic.failure(zero_error)
+            _zero_listener_evidence(lease, storage_command, zero_error)
+            raise
     else:
         require(len(inodes) == 1, 'One exact backend listener required')
     fd = execute('ls', '-l', '/proc/1/fd', maximum=262144).decode('ascii').splitlines()
