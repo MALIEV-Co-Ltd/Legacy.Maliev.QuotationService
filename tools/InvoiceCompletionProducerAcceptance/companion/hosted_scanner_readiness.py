@@ -19,6 +19,7 @@ import uuid
 import selectors
 import ipaddress
 from scanner_loopback_relay import LoopbackRelay
+from scanner_docker_command import run_docker
 from types import SimpleNamespace
 from datetime import datetime, timezone
 
@@ -116,40 +117,7 @@ class Scanner:
                         "scannerReady": False, "cleanupVerified": False}
 
     def docker(self, *args, timeout=30, capture_stderr=False):
-        process = subprocess.Popen(["docker", *args], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        output = {process.stdout: bytearray(), process.stderr: bytearray()}
-        selector = selectors.DefaultSelector()
-        deadline = time.monotonic() + timeout
-        try:
-            for stream in output:
-                os.set_blocking(stream.fileno(), False)
-                selector.register(stream, selectors.EVENT_READ)
-            while selector.get_map():
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise TimeoutError("Docker command deadline expired")
-                for key, _ in selector.select(min(remaining, 0.1)):
-                    chunk = os.read(key.fileobj.fileno(), 4096)
-                    if not chunk:
-                        selector.unregister(key.fileobj)
-                    else:
-                        if sum(len(value) for value in output.values()) + len(chunk) > 262144:
-                            raise ValueError("Docker output exceeded measurement bound")
-                        output[key.fileobj].extend(chunk)
-            process.wait(timeout=max(0.001, deadline-time.monotonic()))
-            if process.returncode:
-                raise subprocess.CalledProcessError(process.returncode, ["docker", *args], stderr=output[process.stderr].decode("utf-8", "replace")[:4096])
-            captured = output[process.stdout]
-            if capture_stderr:
-                captured = captured + output[process.stderr]
-            return captured.decode("utf-8", "strict").strip()
-        finally:
-            if process.poll() is None:
-                process.kill()
-            process.wait(timeout=5)
-            selector.close()
-            process.stdout.close()
-            process.stderr.close()
+        return run_docker(args, timeout=timeout, capture_stderr=capture_stderr)
 
     def command(self, request, payload=None, timeout=3):
         if payload is not None and (not isinstance(payload, bytes) or len(payload) > 200 * 1024 * 1024):

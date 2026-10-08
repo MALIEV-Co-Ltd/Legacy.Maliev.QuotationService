@@ -1,0 +1,57 @@
+name: Financial scanner helper lifetime
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/financial-scanner-helper-lifetime.yml'
+      - 'tools/InvoiceCompletionProducerAcceptance/companion/*scanner*'
+      - 'docs/scanner-helper-hosted-controls.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/financial-scanner-helper-lifetime.yml'
+      - 'tools/InvoiceCompletionProducerAcceptance/companion/*scanner*'
+      - 'docs/scanner-helper-hosted-controls.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: financial-scanner-helper-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  original-command-lifetime:
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'codex/scanner-owned-helper-20261008')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [natural, selector-register, post-signal, post-waitid]
+    env:
+      FINANCIAL_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      HELPER_CASE: ${{ matrix.case }}
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Execute source refusal controls
+        shell: bash
+        run: |
+          python3 -B tools/InvoiceCompletionProducerAcceptance/companion/scanner_helper_source_entry.py --models
+      - name: Observe actual original Docker CLI lifecycle
+        shell: bash
+        run: |
+          python3 -B tools/InvoiceCompletionProducerAcceptance/companion/scanner_helper_source_entry.py --case "$HELPER_CASE" --receipt "TestResults/ScannerHelper/$HELPER_CASE.json"
+      - name: Retain actual typed lifecycle receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: financial-scanner-helper-${{ matrix.case }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: TestResults/ScannerHelper/${{ matrix.case }}.json
+          if-no-files-found: error
+          retention-days: 7
