@@ -15,7 +15,7 @@ if (remaining <= TimeSpan.Zero) throw new InvalidDataException("Front owner leas
 using var lease = new CancellationTokenSource(remaining);
 using var admission = CancellationTokenSource.CreateLinkedTokenSource(startup.Token, lease.Token);
 await FrontHostAdmission.ObserveOwnerAsync(profile, admission.Token);
-var backend = new ObservedStorageBackend(profile.Backend);
+var backend = new ObservedStorageBackend(profile.Backend, profile.SharedScannerBridge);
 await backend.ObserveAsync(admission.Token);
 using var front = new HostedStorageFront(profile.FrontOrigin, backend, profile.RunId, profile.ExpiresUtc);
 var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args = [], ContentRootPath = profile.Repository });
