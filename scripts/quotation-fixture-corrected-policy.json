@@ -1,4 +1,5 @@
 {
+  "qualificationScope": "fixture-residual-wire",
   "acceptedBase": "1adb718c5ecfaa819d1d647953e14ec28ae4d4f0",
   "sourcePins": {
     "IAM": "4fe6642e5674013de9a3672505aec898fdcae0ed",
@@ -72,6 +73,11 @@
       "bytes": 42183
     },
     {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QualificationOutcomeWireSourceTests.cs",
+      "sha256": "0f38b7596b628d651e3b11581d958a7e3cfa2e81fe0c9fcabc990b94ebc391f6",
+      "bytes": 4256
+    },
+    {
       "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QualificationPrivateObservationTests.cs",
       "sha256": "b7d23c18db6ccce16af471fd19aa32389d1a2cdf29066e0ff915e33910abd6a7",
       "bytes": 21980
@@ -102,6 +108,11 @@
       "bytes": 22138
     },
     {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationIamTerminalObservationTests.cs",
+      "sha256": "df293a19e254b4dda2ece5617b8724dc93b0584ee83419faae909e110ddffc5d",
+      "bytes": 13914
+    },
+    {
       "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceCapabilityHttpTests.cs",
       "sha256": "483af96b325f8931592054424fbaae464fdaf3976976a15edbed0c25dadb818d",
       "bytes": 58166
@@ -115,6 +126,11 @@
       "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceDecisionHttpPostgresTests.cs",
       "sha256": "4db72642f5b964c2577d2440a0bbebfbfb6d34bacd8019e1be420f139a22af84",
       "bytes": 54356
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationNativeOrderRecoveryHttpTests.cs",
+      "sha256": "5788b78ab155b31fa1ad9c04e5398cae95f742eff2e23b4493abaebc751927bc",
+      "bytes": 15298
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationNormalIamCompositionHttpTests.cs",
@@ -183,13 +199,13 @@
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerStartup.cs",
-      "sha256": "871e06ed1a5edad271ca78147b09f0ec3e3b886680900920975bfd708ad5ee27",
-      "bytes": 18322
+      "sha256": "97965e79eef4ff863429fed43e76c2d663b4c505ec602cde636dd318d2459f51",
+      "bytes": 19068
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerStartupContractTests.cs",
-      "sha256": "f5f41e7ffb840fcfacaa5bf585a831534107f3033fe862589c8396a0f22fc010",
-      "bytes": 27281
+      "sha256": "2d9f7fe648e904e43bafb971a02ab28cedfeccefcf4a32fbcf3651ee62fc5deb",
+      "bytes": 28738
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposablePostgresPoolLifetimeTests.cs",
@@ -213,8 +229,8 @@
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/OwnedInspectionProcess.cs",
-      "sha256": "b45364f0a668ac2b34e80bb9aaad87191c222b717b08b55c292f23ae70c15cdf",
-      "bytes": 1152
+      "sha256": "4448dbd42a3bbb3a87e6ebe1310a1b3fecf9247b22a102ecd1e6816a39191211",
+      "bytes": 2075
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/QuotationNormalIamResourceLifetime.cs",
@@ -387,6 +403,5 @@
       "bytes": 14596
     }
   ],
-  "qualificationScope": "fixture-corrected",
-  "manifestSha256": "b7bcae5422a7767a42602a5e87648d090ffb1b59fe4da36b28812264d8836e5c"
+  "manifestSha256": "3c8f0d2ad5a8f88583b3cf92d54c508161b468b988eabb5a2eafde47f51b38d4"
 }
