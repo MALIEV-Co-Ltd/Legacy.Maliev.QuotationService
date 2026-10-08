@@ -520,19 +520,19 @@ class StorageDiagnosticControls(unittest.TestCase):
         baseline=self.prepare()[0].STORAGE_ENGINE_LINE
         for value in ('OTHER '+baseline,baseline+' OTHER',baseline+'\nSECOND',baseline[:-1],'x'*4096,'x'*5000):
             d,*rest=self.original_failure(value)
-            self.assertEqual(d.FIRST[2],'unclassified-source-clause')
+            self.assertIn(d.FIRST[2],d.STORAGE_DENIALS)
         d,*rest=self.original_failure();error=rest[-1]
         for value in (None,b'PRIVATE',True,{},4096):
             error.__dict__['stderr']=value
-            self.assertEqual(d.storage_clause(error),'unclassified-source-clause')
+            self.assertIn(d.storage_clause(error),d.STORAGE_DENIALS)
         error.__dict__['stderr']=baseline
         d.stage('storage-start');self.assertEqual(d.storage_clause(error),'unclassified-source-clause')
         d.stage('storage-create')
         for foreign in (subprocess.CalledProcessError(1,['PRIVATE'],stderr=baseline),type('CalledProcessError',(Exception,),{})()):
-            self.assertEqual(d.storage_clause(foreign),'unclassified-source-clause')
+            self.assertIn(d.storage_clause(foreign),d.STORAGE_DENIALS)
         try:raise subprocess.CalledProcessError(1,['PRIVATE'],stderr=baseline)
         except subprocess.CalledProcessError as foreign:
-            self.assertEqual(d.storage_clause(foreign),'unclassified-source-clause')
+            self.assertIn(d.storage_clause(foreign),d.STORAGE_DENIALS)
 
     def test_precapture_foreign_body_and_namespace_are_refused(self):
         import types
@@ -557,7 +557,7 @@ class StorageDiagnosticControls(unittest.TestCase):
         self.assertIs(type(error),runner.DockerLifecycleError)
         self.assertNotEqual(d.FIRST[2],d.STORAGE_CLAUSE)
         self.assertTrue(owner.failure);self.assertTrue(runner._OWNERS)
-        self.assertEqual(d.storage_clause(error),'unclassified-source-clause')
+        self.assertIn(d.storage_clause(error),d.STORAGE_DENIALS)
 
     def test_source_tamper_duplicate_capture_and_postcapture_substitution_refuse(self):
         d,launcher,scanner,runner=self.prepare()
@@ -574,11 +574,56 @@ class StorageDiagnosticControls(unittest.TestCase):
         exec(compile('def foreign():\n    raise subprocess.CalledProcessError(1,[],stderr=line)\n','<foreign-after-capture>','exec'),namespace)
         try:namespace['foreign']()
         except subprocess.CalledProcessError as error:
-            self.assertEqual(d.storage_clause(error),'unclassified-source-clause')
+            self.assertIn(d.storage_clause(error),d.STORAGE_DENIALS)
 
     def test_postcapture_same_code_foreign_globals_never_gains_clause(self):
         for family in ('launcher','scanner','runner'):
             d,launcher,scanner,runner,owner,error=self.original_failure(clone=family)
-            self.assertEqual(d.FIRST[2],'unclassified-source-clause')
-            self.assertEqual(d.storage_clause(error),'unclassified-source-clause')
+            self.assertIn(d.FIRST[2],d.STORAGE_DENIALS)
+            self.assertIn(d.storage_clause(error),d.STORAGE_DENIALS)
             self.assertTrue(owner.failure);self.assertEqual(runner._OWNERS,[])
+
+    def test_fixed_gate_codes_distinguish_private_predicates_in_order(self):
+        import copy,subprocess,types,sys
+        d,launcher,scanner,runner,owner,error=self.original_failure()
+        self.assertEqual(d.storage_clause(error),d.STORAGE_CLAUSE)
+        capture=d.STORAGE_CAPTURE
+        d.STORAGE_CAPTURE=None
+        self.assertEqual(d.storage_clause(error),'storage-denial-source-not-captured')
+        d.STORAGE_CAPTURE=capture
+        self.assertEqual(d.storage_clause(ValueError('PRIVATE')),'storage-denial-error-type')
+        foreign=subprocess.CalledProcessError(1,[],stderr=d.STORAGE_ENGINE_LINE)
+        self.assertEqual(d.storage_clause(foreign),'storage-denial-trace-short')
+        original_trace=error.__traceback__
+        for _ in range(40):error.__traceback__=types.TracebackType(error.__traceback__,sys._getframe(),0,0)
+        self.assertEqual(d.storage_clause(error),'storage-denial-trace-limit')
+        error.__traceback__=original_trace
+        codes=dict(capture[1]);codes['HeldPairLauncher.start']=(lambda:None).__code__
+        d.STORAGE_CAPTURE=(capture[0],tuple(codes.items()),capture[2])
+        self.assertEqual(d.storage_clause(error),'storage-denial-frame-code')
+        d.STORAGE_CAPTURE=capture
+        namespaces=dict(capture[2]);namespaces['HeldPairLauncher.start']={}
+        d.STORAGE_CAPTURE=(capture[0],capture[1],tuple(namespaces.items()))
+        self.assertEqual(d.storage_clause(error),'storage-denial-frame-globals')
+        d.STORAGE_CAPTURE=capture
+        sites=dict(d.STORAGE_SITES);d.STORAGE_SITES=dict(sites,create=(-1,-1))
+        self.assertEqual(d.storage_clause(error),'storage-denial-frame-line')
+        d.STORAGE_SITES=sites
+        for value,expected in ((None,'stderr-type'),(b'PRIVATE','stderr-type'),('', 'stderr-bound'),('x'*4096,'stderr-bound'),('PRIVATE other error','stderr-grammar')):
+            error.__dict__['stderr']=value
+            self.assertEqual(d.storage_clause(error),'storage-denial-'+expected)
+
+    def test_gate_projection_keeps_fixed_fourteen_false_scope_and_first_failure(self):
+        d,*rest=self.original_failure('PRIVATE other error');error=rest[-1]
+        self.assertEqual(d.FIRST,('storage-create','cli-nonzero','storage-denial-stderr-grammar'))
+        d.bind('a'*40,'123',1,'b'*64,'pair');before=d.projection()
+        d.failure(ValueError('PRIVATE second error'))
+        self.assertEqual(before,d.projection());self.assertEqual(len(before),14)
+        encoded=__import__('json').dumps(before)
+        self.assertNotIn('PRIVATE',encoded);self.assertNotIn('stderr',encoded.replace('storage-denial-stderr-grammar',''))
+        for key in ('pairAccepted','cleanupAccepted','fileRuntimeAccepted','genuineEightHostFinancialAccepted'):
+            self.assertIs(before[key],False)
+        for code in d.STORAGE_DENIALS:
+            d.FIRST=None;d.record('cli-nonzero',code)
+            self.assertEqual(d.projection()['firstDenialClause'],code)
+        with self.assertRaises(ValueError):d.record('cli-nonzero','storage-denial-PRIVATE')

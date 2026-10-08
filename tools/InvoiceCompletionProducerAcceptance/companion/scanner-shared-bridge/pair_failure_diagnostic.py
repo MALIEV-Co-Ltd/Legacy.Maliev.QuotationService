@@ -1,5 +1,6 @@
 """Fixed first-failure projection only; never an owner or cleanup receipt.
-All strings are source-controlled allowlist members. Exception text is never read.
+All emitted strings are source-controlled allowlist members. Formatted exception text is never read.
+Source-qualified bounded stderr is inspected privately and never projected.
 Original owners and their failure fences remain solely responsible for custody.
 """
 import re
@@ -144,6 +145,7 @@ STORAGE_SOURCE_SHA256 = {'launcher': '606616e55992cb739fb2fd7e7f00edce5bd7e8396d
 STORAGE_SITES = {'create': (150, 150), 'docker': (120, 120), 'propagate': (385, 385), 'original': (360, 361)}
 STORAGE_CAPTURE = None
 STORAGE_CLAUSE = 'docker-static-ip-requires-configured-subnet'
+STORAGE_DENIALS = ('storage-denial-source-not-captured', 'storage-denial-error-type', 'storage-denial-trace-limit', 'storage-denial-trace-short', 'storage-denial-frame-code', 'storage-denial-frame-globals', 'storage-denial-frame-line', 'storage-denial-stderr-type', 'storage-denial-stderr-bound', 'storage-denial-stderr-grammar')
 STORAGE_ENGINE_LINE = 'Error response from daemon: user specified IP address is supported only when connecting to networks with user configured subnets'
 
 
@@ -178,36 +180,46 @@ def capture_storage_sites(launcher, scanner, runner, sources):
 
 
 def storage_clause(error):
-    if CURRENT_STAGE != 'storage-create' or STORAGE_CAPTURE is None or type(error) is not STORAGE_CAPTURE[0]:
+    if CURRENT_STAGE != 'storage-create':
         return 'unclassified-source-clause'
+    if STORAGE_CAPTURE is None:
+        return 'storage-denial-source-not-captured'
+    if type(error) is not STORAGE_CAPTURE[0]:
+        return 'storage-denial-error-type'
     codes = dict(STORAGE_CAPTURE[1])
     namespaces = dict(STORAGE_CAPTURE[2])
     trace = error.__traceback__
     frames = []
     while trace is not None:
         if len(frames) == TRACE_LIMIT:
-            return 'unclassified-source-clause'
+            return 'storage-denial-trace-limit'
         frames.append((trace.tb_frame.f_code,trace.tb_lineno,trace.tb_frame.f_globals))
         trace = trace.tb_next
     # Ordered original call route and the two _run_fenced raise sites. No caller
     # metadata or error text establishes provenance. Other intervening code is
     # allowed only outside this exact contiguous source-owned suffix.
     if len(frames) < 5:
-        return 'unclassified-source-clause'
+        return 'storage-denial-trace-short'
     route = frames[-5:]
     paths = ('HeldPairLauncher.start','Scanner.docker','run_docker','_run_fenced','_run_fenced')
     ranges = (STORAGE_SITES['create'],STORAGE_SITES['docker'],None,STORAGE_SITES['propagate'],STORAGE_SITES['original'])
     for (code,line,namespace),path,bounds in zip(route,paths,ranges):
-        if code is not codes[path] or namespace is not namespaces[path] or (bounds is not None and not bounds[0] <= line <= bounds[1]):
-            return 'unclassified-source-clause'
+        if code is not codes[path]:
+            return 'storage-denial-frame-code'
+        if namespace is not namespaces[path]:
+            return 'storage-denial-frame-globals'
+        if bounds is not None and not bounds[0] <= line <= bounds[1]:
+            return 'storage-denial-frame-line'
     # Exact original class uses the built-in dict; no descriptor, args, command,
     # exception formatting, frame locals/globals or private output is projected.
     data = BaseException.__dict__['__dict__'].__get__(error,type(error))
     value = dict.get(data,'stderr')
-    if type(value) is not str or not 0 < len(value) < 4096:
-        return 'unclassified-source-clause'
+    if type(value) is not str:
+        return 'storage-denial-stderr-type'
+    if not 0 < len(value) < 4096:
+        return 'storage-denial-stderr-bound'
     if value not in (STORAGE_ENGINE_LINE,STORAGE_ENGINE_LINE+'\n',STORAGE_ENGINE_LINE+'.',STORAGE_ENGINE_LINE+'.\n'):
-        return 'unclassified-source-clause'
+        return 'storage-denial-stderr-grammar'
     return STORAGE_CLAUSE
 
 CURRENT_STAGE = 'unentered'
@@ -224,7 +236,7 @@ def stage(value):
 
 def record(category, clause):
     global FIRST
-    if category not in CATEGORIES or clause not in tuple(GUARDS.values()) + tuple(site[3] for site in H_SITES+B_SITES) + (STORAGE_CLAUSE, 'unclassified-source-clause',):
+    if category not in CATEGORIES or clause not in tuple(GUARDS.values()) + tuple(site[3] for site in H_SITES+B_SITES) + (STORAGE_CLAUSE, *STORAGE_DENIALS, 'unclassified-source-clause',):
         raise ValueError('Diagnostic code refused')
     if FIRST is None:
         FIRST = (CURRENT_STAGE, category, clause)

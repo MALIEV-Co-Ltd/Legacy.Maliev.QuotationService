@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "eed08e8e71741a6637c89232a13f193bf3c3e0c3d15bb024fc82cdaa85dff74e",
-      "length": 24653
+      "sha256": "2c73da1d8775bdc8085353825399358a28c51efbbc3452213fd0429bdf6d5731",
+      "length": 25365
     }
   ],
   "rawControls": {
@@ -151,5 +151,18 @@
     "runner": "89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6"
   },
   "storageDiagnosticIdentityOnlyGlobalsRequired": true,
-  "historicalWithheldStorageDiagnosticSeal": "8aa75745ce029c0997c5df5088ad09da7137dd47ff6db8b43df2eb4fd9d0f073"
+  "historicalWithheldStorageDiagnosticSeal": "8aa75745ce029c0997c5df5088ad09da7137dd47ff6db8b43df2eb4fd9d0f073",
+  "storageGateDiagnosticBase": "c5f2e6f3c9986ac32b0c7e0d5fab61ba134a002b",
+  "storageGateDiagnosticClauses": [
+    "storage-denial-source-not-captured",
+    "storage-denial-error-type",
+    "storage-denial-trace-limit",
+    "storage-denial-trace-short",
+    "storage-denial-frame-code",
+    "storage-denial-frame-globals",
+    "storage-denial-frame-line",
+    "storage-denial-stderr-type",
+    "storage-denial-stderr-bound",
+    "storage-denial-stderr-grammar"
+  ]
 }
