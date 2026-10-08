@@ -1,0 +1,27 @@
+{
+  "qualificationScope": "admission-race",
+  "acceptedBase": "2eb291e8320c36dd2b5a0e6808fbcf8f7723b7c7",
+  "sourcePins": {
+    "retainedDefaults": "7b3099bf67d0f17e56cfdb3dcf36541304abaac2",
+    "retainedContracts": "78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7",
+    "compileAccounting": "ae0826156b06c34476e95de8c53dfccfcf5a5972"
+  },
+  "sourceFiles": [
+    {
+      "path": "Legacy.Maliev.QuotationService.Data/QuotationRepositories.cs",
+      "sha256": "1dcd0949837947c06e7053e551a301b2e74ed9ec2e2b8f696aafbeef473daece",
+      "bytes": 67626
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceCapabilityHttpTests.cs",
+      "sha256": "abc2591e9a27b0702014b5e18090c511d3b115cf3ed516918604e5770dcff69f",
+      "bytes": 57215
+    },
+    {
+      "path": "scripts/c821-focused-inventory.json",
+      "sha256": "d70e3006ead4436cb5c6a4f18a08b380443ce59e2e90cac0335ec9c2b8d5e928",
+      "bytes": 14419
+    }
+  ],
+  "manifestSha256": "886ac3770fd6ff05ede4ac5ba887a6d0bbd0a8c1bb825fb295fe7aebaa3977cd"
+}
