@@ -20,7 +20,8 @@ internal static class DisposableContainerStartup
 {
     internal static bool IsCollision(DockerApiException error)
     {
-        if (error.StatusCode != HttpStatusCode.InternalServerError || string.IsNullOrEmpty(error.ResponseBody)) return false;
+        if (error.StatusCode != HttpStatusCode.InternalServerError || string.IsNullOrEmpty(error.ResponseBody)
+            || error.ResponseBody.Length > 64 * 1024) return false;
         try
         {
             using var document = JsonDocument.Parse(error.ResponseBody);
@@ -28,10 +29,20 @@ internal static class DisposableContainerStartup
                 || document.RootElement.EnumerateObject().Count(x => x.NameEquals("message")) != 1
                 || !document.RootElement.TryGetProperty("message", out var property) || property.ValueKind != JsonValueKind.String) return false;
             var message = property.GetString()!;
-            return message.StartsWith("failed to set up container networking: driver failed programming external connectivity", StringComparison.Ordinal)
-                && message.EndsWith(": failed to listen on TCP socket: address already in use", StringComparison.Ordinal);
+            if (!message.StartsWith("failed to set up container networking: driver failed programming external connectivity", StringComparison.Ordinal)) return false;
+            if (message.EndsWith(": failed to listen on TCP socket: address already in use", StringComparison.Ordinal)) return true;
+            // Exact hosted Engine EADDRINUSE form; do not retry generic networking or allocation errors.
+            const string bindPattern = @"\Afailed to set up container networking: driver failed programming external connectivity on endpoint "
+                + @"[A-Za-z0-9][A-Za-z0-9_.-]{0,127} \([a-f0-9]{64}\): failed to bind host port for 0\.0\.0\.0::"
+                + @"(?<target>[0-9]{1,3}(?:\.[0-9]{1,3}){3}):(?<port>[1-9][0-9]{0,4})/tcp: address already in use\z";
+            var match = Regex.Match(message, bindPattern, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+            return match.Success && IPAddress.TryParse(match.Groups["target"].Value, out var address)
+                && address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                && address.ToString() == match.Groups["target"].Value
+                && int.TryParse(match.Groups["port"].Value, out var port) && port <= 65535;
         }
         catch (JsonException) { return false; }
+        catch (RegexMatchTimeoutException) { return false; }
     }
 
     internal static async Task<IStartupResource> StartAsync(Func<IStartupResource> create,

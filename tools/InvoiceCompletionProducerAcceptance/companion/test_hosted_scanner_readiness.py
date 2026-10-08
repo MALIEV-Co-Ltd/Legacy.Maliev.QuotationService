@@ -157,8 +157,12 @@ class ScannerTests(unittest.TestCase):
         scanner.receipt["resources"] = [{"name": scanner.name}]
         observed = {"Id": "a" * 64, "Name": "/" + scanner.name, "Image": scanner.image_id,
                     "Created": datetime.now(timezone.utc).isoformat(),
-                    "State": {"Running": False},
-                    "Config": {"Labels": {"financial.acceptance.run": scanner.run_id}}}
+                    "State": {"Running": False, "Paused": False, "Restarting": False,
+                              "StartedAt": "2000-01-01T00:00:00Z"},
+                    "Config": {"Labels": {"financial.acceptance.run": scanner.run_id}},
+                    "HostConfig": {"Memory": 1610612736, "NanoCpus": 2000000000, "CapDrop": ["ALL"],
+                                   "CapAdd": None, "ReadonlyRootfs": True, "PortBindings": {}, "PublishAllPorts": False},
+                    "NetworkSettings": {"Ports": {}}}
         calls = []
         census = iter(["a" * 64, ""])
         def docker(*args, **kwargs):
@@ -176,17 +180,27 @@ class ScannerTests(unittest.TestCase):
     def test_unavailable_probe_error_does_not_skip_exact_removal(self):
         scanner = Scanner("probe-error")
         scanner.container_id = "a" * 64
+        scanner.image_id = "sha256:" + "b" * 64
         scanner.port = 12345
         scanner.receipt["resources"] = [{"name": scanner.name}]
         calls = []
         def docker(*args, **kwargs):
             calls.append(args)
             if args[0] == "inspect":
-                return json.dumps([{"Id": scanner.container_id, "Config": {"Labels": {"financial.acceptance.run": scanner.run_id}}}])
+                return json.dumps([{"Id": scanner.container_id, "Image": scanner.image_id,
+                                    "Created": "2000-01-01T00:00:00Z",
+                                    "State": {"Running": False, "Paused": False, "Restarting": False,
+                                              "StartedAt": "2000-01-01T00:00:00Z"},
+                                    "Config": {"Labels": {"financial.acceptance.run": scanner.run_id}},
+                                    "HostConfig": {"Memory": 1610612736, "NanoCpus": 2000000000, "CapDrop": ["ALL"],
+                                                   "CapAdd": None, "ReadonlyRootfs": True, "PortBindings": {}, "PublishAllPorts": False},
+                                    "NetworkSettings": {"Ports": {}}}])
             return ""
-        with patch.object(scanner, "docker", side_effect=docker), patch.object(scanner, "command", side_effect=ValueError("bad framing")):
+        with patch.object(scanner, "docker", side_effect=docker), patch.object(scanner, "command", side_effect=RuntimeError("synthetic probe fault")):
             self.assertFalse(scanner.close())
         self.assertIn(("rm", scanner.container_id), calls)
+        self.assertIn("RuntimeError", scanner.receipt["cleanupErrors"])
+        self.assertNotIn("unavailableAfterStop", scanner.receipt.get("controls", {}))
 
     def test_protocol_deadline_cannot_be_reset_by_trickle_response(self):
         listener = socket.socket()

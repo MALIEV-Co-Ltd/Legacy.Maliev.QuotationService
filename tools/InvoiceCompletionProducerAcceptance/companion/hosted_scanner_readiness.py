@@ -60,6 +60,28 @@ def no_docker_publication(container):
             "absenceVerified": True}
 
 
+def observed_runtime_policy(container):
+    """Strict Engine configuration observation; not a kernel cgroup/capability proof."""
+    host = container.get("HostConfig")
+    keys = ("Memory", "NanoCpus", "CapDrop", "CapAdd", "ReadonlyRootfs")
+    if not isinstance(host, dict) or any(key not in host for key in keys):
+        raise ValueError("Actual Docker resource policy fields required")
+    if type(host["Memory"]) is not int or host["Memory"] != 1536 * 1024 * 1024:
+        raise ValueError("Observed Docker memory limit differs")
+    if type(host["NanoCpus"]) is not int or host["NanoCpus"] != 2_000_000_000:
+        raise ValueError("Observed Docker CPU limit differs")
+    if type(host["CapDrop"]) is not list or host["CapDrop"] != ["ALL"]:
+        raise ValueError("Observed Docker dropped capabilities differ")
+    if host["CapAdd"] is not None and (type(host["CapAdd"]) is not list or host["CapAdd"] != []):
+        raise ValueError("Observed Docker added capabilities denied")
+    if host["ReadonlyRootfs"] is not True:
+        raise ValueError("Observed Docker writable root denied")
+    return {"memoryBytes": host["Memory"], "nanoCpus": host["NanoCpus"],
+            "capDrop": list(host["CapDrop"]), "capAdd": host["CapAdd"],
+            "readOnlyRoot": host["ReadonlyRootfs"], "engineConfigurationObserved": True,
+            "kernelEnforcementObserved": False}
+
+
 def database_hashes(output):
     rows = []
     for line in output.splitlines():
@@ -242,7 +264,7 @@ class Scanner:
         self.receipt["stage"] = "observe-container-after-start"
         diagnostic = self.startup_diagnostic()
         state = diagnostic.get("state", {})
-        if not diagnostic.get("observed") or state.get("Running") is not True or state.get("Paused") is not False or state.get("Restarting") is not False or type(state.get("Pid")) is not int or state["Pid"] <= 0:
+        if not diagnostic.get("observed") or diagnostic.get("runtimeBoundaryObserved") is not True or state.get("Running") is not True or state.get("Paused") is not False or state.get("Restarting") is not False or type(state.get("Pid")) is not int or state["Pid"] <= 0:
             raise ValueError("Actual scanner container is not running immediately after start")
         self.receipt["containerGeneration"] = {"createdUtc": diagnostic["createdUtc"], "startedUtc": state["StartedAt"]}
         self.receipt["stage"] = "start-owned-loopback-relay"
@@ -254,6 +276,7 @@ class Scanner:
         container = json.loads(self.docker("inspect", self.container_id))[0]
         if container["Image"] != self.image_id or container["Id"] != self.container_id or not container["HostConfig"]["ReadonlyRootfs"]:
             raise ValueError("Runtime image or immutable root policy differs")
+        self.observe_runtime_boundary(container, "current")
         mounts = container["Mounts"]
         if any(mount.get("Type") != "tmpfs" or mount.get("Destination") not in ("/tmp", "/run") for mount in mounts):
             raise ValueError("Unexpected runtime mounts or persistent volumes")
@@ -326,6 +349,7 @@ class Scanner:
         state = container.get("State", {})
         if container.get("Id") != self.container_id or container.get("Image") != self.image_id or container.get("Created") != generation["createdUtc"] or state.get("StartedAt") != generation["startedUtc"] or state.get("Running") is not True or state.get("Paused") is not False or state.get("Restarting") is not False or container.get("Config", {}).get("Labels", {}).get("financial.acceptance.run") != self.run_id:
             raise ValueError("Relay backend container ownership or generation differs")
+        self.observe_runtime_boundary(container, "current")
         self.receipt["portIsolation"] = no_docker_publication(container)
         networks = container.get("NetworkSettings", {}).get("Networks", {})
         if len(networks) != 1 or container.get("HostConfig", {}).get("NetworkMode") != self.network_id:
@@ -347,6 +371,40 @@ class Scanner:
         self.backend_identity = identity
         return host, 3310
 
+    def require_owned_container(self, container):
+        config = container.get("Config", {})
+        state = container.get("State", {})
+        if (container.get("Id") != self.container_id or not self.container_id
+                or container.get("Image") != self.image_id
+                or config.get("Labels", {}).get("financial.acceptance.run") != self.run_id):
+            raise ValueError("Runtime observation container ownership differs")
+        generation = self.receipt.get("containerGeneration")
+        if generation and (container.get("Created") != generation["createdUtc"]
+                           or state.get("StartedAt") != generation["startedUtc"]):
+            raise ValueError("Runtime observation container generation differs")
+        if not isinstance(container.get("Created"), str) or not isinstance(state.get("StartedAt"), str):
+            raise ValueError("Runtime observation generation fields required")
+
+    def observe_runtime_boundary(self, container, phase):
+        if phase not in ("start", "current", "preStop", "preRemoval"):
+            raise ValueError("Unknown runtime observation phase")
+        try:
+            self.require_owned_container(container)
+            policy = observed_runtime_policy(container)
+            isolation = no_docker_publication(container)
+        except Exception:
+            failures = self.receipt.setdefault("runtimeBoundaryFailures", [])
+            category = phase + "Refused"
+            if category not in failures:
+                failures.append(category)
+            raise
+        snapshot = {"containerId": container["Id"], "imageId": container["Image"],
+                    "runLabel": self.run_id, "createdUtc": container["Created"],
+                    "startedUtc": container["State"]["StartedAt"],
+                    "policy": policy, "portIsolation": isolation}
+        self.receipt.setdefault("runtimeBoundaryObservations", {})[phase] = snapshot
+        return snapshot
+
     def startup_diagnostic(self):
         """Observe only the exact owned synthetic container; never replace admission."""
         diagnostic = {"containerId": self.container_id, "observedUtc": datetime.now(timezone.utc).isoformat()}
@@ -365,6 +423,12 @@ class Scanner:
             diagnostic["networkIds"] = {key: value.get("NetworkID") for key, value in container.get("NetworkSettings", {}).get("Networks", {}).items()}
             diagnostic["observed"] = True
             try:
+                self.observe_runtime_boundary(container, "start")
+                diagnostic["runtimeBoundaryObserved"] = True
+            except Exception as error:
+                diagnostic["runtimeBoundaryObserved"] = False
+                diagnostic["runtimeBoundaryErrorType"] = type(error).__name__
+            try:
                 # Fixed synthetic daemon only. Bounded command + bounded public tail;
                 # no environment/config/private data are collected.
                 tail = self.docker("logs", "--tail", "40", self.container_id, timeout=10, capture_stderr=True)
@@ -380,9 +444,10 @@ class Scanner:
         return diagnostic
 
     def close(self):
-        errors = []
+        errors = list(self.receipt.get("runtimeBoundaryFailures", []))
         if self.receipt["resources"]:
             owned = False
+            removable = False
             try:
                 if not self.container_id:
                     candidates = self.docker("ps", "-a", "--no-trunc", "--filter", "label=financial.acceptance.run=" + self.run_id,
@@ -406,12 +471,27 @@ class Scanner:
                 generation = self.receipt.get("containerGeneration")
                 if generation and (observed["Created"] != generation["createdUtc"] or observed["State"]["StartedAt"] != generation["startedUtc"]):
                     raise ValueError("Container generation changed; cleanup refused")
+                self.require_owned_container(observed)
+                cleanup_generation = (observed["Created"], observed["State"]["StartedAt"])
                 owned = True
+                # Policy drift is sticky, but does not abandon an exactly owned resource.
+                try:
+                    self.observe_runtime_boundary(observed, "preStop")
+                except Exception as error:
+                    errors.append(type(error).__name__)
                 self.docker("stop", "--time", "5", self.container_id)
                 stopped = json.loads(self.docker("inspect", self.container_id))[0]
-                if stopped.get("Id") != self.container_id or stopped.get("State", {}).get("Running") is not False:
+                self.require_owned_container(stopped)
+                if (stopped["Created"], stopped["State"]["StartedAt"]) != cleanup_generation:
+                    raise ValueError("Cleanup-local container generation changed; removal refused")
+                if any(stopped.get("State", {}).get(flag) is not False for flag in ("Running", "Paused", "Restarting")):
                     raise ValueError("Exact stopped scanner state was not observed")
                 self.receipt["stoppedContainerObserved"] = True
+                removable = True
+                try:
+                    self.observe_runtime_boundary(stopped, "preRemoval")
+                except Exception as error:
+                    errors.append(type(error).__name__)
             except Exception as error:
                 errors.append(type(error).__name__)
             if owned:
@@ -424,10 +504,11 @@ class Scanner:
                         errors.append(type(error).__name__)
                     else:
                         errors.append("StoppedScannerResponds")
-                try:
-                    self.docker("rm", self.container_id)
-                except Exception as error:
-                    errors.append(type(error).__name__)
+                if removable:
+                    try:
+                        self.docker("rm", self.container_id)
+                    except Exception as error:
+                        errors.append(type(error).__name__)
             # Absence is measured, not inferred from docker rm's exit code.
             try:
                 remaining = self.docker("ps", "-a", "--filter", "name=^/" + self.name + "$", "--format", "{{.Names}}")
