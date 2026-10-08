@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "sourceOnly": true,
+  "base": "438b8dad054778c8017e88cbcd092427378a4ccb",
+  "modules": [
+    {
+      "name": "scanner_docker_command",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_docker_command.py",
+      "sha256": "89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6",
+      "length": 18024
+    },
+    {
+      "name": "hosted_companion_resources",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_companion_resources.py",
+      "sha256": "58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f",
+      "length": 51476
+    },
+    {
+      "name": "hosted_scanner_readiness",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py",
+      "sha256": "e75cb62607c1471bd86db0cd1450f4389f51c1d18aff171b7896742cce98568a",
+      "length": 37534
+    },
+    {
+      "name": "scanner_loopback_relay",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_loopback_relay.py",
+      "sha256": "ceb81e998f916774a7b159f0b38498c1302c32729120ed945f523c0e6136cce5",
+      "length": 8023
+    },
+    {
+      "name": "held_pair_launcher",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/held_pair_launcher.py",
+      "sha256": "10043a01f80d19bf20874b733841a25a5d0386f4656c24888e5d67b7e8bdfd4f",
+      "length": 13459
+    },
+    {
+      "name": "owned_storage_backend",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/owned_storage_backend.py",
+      "sha256": "09a1a03b2da2f10949f21d107d66130ff02e69060f43aa9dd4c01ad500133d24",
+      "length": 12809
+    },
+    {
+      "name": "storage_owner_command",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/storage_owner_command.py",
+      "sha256": "f91b5f7ec7db47407a37d047ca67db6687b7a5946d0ad835ef6d382df79c9219",
+      "length": 1973
+    },
+    {
+      "name": "pinned_image_oracle",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pinned_image_oracle.py",
+      "sha256": "cdfe69c6b491c2940036557450d7600951fb90f43e94a8cff3c55e158f44f9a1",
+      "length": 14793
+    },
+    {
+      "name": "borrowed_scanner_bridge",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/borrowed_scanner_bridge.py",
+      "sha256": "e7dccdfdfa498d6da439adc9fe2a7ac1f1e08a229529658839bb406366178b91",
+      "length": 12724
+    },
+    {
+      "name": "qualify_pair_resources",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/qualify_pair_resources.py",
+      "sha256": "7e757acd9ae824c434e6952f28b1104917c9fcb82f478246a6e72df6d5109d42",
+      "length": 5089
+    }
+  ],
+  "rawControls": {
+    "path": "tools/InvoiceCompletionProducerAcceptance/companion/test_raw_owner_command.py",
+    "sha256": "e00eb74dae59e205ddd8c02c0cc1c03a206a84e8aa68b09132389681eaf7e9fe",
+    "length": 10234
+  },
+  "origins": [
+    {
+      "packet": "scanner-shared-bridge-adapter-proposal",
+      "sealSha256": "7ace6e4b1d9af1069c3d1290c87f78c44a78c4a9dca5eda73d20f4248317f4fc",
+      "patchSha256": "b491f11bedf639a90dd8e309344f6ab438c282a3576baa5b121b0034d0969997",
+      "scope": "independent source-only clear, no runtime transfer"
+    },
+    {
+      "packet": "scanner-shared-bridge-launcher-proposal",
+      "sealSha256": "655a68432857f1a3079b92fde71e04deb5059453006b859ea8ce7e1c267db04d",
+      "patchSha256": "3174610de334e92ca044ed6a4be7f66cc471cae0e6afbd001435918a49ae0d9c",
+      "scope": "independent source-only clear, no runtime transfer"
+    },
+    {
+      "packet": "companion-docker-delegate-successor-proposal",
+      "sealSha256": "1e1484fa6ed06b87032bd09b1b7e248ede3215c1f386af179f2b2997c845c136",
+      "patchSha256": "cd0136880ceac8adf276243c74781bc212881684352cd8ea3d3c0f9dcb94d491",
+      "scope": "independent source-only clear, no runtime transfer"
+    },
+    {
+      "packet": "scanner-shared-bridge-hosted-successor-proposal",
+      "sealSha256": "655e5226aeeef26345586231b9890c8ffdb623758277eeb07e04a1f20b04b6d8",
+      "patchSha256": "65117199df182f6bc383c188066eb782c1e8b12f33c61f2d8dffe0a32d30f9ff",
+      "scope": "independent source-only clear, no runtime transfer"
+    }
+  ],
+  "qualifierCustody": {
+    "historicalRootPreimageSha256": "8abbefb10fd96e2e172b1215c2c38acf7a4ec47e84b057f1b2b5fe0d8be26d07",
+    "historicalScope": "unpublished root custody, not prior runtime proof",
+    "currentSourcePath": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/qualify_pair_resources.py",
+    "deltaFromReviewed1e": "owned CLI public key names normalized to originalCli",
+    "removedOwnedDuplicate": "held_pair_launcher.run_standalone_pair"
+  },
+  "fileSource": "46a23ff86ac0590de42d889920f4a44a47654542",
+  "fileSourceRole": "provenance-label-only-no-File-runtime",
+  "originalFileRuntimeMaterialization": "07f0b5b721e3df758a9ec742c6f167491f899e44 + separate owneroverlay (not launched)",
+  "runtimeAccepted": false,
+  "actualResourcesExecuted": 0,
+  "fileRuntimeAccepted": false,
+  "fileBoundaryAccepted": false,
+  "genuineEightHostFinancialAccepted": false,
+  "remainingGates": [
+    "whole coherent stagedgraph independent source review",
+    "exact-head standard Ubuntu original helper controls/readiness/normal pair/raw Git receipts",
+    "qualified original File/front lifetime/bootstrap/IAM graph before financial join"
+  ]
+}

@@ -1,0 +1,148 @@
+name: Standalone owned scanner storage pair
+
+on:
+  pull_request:
+    branches: [main, develop, staging]
+    paths:
+      - 'tools/InvoiceCompletionProducerAcceptance/companion/**'
+      - '.github/workflows/financial-shared-pair-qualification.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: financial-shared-pair-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  owned-pair:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'codex/scanner-shared-pair-20261008'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      FINANCIAL_SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+      C821_COMPANION_PROFILE: HostedFinancialCompletionAcceptance
+    steps:
+      - name: Check out exact same-repository candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Execute held controls and original raw Git CLI
+        shell: bash
+        run: |
+          python3 -I -B - raw-git <<'PY'
+          import hashlib, os, stat, sys, types, unittest
+          from pathlib import Path
+          prefix = Path('tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge')
+          held = {}
+          for name, expected in (('qualify_hosted_pair', '39e076e35c3df9c2eb38f63d425c7bf868275769157ee94ebf40e6d7e722afbf'), ('test_hosted_pair_source', 'bc5b9f2e15c92952e1de1da101a3cabbca0dc2a49bd87ab22acf58dc9219c42d')):
+              path = prefix / (name + '.py')
+              fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+              try:
+                  before = os.fstat(fd)
+                  if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= 1048576:
+                      raise SystemExit('Pinned source acquisition refused')
+                  data = bytearray()
+                  while len(data) <= 1048576:
+                      block = os.read(fd, min(65536, 1048577-len(data)))
+                      if not block:
+                          break
+                      data.extend(block)
+                  after = os.fstat(fd)
+                  current = os.stat(path, follow_symlinks=False)
+                  fields = lambda item: (item.st_dev, item.st_ino, item.st_size, item.st_mtime_ns)
+                  if len(data) != before.st_size or fields(before) != fields(after) or fields(before) != fields(current) or hashlib.sha256(data).hexdigest() != expected:
+                      raise SystemExit('Pinned source association refused')
+                  held[name] = bytes(data)
+              finally:
+                  os.close(fd)
+          for name in ('qualify_hosted_pair', 'test_hosted_pair_source'):
+              module = types.ModuleType(name)
+              module.__file__ = '<held-bootstrap:' + name + '>'
+              sys.modules[name] = module
+              exec(compile(held[name], module.__file__, 'exec'), module.__dict__)
+          result = unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromModule(sys.modules['test_hosted_pair_source']))
+          if result.testsRun != 9 or not result.wasSuccessful():
+              raise SystemExit('Source controls refused')
+          owner = sys.modules['qualify_hosted_pair']
+          try:
+              if sys.argv[1:] == ['raw-git']:
+                  owner.raw_git_main()
+              elif sys.argv[1:] == ['pair']:
+                  owner.main()
+              else:
+                  raise SystemExit('Qualified mode refused')
+          except BaseException:
+              try:
+                  print('Standalone pair refused; unresolved original owners retained', file=sys.stderr)
+              except BaseException:
+                  pass
+              finally:
+                  owner.living_failure_fence()
+              raise SystemExit(1)
+          PY
+      - name: Observe actual stopped-image oracle and original owned normal pair
+        shell: bash
+        run: |
+          python3 -I -B - pair <<'PY'
+          import hashlib, os, stat, sys, types, unittest
+          from pathlib import Path
+          prefix = Path('tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge')
+          held = {}
+          for name, expected in (('qualify_hosted_pair', '39e076e35c3df9c2eb38f63d425c7bf868275769157ee94ebf40e6d7e722afbf'), ('test_hosted_pair_source', 'bc5b9f2e15c92952e1de1da101a3cabbca0dc2a49bd87ab22acf58dc9219c42d')):
+              path = prefix / (name + '.py')
+              fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+              try:
+                  before = os.fstat(fd)
+                  if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= 1048576:
+                      raise SystemExit('Pinned source acquisition refused')
+                  data = bytearray()
+                  while len(data) <= 1048576:
+                      block = os.read(fd, min(65536, 1048577-len(data)))
+                      if not block:
+                          break
+                      data.extend(block)
+                  after = os.fstat(fd)
+                  current = os.stat(path, follow_symlinks=False)
+                  fields = lambda item: (item.st_dev, item.st_ino, item.st_size, item.st_mtime_ns)
+                  if len(data) != before.st_size or fields(before) != fields(after) or fields(before) != fields(current) or hashlib.sha256(data).hexdigest() != expected:
+                      raise SystemExit('Pinned source association refused')
+                  held[name] = bytes(data)
+              finally:
+                  os.close(fd)
+          for name in ('qualify_hosted_pair', 'test_hosted_pair_source'):
+              module = types.ModuleType(name)
+              module.__file__ = '<held-bootstrap:' + name + '>'
+              sys.modules[name] = module
+              exec(compile(held[name], module.__file__, 'exec'), module.__dict__)
+          result = unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromModule(sys.modules['test_hosted_pair_source']))
+          if result.testsRun != 9 or not result.wasSuccessful():
+              raise SystemExit('Source controls refused')
+          owner = sys.modules['qualify_hosted_pair']
+          try:
+              if sys.argv[1:] == ['raw-git']:
+                  owner.raw_git_main()
+              elif sys.argv[1:] == ['pair']:
+                  owner.main()
+              else:
+                  raise SystemExit('Qualified mode refused')
+          except BaseException:
+              try:
+                  print('Standalone pair refused; unresolved original owners retained', file=sys.stderr)
+              except BaseException:
+                  pass
+              finally:
+                  owner.living_failure_fence()
+              raise SystemExit(1)
+          PY
+      - name: Retain only fixed public standalone receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: financial-shared-pair-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            TestResults/HostedSharedPair/standalone-pair.json
+            TestResults/HostedSharedPair/raw-git.json
+          if-no-files-found: error
+          retention-days: 7

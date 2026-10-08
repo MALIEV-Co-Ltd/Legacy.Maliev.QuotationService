@@ -198,11 +198,105 @@ def validate_observations(context, lease, container, image, network, now, runnin
             "hostPort":lease.host_port, "containerPort":lease.container_port}
 
 
+_FAILED_DISCOVERY_QUERIES = []
+_PROC_INVENTORIES = []
+_HANDLED_DISCOVERY_QUERIES = []
+
+
+def handled_discovery_queries():
+    """Readonly index/category projection, not a supplied proof capability."""
+    return tuple(_HANDLED_DISCOVERY_QUERIES)
+
+
+def _settled_command(row):
+    positive = ('returnedProcessObserved', 'generationBound', 'originalReaped', 'bothReadersEof',
+                'bothReadersClosed', 'selectorCloseCompleted', 'pidfdCloseCompleted', 'cleanupVerified')
+    return (all(row.get(key) is True for key in positive) and row.get('quarantined') is False
+            and row.get('attemptLedgerCapped') is False)
+
+
+def _discovery_probe(arguments):
+    if len(arguments) not in (6, 7) or arguments[:3] != ('docker', 'container', 'exec'):
+        return None
+    if HEX64.fullmatch(arguments[3]) is None:
+        return None
+    tail = arguments[4:]
+    path = None
+    if len(tail) == 2 and tail[0] == 'cat':
+        path = re.fullmatch(r'/proc/([1-9][0-9]*)/stat', tail[1])
+    elif len(tail) == 3 and tail[:2] == ('ls', '-1'):
+        path = re.fullmatch(r'/proc/([1-9][0-9]*)/fd', tail[2])
+    elif len(tail) == 2 and tail[0] == 'readlink':
+        path = re.fullmatch(r'/proc/([1-9][0-9]*)/fd/(?:0|[1-9][0-9]*)', tail[1])
+    return (arguments[3], path[1]) if path else None
+
+
+def _record_handled_discovery(error, container_id, pid, matched, current_bytes):
+    import scanner_docker_command as owner
+    failed = next((row for row in _FAILED_DISCOVERY_QUERIES if row[0] is error), None)
+    if failed is None:
+        # Original semantic predicate refusal has no command failure to relabel.
+        return
+    _, failed_index, arguments = failed
+    require(_discovery_probe(arguments) == (container_id, pid) and matched is False,
+            'Exact unmatched read-only discovery query required')
+    inventory = next((row for row in _PROC_INVENTORIES if row[0] is current_bytes), None)
+    require(inventory is not None, 'Actual held fresh process inventory required')
+    _, inventory_index, inventory_arguments = inventory
+    require(inventory_arguments == ('docker', 'container', 'exec', container_id, 'ls', '-1', '/proc')
+            and inventory_index > failed_index, 'Exact later container inventory required')
+    entries = current_bytes.decode('ascii').splitlines()
+    require(any(re.fullmatch(r'[1-9][0-9]*', entry) for entry in entries) and pid not in entries,
+            'Actual positive inventory must show probe absent')
+    ledger = owner.command_receipts()
+    require(0 <= failed_index < inventory_index < len(ledger)
+            and _settled_command(ledger[failed_index]) and ledger[failed_index].get('originalFailure') is True
+            and type(ledger[failed_index].get('originalExitCode')) is int
+            and ledger[failed_index]['originalExitCode'] > 0
+            and _settled_command(ledger[inventory_index]) and ledger[inventory_index].get('originalFailure') is False
+            and type(ledger[inventory_index].get('originalExitCode')) is int
+            and ledger[inventory_index]['originalExitCode'] == 0,
+            'Actual settled failed probe and successful absence ledger required')
+    require(len(_HANDLED_DISCOVERY_QUERIES) < 256
+            and all(row[0] != failed_index for row in _HANDLED_DISCOVERY_QUERIES), 'Discovery association reused or capped')
+    _HANDLED_DISCOVERY_QUERIES.append((failed_index, inventory_index, 'vanished-nonowner-read-query'))
+
+
 def command(arguments, timeout=10, maximum=262144):
     """Stream bounded pipes; retain and reap the exact direct child before returning."""
     require(sys.platform == "linux", "Dedicated hosted Linux launcher required")
     require(0 < timeout <= 60 and type(maximum) is int and 0 < maximum <= 1048576,
             "Finite helper time/output limits required")
+    require(type(arguments) in (list, tuple) and bool(arguments) and all(type(value) is str for value in arguments),
+            "Explicit command argument vector required")
+    if arguments[0] in ("docker", "git"):
+        import scanner_docker_command as owner
+        before = len(owner.command_receipts())
+        try:
+            if arguments[0] == "docker":
+                output = owner.run_docker_bytes(arguments[1:], timeout=timeout)
+            else:
+                output = owner.run_git_bytes(arguments[1:], timeout=timeout)
+        except subprocess.CalledProcessError:
+            # Preserve original nonzero AdmissionError category. Original failed
+            # command ledger remains intact; unsettled lifecycle is NOT mapped.
+            error = AdmissionError("Resource observation/action failed; details retained separately")
+            ledger = owner.command_receipts()
+            arguments_tuple = tuple(arguments)
+            if (_discovery_probe(arguments_tuple) is not None and len(ledger) == before + 1
+                    and _settled_command(ledger[before]) and len(_FAILED_DISCOVERY_QUERIES) < 256):
+                _FAILED_DISCOVERY_QUERIES.append((error, before, arguments_tuple))
+            raise error from None
+        require(type(output) is bytes and len(output) <= maximum, "Oversized observer response")
+        arguments_tuple = tuple(arguments)
+        if (len(arguments_tuple) == 7 and arguments_tuple[:3] == ('docker', 'container', 'exec')
+                and arguments_tuple[4:] == ('ls', '-1', '/proc') and HEX64.fullmatch(arguments_tuple[3])):
+            ledger = owner.command_receipts()
+            require(len(ledger) == before + 1 and len(_PROC_INVENTORIES) < 256,
+                    'Actual bounded inventory observation association required')
+            _PROC_INVENTORIES.append((output, before, arguments_tuple))
+        return output
+    # NonDocker/nonGit legacy branch remains under its separate lifetime owner.
     process = None
     selector = selectors.DefaultSelector()
     try:
@@ -417,13 +511,15 @@ def scanner_process(lease, plan):
                 target = execute("readlink",f"/proc/{pid}/fd/{fd}",maximum=4096).decode("ascii").strip()
                 if target == "socket:["+inode+"]":
                     matched = True; owners.append((int(pid),initial,fd)); break
-        except AdmissionError:
+        except AdmissionError as discovery_error:
             require(not matched, "Actual scanner listener vanished during discovery")
             # Positive fresh /proc inventory distinguishes exited nonowner helpers from
             # unreadable live state/engine failure. An arbitrary command failure is not absence.
-            current = execute("ls","-1","/proc").decode("ascii").splitlines()
+            current_bytes = execute("ls","-1","/proc")
+            current = current_bytes.decode("ascii").splitlines()
             require(any(re.fullmatch(r"[1-9][0-9]*",entry) for entry in current) and pid not in current,
                     "Live or uncertain scanner discovery process must not be skipped")
+            _record_handled_discovery(discovery_error, lease.container_id, pid, matched, current_bytes)
     require(len(owners) == 1, "Scanner listener ownership ambiguous")
     pid, initial, descriptor = owners[0]
     start = process_start_ticks(execute("cat",f"/proc/{pid}/stat",maximum=4096),pid)

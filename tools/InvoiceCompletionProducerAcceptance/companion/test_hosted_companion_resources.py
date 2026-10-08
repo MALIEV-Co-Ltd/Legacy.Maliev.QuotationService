@@ -252,7 +252,7 @@ class HelperSourceControls(unittest.TestCase):
     def test_helper_timeout_and_engine_failure_are_closed(self):
         for error in [OSError("engine unavailable"),subprocess.TimeoutExpired(["docker"],10)]:
             with self.subTest(error=error),patch.object(h.sys,"platform","linux"),patch.object(h.subprocess,"Popen",side_effect=error):
-                with self.assertRaises(h.AdmissionError): h.command(["docker","container","inspect",LEASE.container_id])
+                with self.assertRaises(h.AdmissionError): h.command(["synthetic-owned-helper"])
 
     def test_actual_source_and_dll_readback(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -320,7 +320,30 @@ def run_docker(args, timeout=30, capture_stderr=False):
         _FENCE.release()
 
 
-def _run_fenced(args, timeout, capture_stderr):
+def _run_raw(executable, args, timeout):
+    if executable not in ('docker', 'git'):
+        raise ValueError('Reviewed command executable required')
+    if type(timeout) not in (int, float) or not 0 < timeout <= 300:
+        raise ValueError('Finite owned command timeout required')
+    if not _FENCE.acquire(blocking=False):
+        raise DockerLifecycleError('Command lifetime fence already held')
+    try:
+        return _run_fenced(args, timeout, False, executable=executable, raw_stdout=True)
+    finally:
+        _FENCE.release()
+
+
+def run_docker_bytes(args, timeout=30):
+    """Untouched stdout bytes, same aggregate cap/lease/fence/cleanup as run_docker."""
+    return _run_raw('docker', args, timeout)
+
+
+def run_git_bytes(args, timeout=30):
+    """Exact source/build Git query lane; no shell or unknown executable birth."""
+    return _run_raw('git', args, timeout)
+
+
+def _run_fenced(args, timeout, capture_stderr, executable="docker", raw_stdout=False):
     if _OWNERS or len(_HISTORY) >= 256:
         raise DockerLifecycleError("Prior quarantine or command ledger capacity refused")
     lease = _Lease(timeout)
@@ -328,18 +351,18 @@ def _run_fenced(args, timeout, capture_stderr):
     answer = None
     try:
         lease.birth_attempted = True
-        lease.process = subprocess.Popen(["docker", *args], stdin=subprocess.DEVNULL,
+        lease.process = subprocess.Popen([executable, *args], stdin=subprocess.DEVNULL,
                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                          start_new_session=True)
         lease.bind()
         lease.drain()
         if lease.process.returncode:
-            raise subprocess.CalledProcessError(lease.process.returncode, ["docker", *args],
+            raise subprocess.CalledProcessError(lease.process.returncode, [executable, *args],
                                                stderr=lease.output[lease.process.stderr].decode("utf-8", "replace")[:4096])
         captured = lease.output[lease.process.stdout]
         if capture_stderr:
             captured = captured + lease.output[lease.process.stderr]
-        answer = captured.decode("utf-8", "strict").strip()
+        answer = bytes(captured) if raw_stdout else captured.decode("utf-8", "strict").strip()
     except BaseException as error:
         lease.original_failure = error
     finally:
