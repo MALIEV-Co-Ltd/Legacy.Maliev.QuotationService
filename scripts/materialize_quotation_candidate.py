@@ -117,11 +117,28 @@ def validate_capsule(manifest_bytes, capsule_bytes, policy):
         valid_inventory = len(expected) == 76 and (
             "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationWorkloadTokenLifecycleHttpTests.cs" in expected
         )
+    elif scope == "fixture-residual-wire":
+        valid_inventory = len(expected) == 79 and {
+            "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationWorkloadTokenLifecycleHttpTests.cs",
+            "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationIamTerminalObservationTests.cs",
+            "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationNativeOrderRecoveryHttpTests.cs",
+            "Legacy.Maliev.QuotationService.Tests/Controllers/QualificationOutcomeWireSourceTests.cs",
+            "Legacy.Maliev.QuotationService.Tests/Infrastructure/OwnedInspectionProcess.cs",
+            "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerStartup.cs",
+            "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerStartupContractTests.cs",
+        }.issubset(expected)
     elif scope == "admission-race":
         valid_inventory = set(expected) == {
             "Legacy.Maliev.QuotationService.Data/QuotationRepositories.cs",
             "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceCapabilityHttpTests.cs",
             "scripts/c821-focused-inventory.json",
+        }
+    elif scope == "admission-race-wire":
+        valid_inventory = set(expected) == {
+            "Legacy.Maliev.QuotationService.Data/QuotationRepositories.cs",
+            "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceCapabilityHttpTests.cs",
+            "scripts/c821-focused-inventory.json",
+            "Legacy.Maliev.QuotationService.Tests/Controllers/QualificationOutcomeWireSourceTests.cs",
         }
     else:
         raise ValueError("unknown qualification scope")

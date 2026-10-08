@@ -17,14 +17,28 @@ spec.loader.exec_module(gate)
 
 def packet(mutate=None, scope=None):
     files = {f"scripts/source-{n}.txt": f"raw-{n}\r\n".encode() for n in range(75)}
-    if scope == "fixture-corrected":
+    if scope in ("fixture-corrected", "fixture-residual-wire"):
         files["Legacy.Maliev.QuotationService.Tests/Controllers/QuotationWorkloadTokenLifecycleHttpTests.cs"] = b"raw\r\n"
-    if scope == "admission-race":
+    if scope == "fixture-residual-wire":
+        required = (
+            "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationIamTerminalObservationTests.cs",
+            "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationNativeOrderRecoveryHttpTests.cs",
+            "Legacy.Maliev.QuotationService.Tests/Controllers/QualificationOutcomeWireSourceTests.cs",
+            "Legacy.Maliev.QuotationService.Tests/Infrastructure/OwnedInspectionProcess.cs",
+            "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerStartup.cs",
+            "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerStartupContractTests.cs",
+        )
+        for n, path in enumerate(required):
+            if n >= 3: files.pop(f"scripts/source-{n}.txt")
+            files[path] = b"raw\r\n"
+    if scope in ("admission-race", "admission-race-wire"):
         files = {path: b"raw\r\n" for path in (
             "Legacy.Maliev.QuotationService.Data/QuotationRepositories.cs",
             "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceCapabilityHttpTests.cs",
             "scripts/c821-focused-inventory.json",
         )}
+    if scope == "admission-race-wire":
+        files["Legacy.Maliev.QuotationService.Tests/Controllers/QualificationOutcomeWireSourceTests.cs"] = b"raw\r\n"
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as archive:
         for path, data in files.items():
@@ -49,6 +63,20 @@ def packet(mutate=None, scope=None):
 
 
 class TransportTests(unittest.TestCase):
+    def test_residual_wire_scope_requires_79_and_all_explicit_boundaries(self):
+        raw, capsule, policy, files = packet(scope="fixture-residual-wire")
+        _, actual = gate.validate_capsule(raw, capsule, policy)
+        self.assertEqual(files, actual)
+        self.assertEqual(79, len(actual))
+        for target in ("QuotationIamTerminalObservationTests.cs", "QuotationNativeOrderRecoveryHttpTests.cs",
+                       "QualificationOutcomeWireSourceTests.cs", "OwnedInspectionProcess.cs"):
+            m, p = json.loads(raw), copy.deepcopy(policy)
+            next(row for row in m["sourceFiles"] if row["path"].endswith(target))["path"] = "other.cs"
+            p["sourceFiles"] = copy.deepcopy(m["sourceFiles"])
+            changed = json.dumps(m).encode(); p["manifestSha256"] = gate.sha256(changed)
+            with self.subTest(target=target), self.assertRaisesRegex(ValueError, "expanded inventory"):
+                gate.validate_capsule(changed, capsule, p)
+
     def test_fixture_scope_accepts_76_bound_files(self):
         raw, capsule, policy, files = packet(scope="fixture-corrected")
         _, actual = gate.validate_capsule(raw, capsule, policy)
@@ -90,6 +118,23 @@ class TransportTests(unittest.TestCase):
         policy["manifestSha256"] = gate.sha256(raw)
         with self.assertRaisesRegex(ValueError, "expanded inventory"):
             gate.validate_capsule(raw, capsule, policy)
+
+    def test_wire_scope_requires_exact_four_paths_and_preserves_old_scope(self):
+        raw, capsule, policy, files = packet(scope="admission-race-wire")
+        _, actual = gate.validate_capsule(raw, capsule, policy)
+        self.assertEqual(files, actual)
+        self.assertEqual(4, len(actual))
+        for mutation in ("wrong-path", "drop", "extra", "old-scope"):
+            m, p = json.loads(raw), copy.deepcopy(policy)
+            if mutation == "wrong-path": m["sourceFiles"][-1]["path"] = "other.cs"
+            elif mutation == "drop": m["sourceFiles"].pop()
+            elif mutation == "extra": m["sourceFiles"].append({"path": "extra.cs", "bytes": 1, "sha256": "a" * 64})
+            else: m["qualificationScope"] = p["qualificationScope"] = "admission-race"
+            p["sourceFiles"] = copy.deepcopy(m["sourceFiles"])
+            changed = json.dumps(m).encode()
+            p["manifestSha256"] = gate.sha256(changed)
+            with self.subTest(mutation=mutation), self.assertRaisesRegex(ValueError, "expanded inventory"):
+                gate.validate_capsule(changed, capsule, p)
 
     def test_admission_scope_accepts_only_exact_three_paths(self):
         raw, capsule, policy, files = packet(scope="admission-race")

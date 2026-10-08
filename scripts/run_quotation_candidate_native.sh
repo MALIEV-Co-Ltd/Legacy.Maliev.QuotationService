@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Runs only inside the isolated, raw-hash-verified candidate checkout.
+# Historical capsules lack opt-in wire retention; reject unsupported callers before SDK allocation.
+case "${QUOTATION_CANDIDATE_POLICY:-}" in
+  scripts/quotation-admission-race-policy.json|scripts/quotation-fixture-corrected-policy.json) ;;
+  *) echo 'Reviewed candidate wire policy required before native allocation.' >&2; exit 1 ;;
+esac
 available_kib=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
 if [[ ! "$available_kib" =~ ^[0-9]+$ ]] || (( available_kib < 4194304 )); then
   echo '4096 MiB resource admission guard failed.' >&2
@@ -37,12 +42,13 @@ python3 -B -m unittest discover -s tools/InvoiceCompletionProducerAcceptance/com
 
 
 # Prove actual qualification DTO and controller serializer wire
-dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+QUOTATION_CANDIDATE_WIRE=1 dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
   --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
   --filter 'FullyQualifiedName~QualificationOutcomeWireSourceTests' \
   --results-directory TestResults/QualificationWire --logger 'trx;LogFileName=qualification-wire.trx'
-python3 -B scripts/check_qualification_wire_results.py
-dotnet tools/QualificationOutcomeWireSource/bin/Release/net10.0/QualificationOutcomeWireSource.dll "$PWD"
+python3 -B ../scripts/check_quotation_candidate_wire.py --candidate "$PWD" \
+  --policy "$GITHUB_WORKSPACE/$QUOTATION_CANDIDATE_POLICY" \
+  --materialization "$GITHUB_WORKSPACE/evidence/source-materialization.json"
 
 
 # Collect QuotationService coverage
