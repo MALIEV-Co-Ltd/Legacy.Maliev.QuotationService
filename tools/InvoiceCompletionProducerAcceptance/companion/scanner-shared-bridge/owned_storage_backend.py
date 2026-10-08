@@ -55,6 +55,7 @@ class Lease:
     port: int
     executable_sha: str
     kernel_ticks: int
+    bind_owned_ipv4: bool = False
 
     def labels(self, role=None):
         result = {PREFIX + 'run': self.run_id, PREFIX + 'attempt': self.attempt,
@@ -66,6 +67,7 @@ class Lease:
         return result
 
     def validate(self, now):
+        require(type(self.bind_owned_ipv4) is bool, 'Exact binding mode required')
         require(all(hex_value(x, 64) for x in (self.container_id, self.scanner_id, self.network_id)), 'Exact handles required')
         require(self.container_id != self.scanner_id, 'Distinct storage/scanner required')
         require(re.fullmatch('[1-9][0-9]{0,19}', self.run_id) and re.fullmatch('[1-9][0-9]{0,8}', self.attempt), 'Canonical run required')
@@ -82,7 +84,7 @@ class Lease:
 
     def arguments(self):
         origin = f'http://{self.bridge_ip}:{self.port}'
-        return ['-scheme', 'http', '-host', '0.0.0.0', '-port', str(self.port),
+        return ['-scheme', 'http', '-host', self.bridge_ip if self.bind_owned_ipv4 else '0.0.0.0', '-port', str(self.port),
                 '-backend', 'memory', '-external-url', origin, '-public-host', f'{self.bridge_ip}:{self.port}']
 
 
@@ -214,7 +216,8 @@ def _zero_listener_evidence(lease, runner, zero_error=None):
             fields = line.split()
             if len(fields) < 10 or len(fields) > 32 or re.fullmatch('[0-9A-F]{' + str(address_width) + '}:[0-9A-F]{4}', fields[1]) is None:
                 raise AdmissionError('Listener evidence table row differs')
-            if fields[1] == '0' * address_width + f':{lease.port:04X}' and fields[3] == '0A':
+            expected_address = ipaddress.IPv4Address(lease.bridge_ip).packed[::-1].hex().upper() if address_width == 8 and lease.bind_owned_ipv4 else '0' * address_width
+            if fields[1] == expected_address + f':{lease.port:04X}' and fields[3] == '0A':
                 if re.fullmatch('[1-9][0-9]{0,19}', fields[9]) is None:
                     raise AdmissionError('Listener evidence socket inode differs')
                 result.append(fields[9])
@@ -384,7 +387,7 @@ def observe(lease, shared_scanner_network, command_runner=None):
     for row in rows[1:]:
         fields = row.split()
         require(len(fields) >= 10, 'Malformed kernel TCP row')
-        if fields[1] == f'00000000:{lease.port:04X}' and fields[3] == '0A':
+        if fields[1] == (ipaddress.IPv4Address(lease.bridge_ip).packed[::-1].hex().upper() if lease.bind_owned_ipv4 else '00000000') + f':{lease.port:04X}' and fields[3] == '0A':
             require(fields[9].isdigit() and int(fields[9]) > 0, 'Actual socket inode required')
             inodes.append(fields[9])
     if len(inodes) == 0:

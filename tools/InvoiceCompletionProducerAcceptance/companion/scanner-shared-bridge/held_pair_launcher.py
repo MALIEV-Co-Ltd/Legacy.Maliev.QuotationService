@@ -135,7 +135,7 @@ class HeldPairLauncher:
             require(image.get('Id') == storage.IMAGE_ID and storage.IMAGE in (image.get('RepoDigests') or [])
                     and not image.get('Config', {}).get('Volumes'), 'Qualified volume-free backend image differs')
             port = 4443
-            arguments = ['-scheme', 'http', '-host', '0.0.0.0', '-port', str(port), '-backend', 'memory',
+            arguments = ['-scheme', 'http', '-host', address, '-port', str(port), '-backend', 'memory',
                          '-external-url', 'http://' + address + ':' + str(port),
                          '-public-host', address + ':' + str(port)]
             args = ['create', '--name', self.backend_name, '--network', self.scanner.network_id,
@@ -165,7 +165,7 @@ class HeldPairLauncher:
             self.lease = storage.Lease(self.backend_id, self.scanner.container_id, self.scanner.network_id,
                 c.run_id, str(c.attempt), c.file_sha, c.lease_id, c.issued_utc, c.expires_utc,
                 container['Created'], self.backend_started, network['Created'], address, port,
-                self.executable_sha256, int(fields[19]))
+                self.executable_sha256, int(fields[19]), bind_owned_ipv4=True)
             diagnostic.stage('bridge-borrow')
             self.bridge.borrow(self.lease)
             return self

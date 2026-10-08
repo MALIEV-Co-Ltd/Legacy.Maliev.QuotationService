@@ -30,14 +30,14 @@
     {
       "name": "held_pair_launcher",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/held_pair_launcher.py",
-      "sha256": "4fc19580f9b36063e9808efc87e18bd1aa0ee5db955c15a9fee2f65eb419a8d9",
-      "length": 14118
+      "sha256": "4ed52e07b593fe678368e43a2f86e0ab7b83450bf3a9eacf20efdac94cd127d2",
+      "length": 14138
     },
     {
       "name": "owned_storage_backend",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/owned_storage_backend.py",
-      "sha256": "31cf581588ebd6ec2c374c899f4c21431d6f6a79c41afb2babd17ba0e12cb939",
-      "length": 24416
+      "sha256": "dc6903d2f4d682d197e6cec0ae734b7c55273c78ba3a95f2eacb504a14a3b31e",
+      "length": 24847
     },
     {
       "name": "storage_owner_command",
@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "7a989f6779eb05edaac0720e160d23b32b4f64e5ea362e42a0e7a8e59a701554",
-      "length": 52536
+      "sha256": "f59a2b9a6cb523ff667f8edd4fb575e7f14ee3cc5f298facdc600f8a863f1106",
+      "length": 52631
     }
   ],
   "rawControls": {
@@ -182,5 +182,7 @@
   "storageListenerCardinalityBase": "b5d3bf97ae20acb7d848da5ce986bcc9160e989f",
   "storageListenerCardinalityScope": "Only original IPv4 selected-port wildcard LISTEN cardinality partition zero vs nonzero!=1;sameexactoneaccepted/AdmissionError/literal/oneRequire/CLIorder;noTCP6admission/noactualzeroinference",
   "storageZeroEvidenceBase": "882aa1bad5b7345accd25ce7884bbdb72a365a8b",
-  "storageZeroEvidenceScope": "Original zero FIRST retained;thirteen subordinate readonly calls/shared<=min30secLeaseRemaining;noIPv4admission/cleanup/HTTP/eighttransfer"
+  "storageZeroEvidenceScope": "Original zero FIRST retained;thirteen subordinate readonly calls/shared<=min30secLeaseRemaining;noIPv4admission/cleanup/HTTP/eighttransfer",
+  "storageOwnedIpv4BindingBase": "5008c2083881acb501835c2beb1e20857dbbd9bf",
+  "storageOwnedIpv4BindingScope": "Default legacy wildcard remains; standalone explicitly opts into restricting source-owned host argv to exactprivateleaseIP;kernelTCP4 exactLinuxlittleendianIP/port/oneinode/initFD/ticks+Engine fences unchanged;noTCP6admission/cap/deadlinechange"
 }

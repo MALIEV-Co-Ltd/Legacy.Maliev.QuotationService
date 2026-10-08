@@ -33,3 +33,28 @@ upstream v1.52.3 net.Listen(tcp) and current Go wildcard dual-stack semantics ar
 NOT associated with the pinned binary or installed toolchain; no binding policy
 change is justified from those source references. Actual newhead kernel evidence
 and separate ownership/lifecycle receipts remain necessary; pair/File/eight false.
+
+## Exact owned IPv4 fixture binding successor
+
+Actual5008 pair37790130421 qualified subordinate zero-ipv4-tcp6-single-init-owned-stable:
+the prior wildcard IPv4 filter still found zero, while one wildcard TCP6 inode was
+owned by stable original PID1 FDs/generation within the source work deadline. This
+does not prove dual-stack reachability, installed Go version or an upstream tag.
+
+The next fixture contract restricts -host to the exact selected owned private IPv4
+address, standalone launcher argv and opt-in Lease.arguments. Generic Lease defaults remain
+legacy wildcard (bind_owned_ipv4=False); exact bool mode is mandatory. Existing
+ObservedStorageBackend.cs:62 and BackendObservationPureTests.cs:178 retain their
+wildcard C# contract. No C# files change; private standalone mode is not C# File/front
+compatibility or acceptance. That requires a separate reviewed SDK integration lane. Public-host/external-url remain
+unchanged. The normal observer requires that exact address encoded as Linux
+little-endian uppercase IPv4 hex, selected port, LISTEN, one positive inode, original
+PID1 FD ownership and all original repeated ticks/Engine/census/caps checks.
+Wildcard/foreign/loopback/reversed-byte/duplicate bindings cannot satisfy admission.
+No TCP6 listener satisfies this guard. Residual zero supplementary TCP4 reads now
+filter the same exact owned IPv4 address, not the historical wildcard; TCP6 remains
+wildcard-only evidence and fourteen false fields/first-refusal custody remain.
+
+No image/executable/network/API/runner/cap/deadline/retry/HTTP-probe/IAM/producer
+changes are made. Source models are not native proof; actual current-head fixture
+and cleanup are required. File/front/eight-service acceptance remains false.

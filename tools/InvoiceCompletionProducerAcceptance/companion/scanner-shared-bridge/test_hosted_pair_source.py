@@ -1230,3 +1230,125 @@ class ZeroListenerEvidenceControls(unittest.TestCase):
                 else:self.assertEqual(count,13);self.assertIs(type(error),ValueError)
                 d.bind('a'*40,'123',1,'b'*64,'pair')
                 self.assertEqual(d.projection()['firstDenialClause'],d.LISTENER_ZERO_CLAUSE)
+
+class OwnedIpv4BindingControls(unittest.TestCase):
+    source_model = ZeroListenerEvidenceControls.source_model
+    def fixture(self, s):
+        from dataclasses import replace
+        lease,container,image,network,scanner=ZeroListenerEvidenceControls.fixture(self,s)
+        lease=replace(lease,bind_owned_ipv4=True)
+        container['Config']['Cmd']=lease.arguments()
+        return lease,container,image,network,scanner
+
+    def normal(self, case='owned', legacy=False):
+        import copy,json,sys,types
+        d,s,c,b=self.source_model();lease,container,image,network,scanner=self.fixture(s);calls=[];ticks=0;backend_reads=0
+        if legacy:
+            from dataclasses import replace
+            lease=replace(lease,bind_owned_ipv4=False);container['Config']['Cmd']=lease.arguments()
+        handle=SimpleNamespace(network_id=lease.network_id,scanner_container_id=lease.scanner_id,
+            created_utc=lease.network_created,ownership_labels={'financial.acceptance.run':lease.lease_id[5:]},
+            context=SimpleNamespace(run_id=lease.run_id,attempt=1,file_sha=lease.file_sha,lease_id=lease.lease_id,
+                expires_utc=lease.expires,issued_utc=lease.issued))
+        handle.refresh=lambda:dict(networkId=lease.network_id,createdUtc=lease.network_created,scannerContainerId=lease.scanner_id,
+            internal=True,driver='bridge',ownershipLabels=handle.ownership_labels,members=sorted([lease.container_id,lease.scanner_id]))
+        runner=types.ModuleType('scanner_docker_command')
+        def run(args,timeout):
+            nonlocal ticks,backend_reads
+            calls.append(tuple(args))
+            if args[:2] in (['container','inspect'],['network','inspect'],['image','inspect']):
+                obj=copy.deepcopy({lease.container_id:container,lease.scanner_id:scanner,lease.network_id:network,s.IMAGE_ID:image}[args[2]])
+                if args[2]==lease.container_id:
+                    backend_reads+=1
+                    if case=='changed-engine-pid' and backend_reads>1:obj['State']['Pid']=14
+                    if case=='wildcard-argv':obj['Config']['Cmd'][3]='0.0.0.0'
+                return json.dumps([obj])
+            tail=tuple(args[2:])
+            if tail==('cat','/proc/1/stat'):
+                ticks+=1;value=4568 if case=='wrong-pid-generation' or (case=='changed-ticks' and ticks>1) else lease.kernel_ticks
+                return '1 (server) S '+' '.join(['0']*18+[str(value)])
+            if tail==('readlink','/proc/1/exe'):return '/bin/fake-gcs-server'
+            if tail==('sha256sum','/proc/1/exe'):return lease.executable_sha+'  /proc/1/exe'
+            if tail==('cat','/proc/1/cmdline'):return '\0'.join(['/bin/fake-gcs-server',*lease.arguments()])+'\0'
+            if tail==('ls','-l','/proc/1/fd'):
+                inode='888' if case=='unowned-fd' else '777'
+                return f'lrwx------ 1 root root 64 Oct 8 12:00 3 -> socket:[{inode}]\n'
+            if tail[0]=='cat' and tail[1] in ('/proc/1/net/tcp','/proc/1/net/tcp6'):
+                header='sl local_address rem_address st tx_queue rx_queue tr tm->when retrnsmt uid timeout inode\n'
+                if tail[1].endswith('tcp6'):return header
+                address=s.ipaddress.IPv4Address(lease.bridge_ip).packed[::-1].hex().upper() if lease.bind_owned_ipv4 else '00000000'
+                if case=='wildcard':address='00000000'
+                if case=='foreign-ip':address=s.ipaddress.IPv4Address('172.19.0.3').packed[::-1].hex().upper()
+                if case=='loopback':address='0100007F'
+                if case=='wrong-byte-order':address=s.ipaddress.IPv4Address(lease.bridge_ip).packed.hex().upper()
+                port=lease.port+1 if case=='wrong-port' else lease.port
+                state='01' if case=='not-listening' else '0A'
+                row=f'0: {address}:{port:04X} 00000000:0000 {state} 0 0 0 0 0 777\n'
+                return header+row*(2 if case=='two-listeners' else 1)
+            self.fail('Unexpected modeled source command')
+        runner.run_docker=run
+        with patch.dict(sys.modules,{'scanner_docker_command':runner,'storage_owner_command':c,'pair_failure_diagnostic':d}),patch.object(s.sys,'platform','linux'),patch.dict(s.os.environ,{'RUNNER_ENVIRONMENT':'github-hosted','GITHUB_RUN_ID':lease.run_id,'GITHUB_RUN_ATTEMPT':lease.attempt}):
+            try:value=s.observe(lease,handle,command_runner=c.storage_command)
+            except BaseException as error:return d,s,lease,calls,error,None
+        return d,s,lease,calls,None,value
+
+    def test_actual_source_observer_accepts_only_exact_owned_ipv4_model_without_diagnostics(self):
+        d,s,lease,calls,error,value=self.normal()
+        self.assertIsNone(error);self.assertIsNone(d.FIRST);self.assertIsNone(d.LISTENER_EVIDENCE)
+        self.assertIs(value['privateBackendObserved'],True);self.assertIs(value['genuineEightHostFinancialAccepted'],False)
+        self.assertFalse(any('/proc/1/net/tcp6' in args for args in calls))
+
+    def test_wildcard_foreign_loopback_byteorder_port_state_and_two_listeners_refuse(self):
+        for case in ('wildcard','foreign-ip','loopback','wrong-byte-order','wrong-port','not-listening','two-listeners'):
+            with self.subTest(case=case):
+                d,s,lease,calls,error,value=self.normal(case)
+                self.assertIs(type(error),s.AdmissionError);self.assertIsNone(value)
+
+    def test_original_init_fd_kernel_ticks_engine_pid_and_argv_fences_still_refuse(self):
+        for case in ('unowned-fd','wrong-pid-generation','changed-ticks','changed-engine-pid','wildcard-argv'):
+            with self.subTest(case=case):
+                d,s,lease,calls,error,value=self.normal(case)
+                self.assertIs(type(error),s.AdmissionError);self.assertIsNone(value)
+
+    def test_launcher_and_lease_arguments_bind_same_owned_address_and_keep_public_urls(self):
+        import ast
+        d,s,c,b=self.source_model();lease,*_=self.fixture(s)
+        tree=ast.parse(HELD_OWNER_SOURCES['held_pair_launcher'])
+        cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='HeldPairLauncher')
+        fn=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='start')
+        expression=next(n.value for n in ast.walk(fn) if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='arguments' for t in n.targets))
+        actual=eval(compile(ast.Expression(expression),'<actual-args-source>','eval'),{'address':lease.bridge_ip,'port':lease.port})
+        self.assertEqual(actual,lease.arguments());self.assertEqual(actual[3],lease.bridge_ip)
+        self.assertEqual(actual[-4:],['-external-url',f'http://{lease.bridge_ip}:{lease.port}','-public-host',f'{lease.bridge_ip}:{lease.port}'])
+        self.assertNotIn('0.0.0.0',actual)
+
+    def test_primary_and_supplementary_tcp4_filters_use_same_linux_little_endian_lease_ip(self):
+        import ast
+        tree=ast.parse(HELD_OBSERVER_SOURCES['storage'])
+        normal=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='observe')
+        predicate=next(n for n in ast.walk(normal) if isinstance(n,ast.If) and isinstance(n.test,ast.BoolOp) and ast.unparse(n.test).startswith('fields[1] == (ipaddress.IPv4Address'))
+        expression=predicate.test.values[0].comparators[0].left
+        helper=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='_zero_listener_evidence')
+        secondary=next(n.value.body for n in ast.walk(helper) if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='expected_address' for t in n.targets))
+        d,s,c,b=self.source_model();lease,*_=self.fixture(s)
+        self.assertEqual(eval(compile(ast.Expression(expression),'<actual-address-source>','eval'),{'ipaddress':s.ipaddress,'lease':lease}),'020013AC')
+
+    def test_default_legacy_observer_and_arguments_remain_wildcard(self):
+        d,s,lease,calls,error,value=self.normal(legacy=True)
+        self.assertIsNone(error);self.assertFalse(lease.bind_owned_ipv4)
+        self.assertEqual(lease.arguments()[3],'0.0.0.0')
+        self.assertIs(value['privateBackendObserved'],True)
+        self.assertIsNone(d.FIRST)
+
+    def test_non_boolean_binding_modes_refuse_and_launcher_explicitly_opts_in(self):
+        import ast
+        from dataclasses import replace
+        d,s,c,b=self.source_model();lease,*_=self.fixture(s)
+        for flag in (0,1,None,'true',[],{}):
+            with self.subTest(flag=flag):
+                with self.assertRaises(s.AdmissionError):replace(lease,bind_owned_ipv4=flag).validate(s.datetime.now(s.timezone.utc))
+        tree=ast.parse(HELD_OWNER_SOURCES['held_pair_launcher'])
+        calls=[n for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr=='Lease']
+        self.assertEqual(len(calls),1)
+        kw=next(k for k in calls[0].keywords if k.arg=='bind_owned_ipv4')
+        self.assertIs(kw.value.value,True)

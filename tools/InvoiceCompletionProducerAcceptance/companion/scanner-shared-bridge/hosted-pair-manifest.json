@@ -30,14 +30,14 @@
     {
       "name": "held_pair_launcher",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/held_pair_launcher.py",
-      "sha256": "4fc19580f9b36063e9808efc87e18bd1aa0ee5db955c15a9fee2f65eb419a8d9",
-      "length": 14118
+      "sha256": "4ed52e07b593fe678368e43a2f86e0ab7b83450bf3a9eacf20efdac94cd127d2",
+      "length": 14138
     },
     {
       "name": "owned_storage_backend",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/owned_storage_backend.py",
-      "sha256": "31cf581588ebd6ec2c374c899f4c21431d6f6a79c41afb2babd17ba0e12cb939",
-      "length": 24416
+      "sha256": "dc6903d2f4d682d197e6cec0ae734b7c55273c78ba3a95f2eacb504a14a3b31e",
+      "length": 24847
     },
     {
       "name": "storage_owner_command",
@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "7a989f6779eb05edaac0720e160d23b32b4f64e5ea362e42a0e7a8e59a701554",
-      "length": 52536
+      "sha256": "f59a2b9a6cb523ff667f8edd4fb575e7f14ee3cc5f298facdc600f8a863f1106",
+      "length": 52631
     }
   ],
   "rawControls": {
