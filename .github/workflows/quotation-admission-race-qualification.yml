@@ -8,6 +8,7 @@ on:
       - scripts/check_quotation_candidate_native.py
       - scripts/tests/test_quotation_candidate_native.py
       - scripts/quotation-admission-race-policy.json
+      - scripts/quotation-candidate-delayed-theories.json
       - scripts/run_quotation_candidate_native.sh
       - .github/workflows/quotation-admission-race-qualification.yml
   workflow_dispatch:
