@@ -1,0 +1,70 @@
+# Qualification before source integration
+
+The separate dispatch workflow validates a reviewed, uncommitted candidate before
+its C# files enter a Git commit. The ordinary protected build and test workflow
+remains unchanged. A successful transport PR only validates the transport.
+
+The committed policy pins manifest SHA256, exact accepted base, dependency commits
+and all 75 file hashes/sizes. Operators upload the reviewed manifest and raw ZIP
+through this repository's Git blob API, then dispatch with the two returned blob
+IDs. The materializer reads only this repository, recomputes Git object identities
+and SHA256, bounds bytes, and rejects duplicate entries, noncanonical paths,
+symlinks, missing files and extra files. It writes the exact raw bytes into an
+isolated checkout and verifies them before any SDK build. Text patches are review
+artifacts; they cannot attest raw source with different line endings.
+
+The hosted job builds the original IAM catalogue boundary using genuine pinned
+Contracts and Defaults sources. Its four cases use mocked repository and event
+transport. They do not establish HTTP/database registration or live IAM grants.
+The job then builds the affected Quotation solution with warnings treated as
+errors, runs its suite, checks formatting and package audit evidence, and retains
+the existing focused checks and both 80 percent coverage floors. The historical
+Accounting dependency is compile-time input; this run does not qualify a current
+multi-host financial graph or malware scanner database.
+
+All four original test-project reports must match their compiled discovery,
+assembly and execution identities. The known nonserializable `Claim[]` member
+theory can expand during execution: its reviewed source hash and ten-row inventory
+are pinned separately. Other unknown discovery expansions fail closed. Audit
+evidence must cover the exact solution project paths and their `net10.0` frameworks.
+The trusted transport checks both solution and catalogue audits independently:
+literal integer schema version, transitive vulnerable scope, reviewed actual feeds,
+empty well-formed affected-package collections and empty retained stderr are
+required. Catalogue restore feeds must match the genuine local package builder and
+nuget.org; the hosted package cache starts fresh. The frozen candidate ZIP stays
+unchanged when these transport checks are tightened.
+
+SDK setup also consumes the original pinned Contracts `global.json`. That source
+requires SDK `10.0.302` with roll-forward disabled; the ordinary Quotation .NET 10
+channel alone cannot run its generator. Installing the declared SDK preserves the
+genuine source pins and global.json rather than rewriting them.
+
+Jobs have finite timeouts, read-only repository permissions and a 4096 MiB memory
+admission guard. They use disposable hosted workspaces and start no detached
+workers or provider sessions. Original logs, TRX, coverage and raw source identity
+receipts are retained for seven days. Missing or failed native evidence leaves the
+candidate ineligible for a C# commit. Successful native evidence still requires a
+subsequent source PR and its normal protected checks before integration.
+
+Clean NuGet vulnerability JSON can retain only a project path, omitting framework
+rows. Such a row is accepted only when a separate original full transitive package
+graph confirms the exact project set and sole net10.0 framework. Both CLI reports
+and their empty stderr are retained. Explicit empty, null or substituted framework
+rows, malformed resolved packages, missing graphs and audit warnings still fail.
+The trusted transport reruns both reports independently of candidate evidence.
+
+The reviewed 75-file successor also includes the source-only admission race
+correction and three deterministic PostgreSQL controls. The protected-main failure
+was observed at 7058f561; this candidate remains uncommitted and requires actual
+full hosted qualification. A transport merge does not prove the race is fixed.
+
+The compile-correction successor preserves the admission race implementation and
+its three focused cases. It explicitly validates nullable Docker inspection fields
+and removes blocking task access and filtered Assert.Single calls in tests.
+The failed native run 37695351754 remains retained. No warning suppression,
+coverage reduction, test removal, or resource admission change is permitted.
+
+The trusted solution build retains the parent Release configuration for references
+outside the solution through ShouldUnsetParentConfigurationAndPlatform=false.
+The original native build log must show Release output for retained dependencies;
+this does not replace their separate current financial-runtime qualification.
