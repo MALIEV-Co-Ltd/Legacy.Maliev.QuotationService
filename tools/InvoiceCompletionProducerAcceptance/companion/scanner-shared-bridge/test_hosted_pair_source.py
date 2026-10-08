@@ -1352,3 +1352,115 @@ class OwnedIpv4BindingControls(unittest.TestCase):
         self.assertEqual(len(calls),1)
         kw=next(k for k in calls[0].keywords if k.arg=='bind_owned_ipv4')
         self.assertIs(kw.value.value,True)
+
+class ListenerReadinessControls(unittest.TestCase):
+    source_model = ZeroListenerEvidenceControls.source_model
+    fixture = OwnedIpv4BindingControls.fixture
+
+    def run_wait(self, case='ready'):
+        import ast,copy,json,sys,types
+        d,s,c,b=self.source_model();lease,container,image,network,scanner=self.fixture(s)
+        scanner['Image']='sha256:'+'e'*64
+        scanner['HostConfig']={'Memory':1536*1024**2,'NanoCpus':2_000_000_000,'CapDrop':['ALL'],'CapAdd':None,'ReadonlyRootfs':True,'PortBindings':{},'PublishAllPorts':False}
+        scanner['NetworkSettings']['Ports']={'3310/tcp':None}
+        handle=SimpleNamespace(_borrow=lease,_failure=False,_released=False,network_id=lease.network_id,
+            scanner_container_id=lease.scanner_id,created_utc=lease.network_created,
+            _runtime_id=scanner['Image'],_generation={'createdUtc':scanner['Created'],'startedUtc':scanner['State']['StartedAt']})
+        policy=types.ModuleType('hosted_scanner_readiness')
+        source=ast.parse(HELD_STORAGE_SOURCES['scanner'])
+        nodes=[n for n in source.body if isinstance(n,ast.FunctionDef) and n.name in ('observed_runtime_policy','no_docker_publication')]
+        exec(compile(ast.Module(body=nodes,type_ignores=[]),'<actual-policy-source>','exec'),policy.__dict__)
+        now=[0.0];calls=[];sleeps=[];polls=0;fault=RuntimeError('private modeled CLI fault')
+        if case=='expired':
+            from dataclasses import replace
+            lease=replace(lease,expires=lease.issued);handle._borrow=lease
+        if case=='reserve':
+            from dataclasses import replace
+            from datetime import datetime,timezone,timedelta
+            lease=replace(lease,expires=(datetime.now(timezone.utc)+timedelta(seconds=20)).isoformat().replace('+00:00','Z'))
+            handle._borrow=lease
+        def run(args,maximum,*,absolute_deadline):
+            nonlocal polls
+            self.assertGreater(absolute_deadline,now[0]);calls.append(tuple(args))
+            if case=='command-fault' and len(calls)==5:raise fault
+            if case=='cancel' and len(calls)==5:raise KeyboardInterrupt()
+            if case=='late' and len(calls)==5:now[0]=absolute_deadline+0.1
+            if args[1:3] in (['container','inspect'],['network','inspect'],['image','inspect']):
+                obj=copy.deepcopy({lease.container_id:container,lease.scanner_id:scanner,lease.network_id:network,s.IMAGE_ID:image}[args[3]])
+                if args[3]==lease.container_id and case=='foreign':obj['Id']='f'*64
+                if args[3]==lease.container_id and case=='caps':obj['HostConfig']['Memory']=0
+                if args[3]==lease.container_id and case=='generation' and len(calls)>9:obj['State']['Pid']+=1
+                if args[3]==lease.scanner_id and case=='scanner-generation':obj['State']['StartedAt']=lease.created
+                return json.dumps([obj]).encode()
+            tail=tuple(args[3:])
+            if tail==('cat','/proc/1/stat'):return ('1 (server) S '+' '.join(['0']*18+[str(lease.kernel_ticks)])).encode()
+            if tail==('readlink','/proc/1/exe'):return b'/bin/fake-gcs-server\n'
+            if tail==('sha256sum','/proc/1/exe'):return (lease.executable_sha+'  /proc/1/exe\n').encode()
+            if tail==('cat','/proc/1/cmdline'):
+                args0=lease.arguments();
+                if case=='argv':args0[3]='0.0.0.0'
+                return '\0'.join(['/bin/fake-gcs-server',*args0]).encode()+b'\0'
+            if tail==('cat','/proc/1/net/tcp'):
+                polls+=1
+                header=b'sl local_address rem_address st tx_queue rx_queue tr tm retr uid inode\n'
+                if case=='zero' or case in ('delayed','early-wake') and polls==1:return header
+                address=s.ipaddress.IPv4Address(lease.bridge_ip).packed[::-1].hex().upper()
+                if case=='wrong-address':address='00000000'
+                row=f'0: {address}:{lease.port:04X} 00000000:0000 0A 0 0 0 0 0 777\n'.encode()
+                return header+row*(2 if case=='multiple' else 1)
+            if tail==('ls','-l','/proc/1/fd'):return ('lrwx------ 1 root root 64 Oct 8 12:00 3 -> socket:['+('888' if case=='unowned' else '777')+']\n').encode()
+            self.fail('Unexpected modeled readiness command')
+        def sleep(delay):
+            self.assertGreater(delay,0);sleeps.append(delay)
+            now[0]+=delay/2 if case=='early-wake' and len(sleeps)<3 else delay
+        error=value=None
+        with patch.dict(sys.modules,{'hosted_scanner_readiness':policy,'storage_owner_command':c}),patch.object(c,'storage_command',run),patch('time.monotonic',side_effect=lambda:now[0]),patch('time.sleep',side_effect=sleep):
+            try:value=s.wait_listener_ready(lease,handle,command_runner=run)
+            except BaseException as caught:error=caught
+        return d,s,calls,sleeps,polls,error,value,fault
+
+    def test_current_owned_init_listener_needs_no_sleep_and_mints_no_receipt(self):
+        d,s,calls,sleeps,polls,error,value,fault=self.run_wait()
+        self.assertIsNone(error);self.assertIs(value,True);self.assertEqual(polls,1);self.assertEqual(sleeps,[])
+        self.assertLessEqual(len(calls),32);self.assertIsNone(d.FIRST);self.assertIsNone(d.LISTENER_EVIDENCE)
+
+    def test_delayed_zero_binding_waits_to_real_second_slot_then_succeeds(self):
+        for case in ('delayed','early-wake'):
+            d,s,calls,sleeps,polls,error,value,fault=self.run_wait(case)
+            self.assertIsNone(error);self.assertIs(value,True);self.assertEqual(polls,2)
+            self.assertAlmostEqual(sum(sleeps) if case=='delayed' else sleeps[-1]+sum(x/2 for x in sleeps[:-1]),5)
+            self.assertLessEqual(len(calls),32);self.assertIsNone(d.FIRST)
+
+    def test_permanent_exact_zero_is_unproven_not_acceptance_after_two_polls(self):
+        d,s,calls,sleeps,polls,error,value,fault=self.run_wait('zero')
+        self.assertIsNone(error);self.assertIs(value,False);self.assertEqual(polls,2)
+        self.assertIsNone(d.FIRST);self.assertLessEqual(len(calls),32)
+        import ast
+        tree=ast.parse(HELD_OWNER_SOURCES['held_pair_launcher']);cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='HeldPairLauncher')
+        fn=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='observe')
+        calls0=[n for n in ast.walk(fn) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr in ('wait_listener_ready','observe')]
+        self.assertEqual([n.func.attr for n in calls0],['wait_listener_ready','observe'])
+
+    def test_wrong_multiple_unowned_argv_and_generation_fail_without_retry(self):
+        for case in ('wrong-address','multiple','unowned','argv','generation','scanner-generation','foreign','caps'):
+            with self.subTest(case=case):
+                d,s,calls,sleeps,polls,error,value,fault=self.run_wait(case)
+                self.assertIsNotNone(error);self.assertIsNone(value);self.assertEqual(sleeps,[])
+                self.assertLessEqual(polls,1)
+                if case in ('foreign','caps'):self.assertEqual(len(calls),2)
+
+    def test_original_command_fault_and_cancellation_are_not_caught_or_retried(self):
+        for case in ('command-fault','cancel'):
+            d,s,calls,sleeps,polls,error,value,fault=self.run_wait(case)
+            self.assertEqual(len(calls),5);self.assertEqual(sleeps,[]);self.assertIsNone(value)
+            if case=='command-fault':self.assertIs(error,fault)
+            else:self.assertIs(type(error),KeyboardInterrupt)
+
+    def test_late_command_success_refuses_before_next_read_birth(self):
+        d,s,calls,sleeps,polls,error,value,fault=self.run_wait('late')
+        self.assertIs(type(error),s.AdmissionError);self.assertEqual(len(calls),5);self.assertEqual(sleeps,[]);self.assertIsNone(value)
+
+    def test_expired_and_cleanup_reserve_short_lease_birth_no_helper(self):
+        for case in ('expired','reserve'):
+            d,s,calls,sleeps,polls,error,value,fault=self.run_wait(case)
+            self.assertIs(type(error),s.AdmissionError);self.assertEqual(calls,[]);self.assertEqual(sleeps,[])

@@ -36,7 +36,7 @@ jobs:
           from pathlib import Path
           prefix = Path('tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge')
           held = {}
-          for name, expected in (('qualify_hosted_pair', 'd5559e316694a3988a6e6a160b44e904057f52794ca00ca10def2bb0142f252d'), ('test_hosted_pair_source', '2857d39f58514ce943aed00cacab7790da45552df9e4e395d0117427a60e3a2b'), ('pair_failure_diagnostic', 'f59a2b9a6cb523ff667f8edd4fb575e7f14ee3cc5f298facdc600f8a863f1106'), ('pinned_image_oracle', 'da82d89cf595e9e2350f9a15c5e08b61f87c300bc1521d9ed4542400b21f3c5f'), ('held_pair_launcher', '4ed52e07b593fe678368e43a2f86e0ab7b83450bf3a9eacf20efdac94cd127d2'), ('hosted_companion_resources', '58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f'), ('borrowed_scanner_bridge', '751963c8a55666577b7802ecb1ce67ab651cf1c6b05373e02a57a5d91367f6d5'), ('hosted_scanner_readiness', '34f794ca4d05dcd8664fbb8a919975fd0864802bb0ecbd95edae9d67acbd63b6'), ('scanner_docker_command', '89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6'), ('owned_storage_backend', 'dc6903d2f4d682d197e6cec0ae734b7c55273c78ba3a95f2eacb504a14a3b31e'), ('storage_owner_command', '5d063f59ad00c8071e962ebfe34651e343f5c1e2ae6add58cc9a72f837dc1d09')):
+          for name, expected in (('qualify_hosted_pair', '47210a37060d5813ed5142b62a22a4dfe42bf11a4b74d42fee85414411d006cb'), ('test_hosted_pair_source', '48df8010b96dea35b2dd553959bfab9a93e9572260c3da11790281f4e309fa81'), ('pair_failure_diagnostic', '16c48ea293c7d50793c95fd03482039aa0f015555331ded76825011aab769444'), ('pinned_image_oracle', 'da82d89cf595e9e2350f9a15c5e08b61f87c300bc1521d9ed4542400b21f3c5f'), ('held_pair_launcher', '985d7adefea26cc24fb40580c7336f20dc0e505fe64c0ca025e078f4bd033825'), ('hosted_companion_resources', '58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f'), ('borrowed_scanner_bridge', '751963c8a55666577b7802ecb1ce67ab651cf1c6b05373e02a57a5d91367f6d5'), ('hosted_scanner_readiness', '34f794ca4d05dcd8664fbb8a919975fd0864802bb0ecbd95edae9d67acbd63b6'), ('scanner_docker_command', '89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6'), ('owned_storage_backend', '0c3dd559961f61b51bd25afa7489d593822fd877816fd7514c75bd7dbc72cbbf'), ('storage_owner_command', '5d063f59ad00c8071e962ebfe34651e343f5c1e2ae6add58cc9a72f837dc1d09')):
               path = Path('tools/InvoiceCompletionProducerAcceptance/companion') / (name + '.py') if name in ('hosted_companion_resources','hosted_scanner_readiness','scanner_docker_command') else prefix / (name + '.py')
               fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
               try:
@@ -69,7 +69,7 @@ jobs:
           sys.modules['test_hosted_pair_source'].HELD_STORAGE_SOURCES = {'launcher':held['held_pair_launcher'], 'scanner':held['hosted_scanner_readiness'], 'runner':held['scanner_docker_command']}
           sys.modules['test_hosted_pair_source'].HELD_OBSERVER_SOURCES = {'storage':held['owned_storage_backend'], 'command':held['storage_owner_command']}
           result = unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromModule(sys.modules['test_hosted_pair_source']))
-          if result.testsRun != 68 or not result.wasSuccessful():
+          if result.testsRun != 75 or not result.wasSuccessful():
               raise SystemExit('Source controls refused')
           owner = sys.modules['qualify_hosted_pair']
           try:
@@ -97,7 +97,7 @@ jobs:
           from pathlib import Path
           prefix = Path('tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge')
           held = {}
-          for name, expected in (('qualify_hosted_pair', 'd5559e316694a3988a6e6a160b44e904057f52794ca00ca10def2bb0142f252d'), ('test_hosted_pair_source', '2857d39f58514ce943aed00cacab7790da45552df9e4e395d0117427a60e3a2b'), ('pair_failure_diagnostic', 'f59a2b9a6cb523ff667f8edd4fb575e7f14ee3cc5f298facdc600f8a863f1106'), ('pinned_image_oracle', 'da82d89cf595e9e2350f9a15c5e08b61f87c300bc1521d9ed4542400b21f3c5f'), ('held_pair_launcher', '4ed52e07b593fe678368e43a2f86e0ab7b83450bf3a9eacf20efdac94cd127d2'), ('hosted_companion_resources', '58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f'), ('borrowed_scanner_bridge', '751963c8a55666577b7802ecb1ce67ab651cf1c6b05373e02a57a5d91367f6d5'), ('hosted_scanner_readiness', '34f794ca4d05dcd8664fbb8a919975fd0864802bb0ecbd95edae9d67acbd63b6'), ('scanner_docker_command', '89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6'), ('owned_storage_backend', 'dc6903d2f4d682d197e6cec0ae734b7c55273c78ba3a95f2eacb504a14a3b31e'), ('storage_owner_command', '5d063f59ad00c8071e962ebfe34651e343f5c1e2ae6add58cc9a72f837dc1d09')):
+          for name, expected in (('qualify_hosted_pair', '47210a37060d5813ed5142b62a22a4dfe42bf11a4b74d42fee85414411d006cb'), ('test_hosted_pair_source', '48df8010b96dea35b2dd553959bfab9a93e9572260c3da11790281f4e309fa81'), ('pair_failure_diagnostic', '16c48ea293c7d50793c95fd03482039aa0f015555331ded76825011aab769444'), ('pinned_image_oracle', 'da82d89cf595e9e2350f9a15c5e08b61f87c300bc1521d9ed4542400b21f3c5f'), ('held_pair_launcher', '985d7adefea26cc24fb40580c7336f20dc0e505fe64c0ca025e078f4bd033825'), ('hosted_companion_resources', '58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f'), ('borrowed_scanner_bridge', '751963c8a55666577b7802ecb1ce67ab651cf1c6b05373e02a57a5d91367f6d5'), ('hosted_scanner_readiness', '34f794ca4d05dcd8664fbb8a919975fd0864802bb0ecbd95edae9d67acbd63b6'), ('scanner_docker_command', '89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6'), ('owned_storage_backend', '0c3dd559961f61b51bd25afa7489d593822fd877816fd7514c75bd7dbc72cbbf'), ('storage_owner_command', '5d063f59ad00c8071e962ebfe34651e343f5c1e2ae6add58cc9a72f837dc1d09')):
               path = Path('tools/InvoiceCompletionProducerAcceptance/companion') / (name + '.py') if name in ('hosted_companion_resources','hosted_scanner_readiness','scanner_docker_command') else prefix / (name + '.py')
               fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
               try:
@@ -130,7 +130,7 @@ jobs:
           sys.modules['test_hosted_pair_source'].HELD_STORAGE_SOURCES = {'launcher':held['held_pair_launcher'], 'scanner':held['hosted_scanner_readiness'], 'runner':held['scanner_docker_command']}
           sys.modules['test_hosted_pair_source'].HELD_OBSERVER_SOURCES = {'storage':held['owned_storage_backend'], 'command':held['storage_owner_command']}
           result = unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromModule(sys.modules['test_hosted_pair_source']))
-          if result.testsRun != 68 or not result.wasSuccessful():
+          if result.testsRun != 75 or not result.wasSuccessful():
               raise SystemExit('Source controls refused')
           owner = sys.modules['qualify_hosted_pair']
           try:

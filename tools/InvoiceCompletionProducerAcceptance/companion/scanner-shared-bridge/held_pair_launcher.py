@@ -180,6 +180,7 @@ class HeldPairLauncher:
         try:
             import owned_storage_backend as storage
             diagnostic.stage('storage-observe')
+            storage.wait_listener_ready(self.lease, self.bridge, command_runner=storage_command)
             return storage.observe(self.lease, self.bridge, command_runner=storage_command)
         except BaseException:
             self.failure = True

@@ -30,14 +30,14 @@
     {
       "name": "held_pair_launcher",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/held_pair_launcher.py",
-      "sha256": "4ed52e07b593fe678368e43a2f86e0ab7b83450bf3a9eacf20efdac94cd127d2",
-      "length": 14138
+      "sha256": "985d7adefea26cc24fb40580c7336f20dc0e505fe64c0ca025e078f4bd033825",
+      "length": 14235
     },
     {
       "name": "owned_storage_backend",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/owned_storage_backend.py",
-      "sha256": "dc6903d2f4d682d197e6cec0ae734b7c55273c78ba3a95f2eacb504a14a3b31e",
-      "length": 24847
+      "sha256": "0c3dd559961f61b51bd25afa7489d593822fd877816fd7514c75bd7dbc72cbbf",
+      "length": 37634
     },
     {
       "name": "storage_owner_command",
@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "f59a2b9a6cb523ff667f8edd4fb575e7f14ee3cc5f298facdc600f8a863f1106",
-      "length": 52631
+      "sha256": "16c48ea293c7d50793c95fd03482039aa0f015555331ded76825011aab769444",
+      "length": 58573
     }
   ],
   "rawControls": {
@@ -184,5 +184,7 @@
   "storageZeroEvidenceBase": "882aa1bad5b7345accd25ce7884bbdb72a365a8b",
   "storageZeroEvidenceScope": "Original zero FIRST retained;thirteen subordinate readonly calls/shared<=min30secLeaseRemaining;noIPv4admission/cleanup/HTTP/eighttransfer",
   "storageOwnedIpv4BindingBase": "5008c2083881acb501835c2beb1e20857dbbd9bf",
-  "storageOwnedIpv4BindingScope": "Default legacy wildcard remains; standalone explicitly opts into restricting source-owned host argv to exactprivateleaseIP;kernelTCP4 exactLinuxlittleendianIP/port/oneinode/initFD/ticks+Engine fences unchanged;noTCP6admission/cap/deadlinechange"
+  "storageOwnedIpv4BindingScope": "Default legacy wildcard remains; standalone explicitly opts into restricting source-owned host argv to exactprivateleaseIP;kernelTCP4 exactLinuxlittleendianIP/port/oneinode/initFD/ticks+Engine fences unchanged;noTCP6admission/cap/deadlinechange",
+  "listenerReadinessBase": "f277fe97b7e1f1244196a90c1467ba83232e4505",
+  "listenerReadinessScope": "Two zero-only polls, <=32 original bounded owner commands, <=10s work excluding original mandatory cleanup, 30s lease reserve; definitive observer and all default APIs retained. Models are not native readiness or cleanup proof."
 }
