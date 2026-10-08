@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Legacy.Maliev.QuotationService.Tests.Controllers;
@@ -493,6 +494,74 @@ public sealed class QuotationInvoiceCapabilityHttpTests(QuotationNormalIamFixtur
         Assert.Single(await db.InvoiceCompletionOperations.Where(x => x.QuotationId == row.Id).ToArrayAsync());
         Assert.Single(await db.AcceptedOutcomes.Where(x => x.QuotationId == row.Id).ToArrayAsync());
         Assert.Equal(901, (await db.Quotations.FindAsync(row.Id))!.InvoiceId);
+    }
+
+    [Theory]
+    [InlineData("same")]
+    [InlineData("operation")]
+    [InlineData("binding")]
+    public async Task AdmissionCommittedBetweenOperationAndQuotationReads_RequiresExactOwningReceipt(string change)
+    {
+        var row = await fixture.SeedAsync(null);
+        var barrier = new AdmissionQuotationReadBarrier();
+        await using var app = App(new LiveTransport()).WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddDbContext<Legacy.Maliev.QuotationService.Data.QuotationDbContext>(options => options.AddInterceptors(barrier))));
+        await using var firstScope = app.Services.CreateAsyncScope();
+        await using var secondScope = app.Services.CreateAsyncScope();
+        var first = firstScope.ServiceProvider.GetRequiredService<IQuotationInvoiceCompletionStore>();
+        var second = secondScope.ServiceProvider.GetRequiredService<IQuotationInvoiceCompletionStore>();
+        var authority = Context(row.Id, row.ModifiedDate!.Value);
+        var delayedAuthority = change switch
+        {
+            "operation" => authority with { OperationId = Guid.NewGuid() },
+            "binding" => authority with { FinancialBinding = new string('B', 64) },
+            _ => authority,
+        };
+        using var lifetime = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var delayed = first.ApplyAsync(delayedAuthority, lifetime.Token);
+        QuotationDecisionPersistenceResult delayedResult;
+        try
+        {
+            await barrier.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), lifetime.Token);
+            Assert.Equal(QuotationDecisionPersistenceStatus.Completed,
+                (await second.ApplyAsync(authority, lifetime.Token)).Status);
+        }
+        finally
+        {
+            barrier.Release();
+            delayedResult = await delayed;
+        }
+        Assert.Equal(change == "same" ? QuotationDecisionPersistenceStatus.Completed : QuotationDecisionPersistenceStatus.Conflict,
+            delayedResult.Status);
+        await using var db = fixture.Context();
+        var operation = Assert.Single(await db.InvoiceCompletionOperations.Where(x => x.QuotationId == row.Id).ToArrayAsync());
+        Assert.Equal(authority.OperationId, operation.OperationId);
+        Assert.Single(await db.AcceptedOutcomes.Where(x => x.QuotationId == row.Id).ToArrayAsync());
+        Assert.Equal(901, (await db.Quotations.FindAsync(row.Id))!.InvoiceId);
+        Assert.Equal(authority.FinancialBinding, (await second.ReadAsync(authority.OperationId, lifetime.Token))!.Receipt.FinancialBinding);
+    }
+
+    private sealed class AdmissionQuotationReadBarrier : DbCommandInterceptor
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int firstRead;
+
+        public void Release() => released.TrySetResult();
+
+        public override async ValueTask<InterceptionResult<System.Data.Common.DbDataReader>> ReaderExecutingAsync(
+            System.Data.Common.DbCommand command, CommandEventData eventData,
+            InterceptionResult<System.Data.Common.DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.StartsWith("SELECT", StringComparison.Ordinal)
+                && command.CommandText.Contains("FROM \"Quotation\"", StringComparison.Ordinal)
+                && Interlocked.CompareExchange(ref firstRead, 1, 0) == 0)
+            {
+                Entered.TrySetResult();
+                await released.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
+            }
+            return result;
+        }
     }
 
     [Fact]

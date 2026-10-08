@@ -209,7 +209,21 @@ public sealed partial class QuotationRepository(
 
         // A matching invoice without our operation record is not ownership/recovery evidence.
         if (completion is not null && entity.InvoiceId is not null)
+        {
+            // Another admission can commit after the initial operation read and before this link read.
+            // Recheck its immutable authority before treating the newly visible link as a conflict.
+            var prior = await ReadAsync(completion.OperationId, cancellationToken);
+            if (prior is not null && Matches(prior.Receipt, completion))
+            {
+                if (prior.Receipt.State == "Completed")
+                    return new(QuotationDecisionPersistenceStatus.Completed, null, prior.OrderVersion);
+                var linked = await quotations.Quotations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+                if (linked is not null && linked.Accepted == true && linked.InvoiceId == invoiceId
+                    && linked.ModifiedDate is DateTime modified && WireTime(modified) == prior.Receipt.ModifiedDate)
+                    return new(QuotationDecisionPersistenceStatus.Completed, ToResponse(linked), prior.OrderVersion);
+            }
             return new(QuotationDecisionPersistenceStatus.Conflict, null);
+        }
 
         var firstAcceptance = accepted && entity.Accepted != true && entity.AcceptedUtc is null;
         var attachInvoice = invoiceId > 0 && entity.InvoiceId is null;
