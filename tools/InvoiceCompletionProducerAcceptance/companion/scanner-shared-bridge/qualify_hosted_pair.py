@@ -20,7 +20,7 @@ import uuid
 
 
 LIMIT = 1048576
-MANIFEST_SHA256 = '9a81de2e9d29a229ed0a3d5da356f7c63f8068a54b696bce486d3d6d0610c3b3'
+MANIFEST_SHA256 = 'ddd687ed4328bb2c77382c4b6375090ac076167dfdd899ecc949d1c76fead4c4'
 
 
 class Refused(ValueError):

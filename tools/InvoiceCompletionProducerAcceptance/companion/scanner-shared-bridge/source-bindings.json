@@ -36,8 +36,8 @@
     {
       "name": "owned_storage_backend",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/owned_storage_backend.py",
-      "sha256": "09a1a03b2da2f10949f21d107d66130ff02e69060f43aa9dd4c01ad500133d24",
-      "length": 12809
+      "sha256": "0d60b0f718cdcb9b855b45dff814a1f99ef2b794a8f7f2a0559d1319474c7ec5",
+      "length": 12910
     },
     {
       "name": "storage_owner_command",
@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "ef3b6a3d5238292738b03531206f608bb1c6c45d485c5640d4c03d44ba77d4ae",
-      "length": 46113
+      "sha256": "8213d1e1a84f833fcd310f45614d6ab628fc02dac13df8b1432615c7e8076313",
+      "length": 46202
     }
   ],
   "rawControls": {
@@ -178,5 +178,7 @@
   "builtinNullIpamBase": "7a81f533ec2b3159cee1968bcc51663d8c74b999",
   "builtinNullIpamScope": "PRESENTNULL only exact builtin Driver/Name/Scope host/host/local or null/none/local;local normalized Config;raw inspect unmodified;all census checks retained;no observed driver/native acceptance",
   "storageObserverDiagnosticBase": "d8a5a7999de099b92ccf801a26ddf4f0969d09db",
-  "storageObserverDiagnosticScope": "47fixed original sites;S43+command4;actual heldloader retained original class births/code/globals/nestedconstants captured beforeactors;storage-observe only;14falsefields;no policychange/no actualpredicate cause"
+  "storageObserverDiagnosticScope": "47fixed original sites;S43+command4;actual heldloader retained original class births/code/globals/nestedconstants captured beforeactors;storage-observe only;14falsefields;no policychange/no actualpredicate cause",
+  "storageListenerCardinalityBase": "b5d3bf97ae20acb7d848da5ce986bcc9160e989f",
+  "storageListenerCardinalityScope": "Only original IPv4 selected-port wildcard LISTEN cardinality partition zero vs nonzero!=1;sameexactoneaccepted/AdmissionError/literal/oneRequire/CLIorder;noTCP6admission/noactualzeroinference"
 }

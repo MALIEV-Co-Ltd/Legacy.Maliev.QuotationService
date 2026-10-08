@@ -200,7 +200,10 @@ def observe(lease, shared_scanner_network, command_runner=None):
         if fields[1] == f'00000000:{lease.port:04X}' and fields[3] == '0A':
             require(fields[9].isdigit() and int(fields[9]) > 0, 'Actual socket inode required')
             inodes.append(fields[9])
-    require(len(inodes) == 1, 'One exact backend listener required')
+    if len(inodes) == 0:
+        require(False, 'One exact backend listener required')
+    else:
+        require(len(inodes) == 1, 'One exact backend listener required')
     fd = execute('ls', '-l', '/proc/1/fd', maximum=262144).decode('ascii').splitlines()
     require(any(line.rstrip().endswith('-> socket:[' + inodes[0] + ']') for line in fd), 'Backend init must own its listener')
     require(ticks() == lease.kernel_ticks and snapshots()['State']['Pid'] == before['State']['Pid'], 'Observed process changed')

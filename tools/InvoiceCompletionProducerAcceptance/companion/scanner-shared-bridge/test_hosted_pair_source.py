@@ -927,3 +927,60 @@ class StorageObserverSiteControls(unittest.TestCase):
             else:original['owned_storage_backend']=(object(),s.AdmissionError)
             with self.assertRaises(ValueError):d.capture_observer_sites(s,c,b,HELD_OBSERVER_SOURCES,original)
             self.assertIsNone(d.OBSERVER_CAPTURE)
+
+
+class StorageListenerCardinalityControls(unittest.TestCase):
+    ORIGINAL = "    require(len(inodes) == 1, 'One exact backend listener required')\n"
+    SPLIT = "    if len(inodes) == 0:\n        require(False, 'One exact backend listener required')\n    else:\n        require(len(inodes) == 1, 'One exact backend listener required')\n"
+
+    def test_original_source_cardinality_partition_preserves_outcomes_and_one_require(self):
+        import ast,types,sys
+        source=HELD_OBSERVER_SOURCES['storage'];self.assertEqual(source.count(self.SPLIT.encode()),1)
+        storage=types.ModuleType('cardinality_original_storage')
+        with patch.dict(sys.modules,{storage.__name__:storage}):exec(compile(source,'<held-source>','exec'),storage.__dict__)
+        functions=[]
+        for guard in (self.ORIGINAL,self.SPLIT):
+            scope={'require':storage.require};exec(compile('def check(inodes):\n'+guard,'<source-extracted-cardinality>','exec'),scope);functions.append(scope['check'])
+        for count in range(101):
+            results=[]
+            for function in functions:
+                try:result=('accepted',function(['123']*count))
+                except BaseException as error:result=(type(error),error.args)
+                results.append(result)
+            self.assertEqual(results[0],results[1])
+        for guard in (self.ORIGINAL,self.SPLIT):
+            for count in (0,1,2,100):
+                calls=[]
+                def require(value,message):
+                    calls.append((value,message))
+                    if not value:raise storage.AdmissionError(message)
+                scope={'require':require};exec(compile('def check(inodes):\n'+guard,'<counted-source-guard>','exec'),scope)
+                try:scope['check'](['123']*count)
+                except storage.AdmissionError:pass
+                self.assertEqual(calls,[(count==1,'One exact backend listener required')])
+
+    def test_two_fixed_sites_bind_exact_zero_vs_nonzero_refusal_and_same_literal(self):
+        import ast,types
+        tree=ast.parse(HELD_OBSERVER_SOURCES['storage']);fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='observe')
+        branch=next(n for n in fn.body if isinstance(n,ast.If) and ast.unparse(n.test)=='len(inodes) == 0')
+        self.assertEqual(len(branch.body),1);self.assertEqual(len(branch.orelse),1)
+        zero,nonzero=branch.body[0].value,branch.orelse[0].value
+        self.assertEqual(ast.unparse(zero.args[0]),'False');self.assertEqual(ast.unparse(nonzero.args[0]),'len(inodes) == 1')
+        self.assertEqual(zero.args[1].value,nonzero.args[1].value)
+        self.assertEqual(zero.args[1].value,'One exact backend listener required')
+        d=types.ModuleType('cardinality_diagnostic');exec(compile(HELD_DIAGNOSTIC_SOURCE,'<held-diag>','exec'),d.__dict__)
+        sites=[row for row in d.OBSERVER_SITES if row[0]=='storage' and row[1]=='observe' and row[2] in (zero.lineno,nonzero.lineno)]
+        self.assertEqual(len(sites),2);self.assertEqual(len({row[4] for row in sites}),2)
+        self.assertTrue(all(row[5]=='require-call' for row in sites))
+
+    def test_entire_observer_source_restores_by_only_cardinality_guard_recomposition(self):
+        import ast
+        current=HELD_OBSERVER_SOURCES['storage'];original=current.replace(self.SPLIT.encode(),self.ORIGINAL.encode())
+        old=ast.parse(original);new=ast.parse(current)
+        oldfn=next(n for n in old.body if isinstance(n,ast.FunctionDef) and n.name=='observe')
+        newfn=next(n for n in new.body if isinstance(n,ast.FunctionDef) and n.name=='observe')
+        oldcalls=[ast.unparse(n) for n in ast.walk(oldfn) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in ('execute','snapshots','ticks','refresh')]
+        newcalls=[ast.unparse(n) for n in ast.walk(newfn) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in ('execute','snapshots','ticks','refresh')]
+        self.assertEqual(oldcalls,newcalls)
+        self.assertNotIn(b'/proc/1/net/tcp6',current)
+        self.assertEqual(len(current)-len(original),len(self.SPLIT.encode())-len(self.ORIGINAL.encode()))
