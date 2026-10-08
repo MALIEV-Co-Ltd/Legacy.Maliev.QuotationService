@@ -1,0 +1,138 @@
+{
+  "files": [
+    {
+      "destination": "tools/FinancialCompositionAdapter/FinancialCompositionAdapter.csproj",
+      "bytes": 824,
+      "sha256": "911d16013f0bd904f0815f8bb2985d153beb03ed64d7fa9e8cfadd904ef461bc",
+      "gitBlob": "b912e1bb93bb7b31a5c24808515a6ad3c61f332b"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/OrdinaryOpaquePrincipalEnrollment.cs",
+      "bytes": 4825,
+      "sha256": "4e3371c3392a2dd9e3d46a2e2a82730cd5ff0f5ae0b4651a7b4e9c0411dfacf7",
+      "gitBlob": "ad065f8915526ad593a7c1065b6d62ad40f7fec5"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/OwnedBusinessSchema.cs",
+      "bytes": 9930,
+      "sha256": "2efac519c3725c43569b83cbc497335b5a2eb9ecd8d0eb6fd535e6e38ebcf4d0",
+      "gitBlob": "0ce4670f9a4470f51a90494087d5a1ff6a0275af"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/PinnedBusinessSchemas.g.cs",
+      "bytes": 11189,
+      "sha256": "8d110268c67a741cc161e57c8549ff22db5756a87331a0c7cff2084aacd9c151",
+      "gitBlob": "f064bdce618f562f22e96271c33f8d60dcdff4ac"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/SourceCatalogueAdmission.cs",
+      "bytes": 2219,
+      "sha256": "bfa5282db753646ea9cf7a2f77dca28781834f429f3c934f6c6af315bc30d9f6",
+      "gitBlob": "09e2f0560f2f7e1265eeda2078dca9118490e4d3"
+    },
+    {
+      "destination": "docs/financial-composition-adapter-source.md",
+      "bytes": 8526,
+      "sha256": "c290d2fe39613f64fee849cbd8b48b3796bd23e82f633e983ce7ab8eaeb54955",
+      "gitBlob": "61941a3547612929cbb7a801c65db597d7c48fda"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/provenance/exact-producer-inventory.json",
+      "bytes": 202702,
+      "sha256": "b80a6bfc7e6deb6ee6b22b2ce530018513e73b37f7276486261e081d28d33ef3",
+      "gitBlob": "723cad3a071d27af61e41318604925c228b2c114"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/provenance/caller-phase-contract.json",
+      "bytes": 1215,
+      "sha256": "3361b382e121a4a08fb0ceac553beb5a5a6303fe2dbc303f699c8c29909dacb7",
+      "gitBlob": "66533f750afc2658449f8b84016f425a19fea181"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter.Controls/AdapterCompileControls.csproj",
+      "bytes": 812,
+      "sha256": "84ee70cb4a70d11a2c6f31725cdd11c1a5abcb04ea6963cce91147b19d7fb336",
+      "gitBlob": "4c00d9e02836057cf3fff700bce96dd56a912bd6"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter.Controls/Program.cs",
+      "bytes": 5782,
+      "sha256": "4ee49d861f5f792e401066473115261820a597fac901cbbb357b5a0a444723c9",
+      "gitBlob": "7940e63d00434d8a87c03b58900c652a3fb7f547"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter.Qualification/qualify.py",
+      "bytes": 50901,
+      "sha256": "405957b6bd11fc3e807a5aa18e9428faef99d6d951cbbc925bc240abcab6cd73",
+      "gitBlob": "5d98de5c30c7591514df1e17e353778fc873fb5f"
+    },
+    {
+      "destination": "docs/financial-composition-adapter-qualification.md",
+      "bytes": 3674,
+      "sha256": "b16861594a25610a59fbe31802c072ae781c4be66285a75ecf5732cd8492fd29",
+      "gitBlob": "b21909622d86b9dac4f7d8bec433d5bd517e8b28"
+    },
+    {
+      "destination": ".github/workflows/financial-composition-compile.yml",
+      "bytes": 9668,
+      "sha256": "7c34c264a7fd005a2f7114857121014356901f5304fe68aefac130427d07decc",
+      "gitBlob": "b7dd5c301921467a309fd55684d3440a206d008a"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter.Qualification/owned_command.py",
+      "bytes": 16674,
+      "sha256": "427f68ef6a78c9b6428bda39b93be782188ed398fd748ad69dc562f02868f993",
+      "gitBlob": "233b060639613bc39db8fe182124bf3f06b72b80"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter.Qualification/owned_command_controls.py",
+      "bytes": 10964,
+      "sha256": "351a9ae3b600a0c8400dd4d91d21c9b3bcce9f047e9cd7b67d77e211bb1c949e",
+      "gitBlob": "f982886ab8d699327dd45cbac608941ba6ba5895"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter.Qualification/owned_command_provenance.json",
+      "bytes": 1988,
+      "sha256": "30304942ffe1ed4aef386e2a8a2c3d06665424187b0c32f94b7c7d5e8860bda9",
+      "gitBlob": "5eef1afb4f620148dd95392326207819c7f5fa13"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter.Qualification/owned_command_fixture.py",
+      "bytes": 1676,
+      "sha256": "64531503592f63020e6d33ad49b66caa83f80b0591f427ce7d0d8db5792c438e",
+      "gitBlob": "c608417f3276b577fc28db3b607935ff3134a273"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter.Qualification/owned_command_hosted_controls.py",
+      "bytes": 10937,
+      "sha256": "fd0656b70663180ce04bd0776b63d115f6236d2092da143eba3a40393f3255e5",
+      "gitBlob": "a5514a947762a16ba68c9254d6260d4c1553881d"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/OwnedPhysicalColumns.cs",
+      "bytes": 16225,
+      "sha256": "7690b58f306517673a108f7f95b40b0c028e49ce039b581ccc21c61dd9b996e3",
+      "gitBlob": "5d3a076cfe413819f5f7b7d75846d5acb1a154a0"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter/PhysicalSchemaRelease.cs",
+      "bytes": 1380,
+      "sha256": "6cb8d1d96f7adee395ff73d7430d0a40259625b9a3b0fc2ad372ae99a07831cb",
+      "gitBlob": "e883bc61d21d652edd14acdad832cee9112d2568"
+    },
+    {
+      "destination": "tools/FinancialCompositionAdapter.Controls/PhysicalColumnControls.cs",
+      "bytes": 4518,
+      "sha256": "5905e406fd88a2d17ea6386c42f9c370622f3f6d528612a44760dc863a52025e",
+      "gitBlob": "8b8ee2da4652347679f0405d4ea9f4b5c2ab1df8"
+    }
+  ],
+  "adapterPacketPatchSha256": "2e380f379ef1ccfa7b00bad331a4ff125ed6058dc200bdf2324e6e271d1ce53d",
+  "acceptedFixtureCommit": "85a00d4bb54cf95199ee67dfd97d2b168233ff68",
+  "acceptedFixtureRun": 37655912717,
+  "acceptedMaterializerSha256": "6288b97f8baf0d55c2d53dc6451e658137dd76cc67175e5d1caa8e32f4bcfd2d",
+  "originalIamProgramDigest": "cd3736e1edfab60e8dbfcffa031806007f36d767dc278e0d1762688a2c2985b8",
+  "acceptedMaterializerGitBlob": "aca0b4189bf5f1f80911b5b011908668d903c9a5",
+  "acceptedMaterializerCheckoutSha256": "b5fabd9a63323e9445541106385f78c16d297242760ad979bcb02a8287189076",
+  "acceptedAttributesSha256": "a51d4446ea808450aac392ca1176440927d4a58ae4a5e605266db1ab00c29a3f"
+}

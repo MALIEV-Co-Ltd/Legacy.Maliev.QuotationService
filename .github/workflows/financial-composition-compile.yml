@@ -1,0 +1,163 @@
+name: Financial composition adapter compile qualification
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'tools/FinancialCompositionAdapter/**'
+      - 'tools/FinancialCompositionAdapter.Controls/**'
+      - 'tools/FinancialCompositionAdapter.Qualification/**'
+      - 'docs/financial-composition-adapter*.md'
+      - '.github/workflows/financial-composition-compile.yml'
+permissions:
+  contents: read
+concurrency:
+  group: financial-composition-compile-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+jobs:
+  compile-qualification:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number > 0 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.ref == 'codex/financial-composition-compile-20261007'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
+      DOTNET_CLI_UI_LANGUAGE: en
+      DOTNET_CLI_USE_MSBUILD_SERVER: '0'
+      MSBUILDDISABLENODEREUSE: '1'
+      DOTNET_GCHeapHardLimit: '20000000'
+    steps:
+      - name: Check out actual guarded PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Check out accepted genuine IAM fixture authority
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.AuthService
+          ref: 85a00d4bb54cf95199ee67dfd97d2b168233ff68
+          path: .adapter-dependencies/AcceptedAuth
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out original IAM archive source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Maliev.IAMService
+          ref: 4fe6642e5674013de9a3672505aec898fdcae0ed
+          path: .adapter-dependencies/AcceptedAuth/.dependencies/Maliev.IAMService
+          persist-credentials: false
+      - name: Check out original Aspire archive source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Maliev.Aspire
+          ref: 01d506203763b914e237268a8746f1406423df86
+          path: .adapter-dependencies/AcceptedAuth/.dependencies/Maliev.Aspire
+          persist-credentials: false
+      - name: Check out original Messaging archive source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Maliev.MessagingContracts
+          ref: 559a00db0c7920a5247fdff60d4476ad23a9a501
+          path: .adapter-dependencies/AcceptedAuth/.dependencies/Maliev.MessagingContracts
+          persist-credentials: false
+      - name: Check out accepted Defaults archive source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults
+          ref: 7b3099bf67d0f17e56cfdb3dcf36541304abaac2
+          path: .adapter-dependencies/AcceptedAuth/.dependencies/GenuineIamDefaults
+          persist-credentials: false
+      - name: Check out Compatibility archive source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.CompatibilityContracts
+          ref: 78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7
+          path: .adapter-dependencies/AcceptedAuth/.dependencies/Legacy.Maliev.CompatibilityContracts
+          persist-credentials: false
+      - name: Verify exact source bytes before any owned module execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B - <<'PY'
+          import hashlib, pathlib
+          expected = {'owned_command.py': ('427f68ef6a78c9b6428bda39b93be782188ed398fd748ad69dc562f02868f993', 16674), 'owned_command_controls.py': ('351a9ae3b600a0c8400dd4d91d21c9b3bcce9f047e9cd7b67d77e211bb1c949e', 10964), 'owned_command_provenance.json': ('30304942ffe1ed4aef386e2a8a2c3d06665424187b0c32f94b7c7d5e8860bda9', 1988), 'owned_command_fixture.py': ('64531503592f63020e6d33ad49b66caa83f80b0591f427ce7d0d8db5792c438e', 1676), 'owned_command_hosted_controls.py': ('fd0656b70663180ce04bd0776b63d115f6236d2092da143eba3a40393f3255e5', 10937), 'qualify.py': ('405957b6bd11fc3e807a5aa18e9428faef99d6d951cbbc925bc240abcab6cd73', 50901)}
+          root = pathlib.Path('tools/FinancialCompositionAdapter.Qualification')
+          for name, (sha, count) in expected.items():
+              with (root / name).open('rb') as stream:
+                  raw = stream.read(count + 1)
+              if len(raw) != count or hashlib.sha256(raw).hexdigest() != sha:
+                  raise SystemExit('Owned source identity refused')
+          PY
+      - name: Require pure injected algorithm controls distinct from actual Linux proof
+        shell: bash
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 -B tools/FinancialCompositionAdapter.Qualification/owned_command_controls.py > "$RUNNER_TEMP/owned-command-pure-controls.json"
+          python3 -B - <<'PY'
+          import json, os, pathlib
+          actual = json.loads((pathlib.Path(os.environ['RUNNER_TEMP']) / 'owned-command-pure-controls.json').read_text())
+          expected = {'PureAlgorithmControlsPassed':18,'InjectedDriverOnly':True,'ActualChildrenStarted':False,'ActualDescriptorCensusPerformed':False,'ActualKernelResourceCapsObserved':False,'HostedLifecycleAccepted':False,'GeneralSourceGitCleanupAccepted':False,'GenuineEightHostFinancialAccepted':False}
+          if set(actual) != set(expected) or any(type(actual[k]) is not type(v) or actual[k] != v for k,v in expected.items()):
+              raise SystemExit('Pure controls refused')
+          PY
+      - name: Require six actual Linux owned command cases and strict public receipt
+        shell: bash
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          umask 077
+          timeout --signal=TERM --kill-after=5s 120s python3 -B tools/FinancialCompositionAdapter.Qualification/owned_command_hosted_controls.py "$RUNNER_TEMP/owned-command-controls-public.json"
+          python3 -B - <<'PY'
+          import json, os, pathlib
+          def pairs(items):
+              value = {}
+              for k,v in items:
+                  if k in value: raise ValueError('duplicate')
+                  value[k] = v
+              return value
+          with (pathlib.Path(os.environ['RUNNER_TEMP']) / 'owned-command-controls-public.json').open('rb') as stream:
+              raw = stream.read(16385)
+          if not 0 < len(raw) <= 16384: raise SystemExit('Hosted controls refused')
+          actual = json.loads(raw, object_pairs_hook=pairs)
+          cases = ('natural','overflow','timeout','selector','inherited','recovery')
+          if set(actual) != {'Schema','Completed','Cases'} or type(actual['Schema']) is not int or actual['Schema'] != 1 or actual['Completed'] is not True or type(actual['Cases']) is not list or len(actual['Cases']) != 6:
+              raise SystemExit('Hosted controls refused')
+          for case, item in zip(cases, actual['Cases'], strict=True):
+              expected = {'Case':case,'Passed':True,'ActualLinuxBackendUsed':True,'OriginalRecordedGenerationsAbsent':True,'RecordedPipeDescriptorsAbsent':True,'SameSessionCleanupVerified':True,'ExpectedRefusalObserved':case != 'natural','ControlledFaultInjected':case in ('selector','recovery'),'InitialQuarantineObserved':case == 'recovery','RecoveryVerified':case == 'recovery','KernelResourceCapsObserved':False,'NaturalLeaderExitObserved':case in ('natural','inherited'),'RetainedPhaseDeadlineRefusalObserved':case in ('timeout','inherited','recovery'),'RetainedByteBoundaryObserved':case == 'overflow','EscapedSessionDescendantsAccepted':False}
+              if type(item) is not dict or set(item) != set(expected) or any(type(item[k]) is not type(v) or item[k] != v for k,v in expected.items()):
+                  raise SystemExit('Hosted controls refused')
+          PY
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.x
+      - name: Install exact trusted gitleaks implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          go install github.com/zricethezav/gitleaks/v8@6eaad039603a4de39fddd1cf5f727391efe9974e
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Qualify actual source archives types and strict controls
+        shell: bash
+        timeout-minutes: 14
+        run: |
+          set -euo pipefail
+          umask 077
+          timeout --signal=TERM --kill-after=5s 810s python3 -B tools/FinancialCompositionAdapter.Qualification/qualify.py
+      - name: Retain only explicit sanitized public qualification and owned controls
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: financial-composition-compile-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/financial-composition-compile/qualification.json
+            ${{ runner.temp }}/owned-command-controls-public.json
+          if-no-files-found: error
+          retention-days: 7
+          include-hidden-files: false

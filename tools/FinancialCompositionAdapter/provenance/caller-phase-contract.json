@@ -1,0 +1,29 @@
+{
+  "sourceOnly": true,
+  "runtimeStarted": false,
+  "qualifiedProducerRuntimeCommit": null,
+  "ownerContractPath": "D:\\codex-temp\\2026-10-03\\legacy-code-quotation-20261003\\outputs\\quotation-financial-phase-handoff-parent-contract-20261007.md",
+  "ownerContractSha256": "c537092337e4b61430eb9aa37e76e5db23191592a16301694766b813d7dcae40",
+  "handoff": {
+    "path": "D:\\codex-temp\\2026-10-03\\legacy-code-quotation-20261003\\outputs\\quotation-task3-current-graph-source-handoff-20261007\\source-handoff.json",
+    "sha256": "6e3a68768dafba8fb5086449009b59b71100150ecc8e20fe4a98be014bb9d83c",
+    "quotationOverlaySha256": "6090e98c97f11f3f287f04cce3e75074a2eb231573901c180d2677cb987ae7f1",
+    "quotationOverlaySourceFiles": 61
+  },
+  "mode": "C821_FINANCIAL_PHASE_HANDOFF=stdio-v1",
+  "producerMarkers": [
+    "baseline",
+    "completion",
+    "replay",
+    "stop"
+  ],
+  "parentAcknowledgments": [
+    "held baseline",
+    "held completion",
+    "held replay",
+    "stopped"
+  ],
+  "framing": "exact LF retained exclusive anonymous endpoints; no synthetic counters",
+  "counterAdmission": "Actual matching collector JSON and actual fully drained stop receipt required",
+  "financialEightAccepted": false
+}
