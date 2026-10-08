@@ -86,6 +86,12 @@ def validate(path, specification, evidence_root):
     with resolved.open("rb") as stream:
         data = stream.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES: raise ValueError("Oversized focal XML")
+    validate_bytes(data, specification, resolved.name)
+
+
+def validate_bytes(data, specification, report_name="captured.trx"):
+    """Validate exactly the captured TRX bytes; callers own path and descriptor checks."""
+    if not isinstance(data, bytes) or len(data) > MAX_BYTES: raise ValueError("Oversized/nonbyte focal XML")
     text = data.decode("utf-8-sig")
     if "\x00" in text or re.search(r"<!\s*(?:DOCTYPE|ENTITY)\b", text, re.I):
         raise ValueError("DTD/entity/unsupported XML encoding denied")
@@ -144,7 +150,7 @@ def validate(path, specification, evidence_root):
         if execution in entry_map: raise ValueError("Repeated test entry")
         entry_map[execution] = identity
     if entry_map != executions: raise ValueError("Test entries disagree with executions")
-    print(f"{resolved.name}: {expected} exact source cases executed/passed; zero failed/skipped")
+    print(f"{report_name}: {expected} exact source cases executed/passed; zero failed/skipped")
 
 
 if __name__ == "__main__":
