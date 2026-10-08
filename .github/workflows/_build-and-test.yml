@@ -91,7 +91,7 @@ jobs:
           path: .dependencies/Legacy.Maliev.AccountingService
           persist-credentials: false
       - name: Validate .NET solution
-        uses: MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@e3a6093324a24968876782153286f52db8b29fd8
+        uses: MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@53892c362a30130f582c40da7525e44f11474e8e
         with:
           solution: Legacy.Maliev.QuotationService.slnx
           use-local-maliev-dependencies: 'true'
