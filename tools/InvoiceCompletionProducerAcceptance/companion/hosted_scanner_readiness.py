@@ -258,11 +258,31 @@ class Scanner:
         self.receipt["stage"] = "measure-immutable-files"
         before = self.measure()
         self.receipt["stage"] = "await-actual-clamd-ping"
-        deadline = time.monotonic() + self.deadline_seconds
-        while time.monotonic() < deadline:
-            try:
-                if self.relay.startup_ping(timeout=min(3, max(0.001, deadline-time.monotonic()))) == "PONG":
+        readiness_started = time.monotonic()
+        deadline = readiness_started + self.deadline_seconds
+        final_slot_budget = min(3, self.deadline_seconds / 16)
+        slot_spacing = (self.deadline_seconds - final_slot_budget) / 15
+        attempt_index = 0
+        while attempt_index < 16 and time.monotonic() < deadline:
+            target = readiness_started + attempt_index * slot_spacing
+            while time.monotonic() < target and time.monotonic() < deadline:
+                pause = min(target, deadline) - time.monotonic()
+                if pause <= 0:
                     break
+                time.sleep(pause)
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Actual clamd readiness deadline expired")
+            attempt_index += 1
+            try:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("Actual clamd readiness deadline expired")
+                answer = self.relay.startup_ping(timeout=min(3, remaining))
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("Actual clamd readiness deadline expired")
+                if answer == "PONG":
+                    break
+                raise ValueError("Original startup PING result refused")
             except StartupPingRefused:
                 pass
             except BaseException:
@@ -274,8 +294,14 @@ class Scanner:
                 except BaseException:
                     pass
                 raise
-            time.sleep(0.5)
+            # Only the original settled/accounted StartupPingRefused reaches
+            # this next slot. A successful source return is exclusively PONG.
         else:
+            while time.monotonic() < deadline:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                time.sleep(remaining)
             raise TimeoutError("Actual clamd readiness deadline expired")
         self.receipt["startupRelayHandoff"] = self.relay.seal_startup_readiness()
         version = self.command(b"VERSION")

@@ -18,8 +18,8 @@
     {
       "name": "hosted_scanner_readiness",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py",
-      "sha256": "3382d80c3837b9f5001bf44562ad95e7858190d97ecee73afbf5feb200ce9c57",
-      "length": 38141
+      "sha256": "aa6c9591d4df6b5feb7ecd7959be06b8e0743f8f83f717f392b6792d4d5a6eba",
+      "length": 39538
     },
     {
       "name": "scanner_loopback_relay",
@@ -134,11 +134,13 @@
   "relayConjunctDiagnosticOnly": true,
   "startupControls": {
     "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_startup_ping_handoff.py",
-    "sha256": "689bd0148e2ebc9d151b40e7819cf50647b1e467ebffd24dbe9c77078bcdd57e",
-    "length": 29905
+    "sha256": "5c2b771994a33daac6881a4d9f5577e4514545c7a599a9157dbdabe5f05348c1",
+    "length": 34797
   },
   "startupHandoffSourceBase": "93dd69993414f99603a9d11610ca4aa07020b28d",
   "startupHandoffScope": "Original owned startup PING ECONNREFUSED only; full history retained; no native acceptance",
   "startupAdmissionDiagnosticBase": "74c87a5777310a06d5e3138d3ab70e87e4d4c402",
-  "startupAdmissionDiagnosticScope": "Finite original lock snapshot before quarantine; UNKNOWN unevaluated/unknown shape; no cap/deadline/retry or acceptance change"
+  "startupAdmissionDiagnosticScope": "Finite original lock snapshot before quarantine; UNKNOWN unevaluated/unknown shape; no cap/deadline/retry or acceptance change",
+  "sameBudgetPacingBase": "e6e3ea1f6abb27ba79c87f60c0c14f7d2e509740",
+  "sameBudgetPacingScope": "Same max16/source settlement/per-call3s and absolute120/180 deadline; paced original attempts only; no cap/network/runner change"
 }

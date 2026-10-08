@@ -492,7 +492,7 @@ class StartupTests(unittest.TestCase):
         cls=next(node for node in tree.body if isinstance(node,ast.ClassDef) and node.name=='Scanner')
         start=next(node for node in cls.body if isinstance(node,ast.FunctionDef) and node.name=='start')
         loop=next(node for node in start.body if isinstance(node,ast.While))
-        function=ast.FunctionDef(name='run',args=ast.arguments(posonlyargs=[],args=[ast.arg(arg='self')],kwonlyargs=[],kw_defaults=[],defaults=[]),body=[loop],decorator_list=[])
+        function=ast.FunctionDef(name='run',args=ast.arguments(posonlyargs=[],args=[ast.arg(arg='self')],kwonlyargs=[],kw_defaults=[],defaults=[]),body=start.body[next(i for i,n in enumerate(start.body) if isinstance(n,ast.Assign) and any(isinstance(v,ast.Name) and v.id=='readiness_started' for v in n.targets)):start.body.index(loop)+1],decorator_list=[])
         module=ast.fix_missing_locations(ast.Module(body=[function],type_ignores=[]))
         for projection_fault in (False,True):
             original=ValueError('PRIVATE original');projected={'schemaVersion':1}
@@ -502,7 +502,87 @@ class StartupTests(unittest.TestCase):
                 return projected
             ns={'time':types.SimpleNamespace(monotonic=lambda:0),'deadline':120,'StartupPingRefused':type('StartupPingRefused',(OSError,),{})}
             exec(compile(module,'<held-scanner-failure-loop>','exec'),ns)
-            owner=types.SimpleNamespace(relay=types.SimpleNamespace(startup_ping=ping,startup_admission_diagnostic=project),receipt={})
+            owner=types.SimpleNamespace(relay=types.SimpleNamespace(startup_ping=ping,startup_admission_diagnostic=project),receipt={},deadline_seconds=120)
             with self.assertRaises(ValueError) as caught:ns['run'](owner)
             self.assertIs(caught.exception,original)
             self.assertEqual('startupAdmissionDiagnostic' in owner.receipt,not projection_fault)
+
+
+class StartupPacingControls(unittest.TestCase):
+    def run_loop(self,D=120,pong=None,slow=0,late=0,fault=None,early_wait=False,answer="PONG",cross_final=False):
+        import ast
+        source=ast.parse(HELD_SCANNER_SOURCE)
+        cls=next(n for n in source.body if isinstance(n,ast.ClassDef) and n.name=='Scanner')
+        start=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='start')
+        first=next(i for i,n in enumerate(start.body) if isinstance(n,ast.Assign) and any(isinstance(v,ast.Name) and v.id=='readiness_started' for v in n.targets))
+        loop=next(n for n in start.body if isinstance(n,ast.While))
+        function=ast.FunctionDef(name='run',args=ast.arguments(posonlyargs=[],args=[ast.arg(arg='self')],kwonlyargs=[],kw_defaults=[],defaults=[]),body=start.body[first:start.body.index(loop)+1],decorator_list=[])
+        compiled=ast.fix_missing_locations(ast.Module(body=[function],type_ignores=[]))
+        clock=[0.0];calls=[];waits=[]
+        refusal=type('StartupPingRefused',(OSError,),{})
+        def sleep(value):
+            self.assertGreater(value,0);waits.append(value)
+            if not early_wait or len(waits)>1:clock[0]+=value+late
+        def ping(timeout):
+            self.assertGreater(timeout,0);self.assertLessEqual(timeout,3)
+            self.assertLess(clock[0],D)
+            calls.append((clock[0],timeout));clock[0]+=slow
+            if fault is not None:raise fault
+            if len(calls)==pong:return answer
+            raise refusal('modeled settled source refusal')
+        final_reads=[0]
+        def monotonic():
+            if cross_final and len(calls)==16:
+                final_reads[0]+=1
+                if final_reads[0]==2:clock[0]=D+1
+            return clock[0]
+        ns={'time':types.SimpleNamespace(monotonic=monotonic,sleep=sleep),'StartupPingRefused':refusal}
+        exec(compile(compiled,'<held-source-pacing-model>','exec'),ns)
+        owner=types.SimpleNamespace(deadline_seconds=D,relay=types.SimpleNamespace(startup_ping=ping,startup_admission_diagnostic=lambda:None),receipt={})
+        error=None
+        try:ns['run'](owner)
+        except BaseException as observed:error=observed
+        return calls,waits,clock[0],error
+
+    def test_sixteen_settled_refusals_never_probe_seventeenth(self):
+        for D in (120,180):
+            calls,waits,now,error=self.run_loop(D)
+            self.assertEqual(len(calls),16);self.assertEqual(now,D)
+            self.assertIs(type(error),TimeoutError)
+            self.assertEqual(str(error),'Actual clamd readiness deadline expired')
+            self.assertAlmostEqual(calls[-1][0],D-3)
+        calls,waits,now,error=self.run_loop(cross_final=True)
+        self.assertEqual(len(calls),16);self.assertEqual(now,121)
+        self.assertIs(type(error),TimeoutError)
+        self.assertEqual(str(error),'Actual clamd readiness deadline expired')
+
+    def test_pong_sixteen_and_early_pong_stop_without_final_wait(self):
+        for index in (1,2,16):
+            calls,waits,now,error=self.run_loop(pong=index)
+            self.assertIsNone(error);self.assertEqual(len(calls),index)
+            self.assertLess(now,120)
+
+    def test_tiny_deadlines_late_wake_and_slow_settlement_remain_absolute(self):
+        for D in (1,2,3,300):
+            calls,waits,now,error=self.run_loop(D)
+            self.assertEqual(len(calls),16);self.assertLessEqual(len(waits),16)
+            self.assertAlmostEqual(now,D);self.assertIs(type(error),TimeoutError)
+        calls,waits,now,error=self.run_loop(late=200)
+        self.assertEqual(len(calls),1);self.assertIs(type(error),TimeoutError)
+        calls,waits,now,error=self.run_loop(slow=30)
+        self.assertEqual(len(calls),4);self.assertEqual(now,120)
+
+    def test_unknown_or_unsettled_original_failure_forbids_next_birth(self):
+        for error in (ValueError('PRIVATE unsettled'),KeyboardInterrupt('PRIVATE unknown')):
+            calls,waits,now,observed=self.run_loop(fault=error)
+            self.assertIs(observed,error);self.assertEqual(len(calls),1);self.assertEqual(waits,[])
+        calls,waits,now,error=self.run_loop(pong=1,answer='FOREIGN')
+        self.assertIs(type(error),ValueError);self.assertEqual(len(calls),1);self.assertEqual(waits,[])
+
+    def test_early_sleep_return_rechecks_target_and_late_pong_refuses(self):
+        calls,waits,now,error=self.run_loop(early_wait=True)
+        self.assertEqual(len(calls),16);self.assertEqual(now,120)
+        self.assertAlmostEqual(calls[1][0],7.8)
+        self.assertIs(type(error),TimeoutError)
+        calls,waits,now,error=self.run_loop(pong=1,slow=121)
+        self.assertEqual(len(calls),1);self.assertIs(type(error),TimeoutError)
