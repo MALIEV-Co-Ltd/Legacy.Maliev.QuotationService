@@ -11,6 +11,7 @@ HELD_DIAGNOSTIC_SOURCE = None
 HELD_OWNER_SOURCES = None
 HELD_H_SOURCE = None
 HELD_BRIDGE_SOURCE = None
+ORIGINAL_RELAY_PREFIX = "def _relay(self):\n    relay = self.scanner.relay\n    require(relay is not None and not relay.stop.is_set() and relay.acceptor.is_alive()\n            and not relay.failures and relay.listener.fileno() >= 0\n            and relay.listener.getsockname() == relay.endpoint\n            and relay.endpoint == ('127.0.0.1', self.scanner.port), 'Held relay unavailable')\n"
 
 
 class HostedPairSourceControls(unittest.TestCase):
@@ -192,6 +193,86 @@ class HostedPairSourceControls(unittest.TestCase):
                 with self.assertRaises(ValueError):capture(resources,held)
                 self.assertIsNone(d.H_CAPTURE)
                 self.assertIsNone(d.B_CAPTURE)
+
+    def relay_prefix_models(self):
+        import ast,types
+        original=ast.parse(ORIGINAL_RELAY_PREFIX).body[0]
+        source=ast.parse(HELD_BRIDGE_SOURCE)
+        klass=next(n for n in source.body if isinstance(n,ast.ClassDef) and n.name=='BorrowedScannerBridge')
+        split=next(n for n in klass.body if isinstance(n,ast.FunctionDef) and n.name=='_relay')
+        split.body=split.body[:8]
+        models=[]
+        class Refused(ValueError):pass
+        def require(value,message):
+            if not value:raise Refused(message)
+        for function in (original,split):
+            scope={'require':require}
+            exec(compile(ast.fix_missing_locations(ast.Module(body=[function],type_ignores=[])),'<pure-relay-prefix>','exec'),scope)
+            models.append(scope['_relay'])
+        return models,Refused
+
+    def relay_probe(self,failed=None,error=None):
+        import types
+        trace=[]
+        class Probe:
+            def __init__(self,fields):object.__setattr__(self,'fields',fields)
+            def __getattribute__(self,name):
+                if name=='fields':return object.__getattribute__(self,name)
+                trace.append(name)
+                if error==name:raise RuntimeError('PRIVATE')
+                return object.__getattribute__(self,'fields')[name]
+        def method(name,value):
+            def result():
+                trace.append(name+'()')
+                if error==name+'()':raise RuntimeError('PRIVATE')
+                return value
+            return result
+        endpoint=('127.0.0.1',7)
+        listener=Probe({'fileno':method('fileno',-1 if failed==4 else 8),
+                        'getsockname':method('getsockname',('127.0.0.1',8) if failed==5 else endpoint)})
+        relay=Probe({'stop':Probe({'is_set':method('is_set',failed==1)}),
+                     'acceptor':Probe({'is_alive':method('is_alive',failed!=2)}),
+                     'failures':['PRIVATE'] if failed==3 else [],'listener':listener,'endpoint':endpoint})
+        scanner=Probe({'relay':None if failed==0 else relay,'port':8 if failed==6 else 7})
+        return types.SimpleNamespace(scanner=scanner),trace
+
+    def test_all_seven_first_failed_conjuncts_preserve_short_circuit(self):
+        models,Refused=self.relay_prefix_models()
+        for failed in list(range(7))+[None]:
+            observations=[]
+            for model in models:
+                owner,trace=self.relay_probe(failed)
+                try:model(owner);outcome=('success',)
+                except Refused as error:outcome=(type(error),str(error))
+                observations.append((outcome,trace))
+            self.assertEqual(observations[0],observations[1])
+            if failed is not None:self.assertIs(observations[0][0][0],Refused)
+
+    def test_conjunct_getter_and_method_errors_preserve_order_and_type(self):
+        models,_=self.relay_prefix_models()
+        for fault in ('relay','stop','is_set','is_set()','acceptor','is_alive','is_alive()',
+                      'failures','listener','fileno','fileno()','getsockname','getsockname()','endpoint','port'):
+            observations=[]
+            for model in models:
+                owner,trace=self.relay_probe(error=fault)
+                with self.assertRaises(RuntimeError) as caught:model(owner)
+                observations.append((type(caught.exception),trace))
+            self.assertEqual(observations[0],observations[1])
+
+    def test_split_original_sites_emit_seven_fixed_codes_without_private_values(self):
+        import types
+        bridge=types.ModuleType('split_bridge_model')
+        exec(compile(HELD_BRIDGE_SOURCE,'<held-split-bridge>','exec'),bridge.__dict__)
+        d=self.diagnostic_model();d.capture_bridge_sites(bridge,HELD_BRIDGE_SOURCE)
+        emitted=[]
+        for failed in range(7):
+            owner,_=self.relay_probe(failed)
+            try:bridge.BorrowedScannerBridge._relay(owner)
+            except bridge.BridgeRefused as error:
+                emitted.append(d.owner_clause(error))
+        sites=[row[3] for row in d.B_SITES if row[0]=='BorrowedScannerBridge._relay' and row[4]=='require-call'][:7]
+        self.assertEqual(emitted,sites);self.assertEqual(len(set(emitted)),7)
+        self.assertTrue(all(value.startswith('bridge-guard-') for value in emitted))
 
     def test_invalid_metadata_refuses_before_either_actor_callback(self):
         from unittest.mock import Mock

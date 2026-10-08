@@ -54,8 +54,8 @@
     {
       "name": "borrowed_scanner_bridge",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/borrowed_scanner_bridge.py",
-      "sha256": "e7dccdfdfa498d6da439adc9fe2a7ac1f1e08a229529658839bb406366178b91",
-      "length": 12724
+      "sha256": "efb2541f975df404a454061827f2aabf801c18b80f71309e5a9ee41739e68d53",
+      "length": 12910
     },
     {
       "name": "qualify_pair_resources",
@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "60a6162e603e06b62b0a0e1b49c8c4b21c401cc9195330e10d11ad0fa2578bfc",
-      "length": 19591
+      "sha256": "f9494f43488770f07d514a8bfb42b7a5e3b8fa2297224b7980cf246f7af10cf6",
+      "length": 20125
     }
   ],
   "rawControls": {

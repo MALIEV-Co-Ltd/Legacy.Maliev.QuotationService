@@ -99,10 +99,13 @@ class BorrowedScannerBridge:
 
     def _relay(self):
         relay = self.scanner.relay
-        require(relay is not None and not relay.stop.is_set() and relay.acceptor.is_alive()
-                and not relay.failures and relay.listener.fileno() >= 0
-                and relay.listener.getsockname() == relay.endpoint
-                and relay.endpoint == ('127.0.0.1', self.scanner.port), 'Held relay unavailable')
+        require(relay is not None, 'Held relay unavailable')
+        require(not relay.stop.is_set(), 'Held relay unavailable')
+        require(relay.acceptor.is_alive(), 'Held relay unavailable')
+        require(not relay.failures, 'Held relay unavailable')
+        require(relay.listener.fileno() >= 0, 'Held relay unavailable')
+        require(relay.listener.getsockname() == relay.endpoint, 'Held relay unavailable')
+        require(relay.endpoint == ('127.0.0.1', self.scanner.port), 'Held relay unavailable')
         expected = relay.identity
         require(expected['ownerPid'] == os.getpid()
                 and expected['listenerFd'] == relay.listener.fileno()

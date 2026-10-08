@@ -54,8 +54,8 @@
     {
       "name": "borrowed_scanner_bridge",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/borrowed_scanner_bridge.py",
-      "sha256": "e7dccdfdfa498d6da439adc9fe2a7ac1f1e08a229529658839bb406366178b91",
-      "length": 12724
+      "sha256": "efb2541f975df404a454061827f2aabf801c18b80f71309e5a9ee41739e68d53",
+      "length": 12910
     },
     {
       "name": "qualify_pair_resources",
@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "60a6162e603e06b62b0a0e1b49c8c4b21c401cc9195330e10d11ad0fa2578bfc",
-      "length": 19591
+      "sha256": "f9494f43488770f07d514a8bfb42b7a5e3b8fa2297224b7980cf246f7af10cf6",
+      "length": 20125
     }
   ],
   "rawControls": {
@@ -127,6 +127,9 @@
   "codeSiteDiagnosticBase": "ef7706b2915d9cc39a595ede30a4ac4dea903dd9",
   "ownerDiagnosticSourceSha256": "58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f",
   "ownerDiagnosticSiteTableSha256": "c00aba56c681457c7dc4a52a7d17ae601d5a2dc34be8b847d96e1e9562dffdc2",
-  "bridgeDiagnosticSourceSha256": "e7dccdfdfa498d6da439adc9fe2a7ac1f1e08a229529658839bb406366178b91",
-  "bridgeDiagnosticSiteTableSha256": "54a9c7fa745defa33b7f7df0c613678dc0281af279a406912036e2565461687b"
+  "bridgeDiagnosticSourceSha256": "efb2541f975df404a454061827f2aabf801c18b80f71309e5a9ee41739e68d53",
+  "bridgeDiagnosticSiteTableSha256": "fc7c052fa2c0186e420626e3b117062e203bbff4a7022a07ec1200557d83f2b9",
+  "relayConjunctDiagnosticBase": "56df81a0041e642952f90b4a4184f830799207d0",
+  "relayConjunctOriginalSourceSha256": "e7dccdfdfa498d6da439adc9fe2a7ac1f1e08a229529658839bb406366178b91",
+  "relayConjunctDiagnosticOnly": true
 }
