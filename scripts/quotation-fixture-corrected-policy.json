@@ -29,8 +29,8 @@
     },
     {
       "path": "Legacy.Maliev.QuotationService.Api/Controllers/OrderItemsController.cs",
-      "sha256": "b385b78a09b8e99d2c675136cec8e1ce6e2fa5f008423195a2dca2ffcc7961d3",
-      "bytes": 2752
+      "sha256": "f9ce69a1906a8eedfb0e5ad0bf0b7ca369ae5edd5c9cf740eb4cc128c1a6b57e",
+      "bytes": 2756
     },
     {
       "path": "Legacy.Maliev.QuotationService.Api/Controllers/QuotationRequestFilesController.cs",
@@ -89,8 +89,8 @@
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationDraftAggregateHttpTests.cs",
-      "sha256": "582c1eb1b0f635d40ed10910c8135fcad04a520a2108fb69afbc1ecb8519760c",
-      "bytes": 76350
+      "sha256": "3091e338d97ec000ebee5b1487595820757088ede0584f0809ec97554113f8ac",
+      "bytes": 76810
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationDraftReadParityHttpTests.cs",
@@ -199,8 +199,8 @@
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerStartup.cs",
-      "sha256": "97965e79eef4ff863429fed43e76c2d663b4c505ec602cde636dd318d2459f51",
-      "bytes": 19068
+      "sha256": "45b3d5fa4aa73231b34316199b66a8c3d2e98befdd23dc04bab357c68d9a64d4",
+      "bytes": 19120
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerStartupContractTests.cs",
@@ -219,8 +219,8 @@
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/EphemeralFixturePlanTests.cs",
-      "sha256": "306c7f407681c8d9db613a9fe49bcf2ed40b7a5119ad84006c70305316acfff4",
-      "bytes": 2504
+      "sha256": "bd303339c6545487ff233febe5b0a509bccc7e5e0cd64198cd6eec0002e0d81e",
+      "bytes": 2556
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/FinancialPhaseHandoffTests.cs",
@@ -244,13 +244,13 @@
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/StrictEphemeralContainer.cs",
-      "sha256": "1890f169a9b8357403d7955b40c9db72ee1f4672fc2be624174ae981dfd46b04",
-      "bytes": 7624
+      "sha256": "4deb431cd1d91eb45ae05e9a9a2aa5a3205bc408f77b1b0bb5b7dd5f7f531a9f",
+      "bytes": 7768
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Infrastructure/StrictEphemeralContainerTests.cs",
-      "sha256": "a5b10a792398d2575e4a6023df3b2dd0972a74fce74e571e047c8b98a83d06d3",
-      "bytes": 14418
+      "sha256": "187438d3a2f8a22d5b78d882a600b82fb41bd9d165649c07b84f0928ba58d9d1",
+      "bytes": 14466
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj",
@@ -403,5 +403,5 @@
       "bytes": 14596
     }
   ],
-  "manifestSha256": "7c8cf634c7b22bd828b9450d272edd32bd2088ef7d48966b8e38299757e9d106"
+  "manifestSha256": "65aabf3d29dc9d47f58017a0f20553f6a2c141e5a25bc43a45a606ba09ebd848"
 }

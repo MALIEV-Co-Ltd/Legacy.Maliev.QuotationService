@@ -78,7 +78,7 @@
   },
   "recipient": {
     "source": "Legacy.Maliev.QuotationService.Tests/Controllers/QuotationInvoiceCapabilityHttpTests.cs",
-    "normalizedSourceSha256": "9ad2185086c2bdb7b47f284cf225485b6141347c35bf2af8640d10a7f6182d04",
+    "normalizedSourceSha256": "abc2591e9a27b0702014b5e18090c511d3b115cf3ed516918604e5770dcff69f",
     "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationInvoiceCapabilityHttpTests",
     "methods": {
       "BoundEmployeeCompletion_ReachesExistingRepositoryWithoutInventingHistoricalOutcome": {
@@ -336,6 +336,19 @@
           "f0c59452d16dfab3ed51a238a5ade54c15492a31e1868fe720a2baa073c4641b",
           "0be1b9b4cd03c8daaa83597d8488cb8a6daf3db7589996f01f28123d3ff38428",
           "bec5a1d254ee0e90c9de29642c5c8fedac61839d73b7aea734e21d2e3384eb00"
+        ]
+      },
+      "AdmissionCommittedBetweenOperationAndQuotationReads_RequiresExactOwningReceipt": {
+        "parameters": [
+          {
+            "name": "change",
+            "type": "string"
+          }
+        ],
+        "cases": [
+          "114dde50ef7b86181dee00a9026cec191cb7063fec403f7d18cce7fad3814391",
+          "8b5af50e6be2454c69a7ca7f6961cc61f307da9788ecbb26fb47075adbabd7af",
+          "6a91276ac650c224675bc84476e13ba512308b213d9d17879d1becc5d8211732"
         ]
       }
     }

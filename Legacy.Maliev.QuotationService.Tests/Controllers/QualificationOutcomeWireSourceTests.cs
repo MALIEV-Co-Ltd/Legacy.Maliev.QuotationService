@@ -1,4 +1,6 @@
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using QualificationOutcomeWireSource;
 
@@ -24,5 +26,47 @@ public sealed class QualificationOutcomeWireSourceTests
         Assert.Equal(JsonIgnoreCondition.WhenWritingNull, emission.IgnoreCondition);
         Assert.Equal("Legacy.Maliev.QuotationService.Application.Models.QualificationOutcomeReadback", emission.ActualDtoType);
         Assert.Equal("Microsoft.AspNetCore.Mvc.Infrastructure.SystemTextJsonResultExecutor", emission.ActualMvcExecutorType);
+        if (Environment.GetEnvironmentVariable("QUOTATION_CANDIDATE_WIRE") == "1")
+        {
+            Assert.True(OperatingSystem.IsLinux());
+            var repository = Path.GetFullPath(Path.Combine(Environment.GetEnvironmentVariable("GITHUB_WORKSPACE")
+                ?? throw new InvalidDataException("Hosted workspace missing."), "candidate"));
+            Assert.Equal(Path.Combine(repository, "Legacy.Maliev.QuotationService.Tests", "bin", "Release", "net10.0",
+                "Legacy.Maliev.QuotationService.Tests.dll"), typeof(QualificationOutcomeWireSourceTests).Assembly.Location);
+            Assert.Equal(typeof(QualificationOutcomeWireSourceTests).Assembly, typeof(QualificationOutcomeWire).Assembly);
+            var output = Path.Combine(repository, "TestResults", "QualificationWire");
+            Directory.CreateDirectory(output);
+            await WriteNewAsync(Path.Combine(output, caseName + ".json"), emission.Bytes, timeout.Token);
+            var assemblies = new[]
+            {
+                typeof(Legacy.Maliev.QuotationService.Application.Models.QualificationOutcomeReadback).Assembly,
+                typeof(Legacy.Maliev.QuotationService.Api.Controllers.QuotationRequestsController).Assembly,
+                typeof(QualificationOutcomeWire).Assembly,
+            }.Select(assembly => new
+            {
+                name = assembly.GetName().Name,
+                sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(assembly.Location))),
+            }).ToArray();
+            var metadata = JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                caseName,
+                emission.StatusCode,
+                emission.ContentType,
+                emission.CamelCase,
+                ignoreCondition = emission.IgnoreCondition.ToString(),
+                emission.ActualDtoType,
+                emission.ActualMvcExecutorType,
+                actualHarnessType = typeof(QualificationOutcomeWire).FullName,
+                actualHarnessAssembly = typeof(QualificationOutcomeWire).Assembly.GetName().Name,
+                assemblies,
+            }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            await WriteNewAsync(Path.Combine(output, caseName + ".metadata.json"), metadata, timeout.Token);
+        }
+    }
+
+    private static async Task WriteNewAsync(string path, byte[] bytes, CancellationToken token)
+    {
+        await using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, true);
+        await stream.WriteAsync(bytes, token);
     }
 }
