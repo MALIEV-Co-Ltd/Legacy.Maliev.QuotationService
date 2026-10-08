@@ -1,0 +1,79 @@
+{
+  "sourceObjectsRead": [
+    {
+      "owner": "Accounting",
+      "sourceSha": "ad45c78d7546674b5bb7eacff62759460df6ca02",
+      "sourceTree": "0aa12635f37c917a77e1ddee019dfd6155e3ad11",
+      "files": [
+        {
+          "path": "Legacy.Maliev.AccountingService.Api/Program.cs",
+          "gitBlob": "e17b414962227aa90acd5a8223fb6386fa3e0fc1",
+          "rawSha256": "2d0cb22886a4b3d6afc65105e1c9d360a71930fa078139fea09ae9d90a20b6f1"
+        },
+        {
+          "path": "Legacy.Maliev.AccountingService.Data/InvoiceCreationDownstreamClients.cs",
+          "gitBlob": "a280f72a8d962bf86cce93805dcb44ab92c98f9c",
+          "rawSha256": "0bebe054a674eef0c9184643867202094c8782dc4d7daf868948d218c2b42825"
+        },
+        {
+          "path": "Legacy.Maliev.AccountingService.Data/ReceiptDownstreamClients.cs",
+          "gitBlob": "004ccb2810ff95ed0f33bb152bb7483441259c06",
+          "rawSha256": "9da8437fac05538705450e8c8fd820fac1759e4999c5b02abee4684a8765f534"
+        }
+      ]
+    },
+    {
+      "owner": "Document",
+      "sourceSha": "af0976cbbb0fa9b2da41822f5d67e95b839f8a91",
+      "sourceTree": "7b827e4918f15af5e6e182fe44836771dae52cde",
+      "files": [
+        {
+          "path": "Legacy.Maliev.DocumentService.Api/Controllers/PdfsController.cs",
+          "gitBlob": "f6a4bc4a3c6b6634f00f507cb92d1ac939e6befc",
+          "rawSha256": "64d5cacd99114c4b5bc76a8325d3a741b35170e669ec368fd307ee35a6b5a079"
+        }
+      ]
+    },
+    {
+      "owner": "File",
+      "sourceSha": "d8be968eb73e7216568248af16a780057098be22",
+      "sourceTree": "4369cde59e64d482f09b234c8a7b882808fda280",
+      "files": [
+        {
+          "path": "Legacy.Maliev.FileService.Api/Controllers/UploadsController.cs",
+          "gitBlob": "1f88ce3054d4f1119421c2d51502d90f7198cf37",
+          "rawSha256": "01ebdec5662ca1a728308dc6468c432741734e4997bb8c6e8b82146789cf3496"
+        }
+      ]
+    },
+    {
+      "owner": "Notification",
+      "sourceSha": "55c2c4b68bfd7749c9262929c850032be6df44e0",
+      "sourceTree": "32f6c647e0557e39cf0a31d76c7bf9dbb11b12b2",
+      "files": [
+        {
+          "path": "Legacy.Maliev.NotificationService.Api/Program.cs",
+          "gitBlob": "f410c495b74fd381a42f6decd44a57246f45a6dc",
+          "rawSha256": "386c95e6cdaa272c7f3f86b6b8088601339a97026416716c646a2bd632302ad0"
+        },
+        {
+          "path": "Legacy.Maliev.NotificationService.Api/DeliveryIntentRegistration.cs",
+          "gitBlob": "b504fc979aecd4905d20ba5b8efeb85420b7ae79",
+          "rawSha256": "0f47441cc163f757cb70e6220cee0d130f1712aa4dd82e83235f8336f352a67d"
+        },
+        {
+          "path": "Legacy.Maliev.NotificationService.Data/BrevoNotificationTransport.cs",
+          "gitBlob": "11a110f640ea1170e128f04645fae73a4ccdfefb",
+          "rawSha256": "3c6bee4804bab87c39eb20517740bd8584e38401299ce995b589e436fadaf735"
+        },
+        {
+          "path": "Legacy.Maliev.NotificationService.Data/BrevoDeliveryIntentSubmission.cs",
+          "gitBlob": "d0a36b925da06c1d2d2e1fc14a759729ef11d9b2",
+          "rawSha256": "3f7047f91f77e239dcea6a7c94601932a6388500ab65596ffa70dbaf720faa54"
+        }
+      ]
+    }
+  ],
+  "selectedSourceNativeAcceptance": false,
+  "notes": "Read exact objects, not latest-checkout approval."
+}

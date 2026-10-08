@@ -1,0 +1,12 @@
+{
+  "sourceHead": "dc1782c24147468573bde090bc61cafc2c724bd6",
+  "sourceTree": "1b5b2c2f7755f396a2f087aa0e77dc630b195ee1",
+  "sourcePath": "tools/HostedProcessStartObserver/DescriptorBoundFrontFile.cs",
+  "sourceGitBlob": "a8a9e57a02bfcb4e9d3d9e57d3554b661fa5fc30",
+  "sourceRawSha256": "79e6c218c9776888e86cf7fc92ed3f16b8e26058b91df86ab5e2166441e9b185",
+  "destination": "source/DescriptorBoundFrontFile.cs",
+  "copyExactGitBytes": true,
+  "previousCheckoutRawSha256": "79e6c218c9776888e86cf7fc92ed3f16b8e26058b91df86ab5e2166441e9b185",
+  "changes": "None; exact Git blob copy with original namespace/API.",
+  "nativeAcceptance": false
+}

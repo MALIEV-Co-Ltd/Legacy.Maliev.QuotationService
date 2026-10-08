@@ -1,0 +1,38 @@
+{
+  "Dependencies": [
+    {
+      "module": "owned_command",
+      "path": "tools/FinancialCompositionAdapter.Qualification/owned_command.py",
+      "bytes": 16674,
+      "sha256": "427f68ef6a78c9b6428bda39b93be782188ed398fd748ad69dc562f02868f993"
+    },
+    {
+      "module": "held_parent_io",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/held_parent_io.py",
+      "bytes": 13032,
+      "sha256": "b1f65e46aabafa312500e987e4dc1fbe06034e663cf2d04001638a09b3fe84e7"
+    },
+    {
+      "module": "held_linux_exit",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/held_linux_exit.py",
+      "bytes": 4218,
+      "sha256": "e7c809d0a1a9c8e8673ed5ef299dd530774d68a48196a739a90f0eaaf5e11515"
+    },
+    {
+      "module": "coordinator",
+      "path": "tools/FinancialOwnerReceiptCoordinator/coordinator.py",
+      "bytes": 17730,
+      "sha256": "6dd6302bd82fc249767ad24b32e5555afabf4ae2aec48a465d385e85d613fed4"
+    },
+    {
+      "module": "collector_preack",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/collector_preack.py",
+      "bytes": 11989,
+      "sha256": "dca7fac535bef9f614d763572d4d87ec51d15ab6f4fff1ed71ccc1ae9334c2fe"
+    }
+  ],
+  "Fixture": {
+    "bytes": 2196,
+    "sha256": "c620d7d26884d9a89f954ecbbe695f0ffdeef27fdbff10b9876db59825f55f18"
+  }
+}
