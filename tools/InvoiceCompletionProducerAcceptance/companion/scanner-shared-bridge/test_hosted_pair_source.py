@@ -9,6 +9,8 @@ import qualify_hosted_pair as harness
 # Workflow injects trusted held bytes before running these pure models.
 HELD_DIAGNOSTIC_SOURCE = None
 HELD_OWNER_SOURCES = None
+HELD_H_SOURCE = None
+HELD_BRIDGE_SOURCE = None
 
 
 class HostedPairSourceControls(unittest.TestCase):
@@ -93,6 +95,103 @@ class HostedPairSourceControls(unittest.TestCase):
             self.assertTrue(harness.owners_retained())
             self.assertIs(harness.sys.modules['pinned_image_oracle'].ORACLE, owner)
         self.assertIsNotNone(d.FIRST)
+
+    def source_resource_model(self):
+        import types
+        module = types.ModuleType('modeled_qualified_resources')
+        with patch.dict(harness.sys.modules, {module.__name__: module}):
+            exec(compile(HELD_H_SOURCE, '<held-model-resource>', 'exec'), module.__dict__)
+        return module
+
+    def test_original_bridge_guard_is_distinct_from_scanner_start_and_foreign_clone(self):
+        import types
+        bridge=types.ModuleType('modeled_bridge')
+        exec(compile(HELD_BRIDGE_SOURCE,'<held-model-bridge>','exec'),bridge.__dict__)
+        d=self.diagnostic_model();d.capture_bridge_sites(bridge,HELD_BRIDGE_SOURCE)
+        d.bind('a'*40,'1',1,'b'*64,'pair');d.stage('scanner-bridge-acquire')
+        try:bridge.validate_image_chain({}, {}, {}, 'model', 'model', 'model')
+        except bridge.BridgeRefused as error:d.failure(error)
+        self.assertEqual(d.projection()['firstStage'],'scanner-bridge-acquire')
+        self.assertTrue(d.projection()['firstDenialClause'].startswith('bridge-guard-'))
+        other=types.ModuleType('other_bridge')
+        exec(compile(HELD_BRIDGE_SOURCE,'<same-lines-other-code>','exec'),other.__dict__)
+        other.BridgeRefused=bridge.BridgeRefused  # Same class/site lines, cloned foreign code.
+        try:other.validate_image_chain({}, {}, {}, 'model', 'model', 'model')
+        except other.BridgeRefused as error:self.assertEqual(d.owner_clause(error),'unclassified-source-clause')
+
+    def test_original_require_code_and_callsite_emit_only_fixed_clause(self):
+        resources = self.source_resource_model()
+        d = self.diagnostic_model()
+        d.capture_h_sites(resources, HELD_H_SOURCE)
+        d.bind('a'*40, '1', 1, 'b'*64, 'pair')
+        d.stage('scanner-start')
+        try:
+            resources.ScannerPlan('', 'a'*64, (), '', 'b'*64, {}, '').validate()
+        except resources.AdmissionError as error:
+            d.failure(error)
+        proof=d.projection()
+        expected=next(row[3] for row in d.H_SITES if row[0]=='ScannerPlan.validate' and row[4]=='require-call')
+        self.assertEqual(proof['firstDenialClause'], expected)
+        self.assertEqual(proof['firstCategory'], 'owner-refusal')
+        self.assertFalse(proof['cleanupAccepted'])
+
+    def test_foreign_code_same_lines_direct_unknown_and_caller_attributes_refuse(self):
+        original=self.source_resource_model()
+        foreign=self.source_resource_model()
+        foreign.AdmissionError=original.AdmissionError  # Same class, different original code identities.
+        for kind in ('foreign','nonrequire','attributes'):
+            d=self.diagnostic_model();d.capture_h_sites(original, HELD_H_SOURCE)
+            try:
+                if kind=='foreign':
+                    # Exact same text and source line numbers, different originals.
+                    foreign.ScannerPlan('', 'a'*64, (), '', 'b'*64, {}, '').validate()
+                else:
+                    error=original.AdmissionError('PRIVATE original text must not be read')
+                    error.diagnosticCode=next(row[3] for row in d.H_SITES)
+                    raise error
+            except (original.AdmissionError,foreign.AdmissionError) as error:
+                self.assertEqual(d.owner_clause(error),'unclassified-source-clause')
+
+    def test_capped_trace_and_wrong_source_never_acquire_an_owner_clause(self):
+        resources=self.source_resource_model();d=self.diagnostic_model()
+        with self.assertRaises(ValueError):d.capture_h_sites(resources,b'wrong source')
+        self.assertIsNone(d.H_CAPTURE)
+        d.capture_h_sites(resources,HELD_H_SOURCE)
+        def wrap(n):
+            if n: return wrap(n-1)
+            resources.ScannerPlan('', 'a'*64, (), '', 'b'*64, {}, '').validate()
+        try:wrap(40)
+        except resources.AdmissionError as error:
+            self.assertEqual(d.owner_clause(error),'unclassified-source-clause')
+        with self.assertRaises(ValueError):d.capture_h_sites(resources,HELD_H_SOURCE)
+
+    def test_precapture_same_line_foreign_body_and_namespace_are_refused(self):
+        import types
+        d=self.diagnostic_model()
+        self.assertTrue(d.same_constant(slice(1,9,2),slice(1,9,2)))
+        self.assertFalse(d.same_constant(slice(1,9,2),slice(1,9,3)))
+        for family in ('h','bridge'):
+            for fault in ('body','globals'):
+                if family=='h':
+                    resources=self.source_resource_model();held=HELD_H_SOURCE
+                else:
+                    resources=types.ModuleType('model_bridge_precapture')
+                    exec(compile(HELD_BRIDGE_SOURCE,'<held-model-bridge>','exec'),resources.__dict__)
+                    held=HELD_BRIDGE_SOURCE
+                original=resources.require
+                if fault=='body':
+                    namespace={}
+                    text='\n'*(original.__code__.co_firstlineno-1)+"def require(value,message):\n    if True: raise RuntimeError('PRIVATE')\n"
+                    exec(compile(text,'<foreign-same-first-line>','exec'),namespace)
+                    original.__code__=namespace['require'].__code__
+                    self.assertEqual(original.__code__.co_firstlineno,namespace['require'].__code__.co_firstlineno)
+                else:
+                    resources.require=types.FunctionType(original.__code__,{'foreign':True})
+                d=self.diagnostic_model()
+                capture=d.capture_h_sites if family=='h' else d.capture_bridge_sites
+                with self.assertRaises(ValueError):capture(resources,held)
+                self.assertIsNone(d.H_CAPTURE)
+                self.assertIsNone(d.B_CAPTURE)
 
     def test_invalid_metadata_refuses_before_either_actor_callback(self):
         from unittest.mock import Mock

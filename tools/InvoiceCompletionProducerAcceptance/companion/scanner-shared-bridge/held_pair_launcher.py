@@ -124,6 +124,7 @@ class HeldPairLauncher:
             import owned_storage_backend as storage
             diagnostic.stage('scanner-start')
             self.scanner.start()
+            diagnostic.stage('scanner-bridge-acquire')
             self.bridge = BorrowedScannerBridge(self.scanner, self.context)
             network = self.inspect('network', self.scanner.network_id)
             address = select_backend_ip(network)

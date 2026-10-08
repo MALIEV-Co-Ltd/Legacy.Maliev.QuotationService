@@ -36,8 +36,8 @@ jobs:
           from pathlib import Path
           prefix = Path('tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge')
           held = {}
-          for name, expected in (('qualify_hosted_pair', 'fa356e7eecf05049ca33664514d7fa894fc00554b49baf2cdb8ea654df58633d'), ('test_hosted_pair_source', 'cc8919192e750d398eacef20103c7f3dfaf02a9eaf29f5f4938d001197d37720'), ('pair_failure_diagnostic', 'bd5d1cb8009d791119ad4167ad99932a12823bcfb38832eead925b46d78830fa'), ('pinned_image_oracle', 'da82d89cf595e9e2350f9a15c5e08b61f87c300bc1521d9ed4542400b21f3c5f'), ('held_pair_launcher', '8a77702c9c03c8a3e1abc48a17448e45aced3ed6336fbe22249caa085c300349')):
-              path = prefix / (name + '.py')
+          for name, expected in (('qualify_hosted_pair', '34e19222bb324a1d18626ce81d9241272224bf9ed48211a65ce0b74c683e9898'), ('test_hosted_pair_source', '9155794b0b26078ff3490c98e781280aef11b85d1a347af1beb728a6562ad83d'), ('pair_failure_diagnostic', '60a6162e603e06b62b0a0e1b49c8c4b21c401cc9195330e10d11ad0fa2578bfc'), ('pinned_image_oracle', 'da82d89cf595e9e2350f9a15c5e08b61f87c300bc1521d9ed4542400b21f3c5f'), ('held_pair_launcher', '606616e55992cb739fb2fd7e7f00edce5bd7e8396d15c30a99270b8a526f3763'), ('hosted_companion_resources', '58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f'), ('borrowed_scanner_bridge', 'e7dccdfdfa498d6da439adc9fe2a7ac1f1e08a229529658839bb406366178b91')):
+              path = Path('tools/InvoiceCompletionProducerAcceptance/companion/hosted_companion_resources.py') if name == 'hosted_companion_resources' else prefix / (name + '.py')
               fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
               try:
                   before = os.fstat(fd)
@@ -64,8 +64,10 @@ jobs:
               exec(compile(held[name], module.__file__, 'exec'), module.__dict__)
           sys.modules['test_hosted_pair_source'].HELD_DIAGNOSTIC_SOURCE = held['pair_failure_diagnostic']
           sys.modules['test_hosted_pair_source'].HELD_OWNER_SOURCES = {name: held[name] for name in ('pinned_image_oracle', 'held_pair_launcher')}
+          sys.modules['test_hosted_pair_source'].HELD_H_SOURCE = held['hosted_companion_resources']
+          sys.modules['test_hosted_pair_source'].HELD_BRIDGE_SOURCE = held['borrowed_scanner_bridge']
           result = unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromModule(sys.modules['test_hosted_pair_source']))
-          if result.testsRun != 13 or not result.wasSuccessful():
+          if result.testsRun != 18 or not result.wasSuccessful():
               raise SystemExit('Source controls refused')
           owner = sys.modules['qualify_hosted_pair']
           try:
@@ -93,8 +95,8 @@ jobs:
           from pathlib import Path
           prefix = Path('tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge')
           held = {}
-          for name, expected in (('qualify_hosted_pair', 'fa356e7eecf05049ca33664514d7fa894fc00554b49baf2cdb8ea654df58633d'), ('test_hosted_pair_source', 'cc8919192e750d398eacef20103c7f3dfaf02a9eaf29f5f4938d001197d37720'), ('pair_failure_diagnostic', 'bd5d1cb8009d791119ad4167ad99932a12823bcfb38832eead925b46d78830fa'), ('pinned_image_oracle', 'da82d89cf595e9e2350f9a15c5e08b61f87c300bc1521d9ed4542400b21f3c5f'), ('held_pair_launcher', '8a77702c9c03c8a3e1abc48a17448e45aced3ed6336fbe22249caa085c300349')):
-              path = prefix / (name + '.py')
+          for name, expected in (('qualify_hosted_pair', '34e19222bb324a1d18626ce81d9241272224bf9ed48211a65ce0b74c683e9898'), ('test_hosted_pair_source', '9155794b0b26078ff3490c98e781280aef11b85d1a347af1beb728a6562ad83d'), ('pair_failure_diagnostic', '60a6162e603e06b62b0a0e1b49c8c4b21c401cc9195330e10d11ad0fa2578bfc'), ('pinned_image_oracle', 'da82d89cf595e9e2350f9a15c5e08b61f87c300bc1521d9ed4542400b21f3c5f'), ('held_pair_launcher', '606616e55992cb739fb2fd7e7f00edce5bd7e8396d15c30a99270b8a526f3763'), ('hosted_companion_resources', '58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f'), ('borrowed_scanner_bridge', 'e7dccdfdfa498d6da439adc9fe2a7ac1f1e08a229529658839bb406366178b91')):
+              path = Path('tools/InvoiceCompletionProducerAcceptance/companion/hosted_companion_resources.py') if name == 'hosted_companion_resources' else prefix / (name + '.py')
               fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
               try:
                   before = os.fstat(fd)
@@ -121,8 +123,10 @@ jobs:
               exec(compile(held[name], module.__file__, 'exec'), module.__dict__)
           sys.modules['test_hosted_pair_source'].HELD_DIAGNOSTIC_SOURCE = held['pair_failure_diagnostic']
           sys.modules['test_hosted_pair_source'].HELD_OWNER_SOURCES = {name: held[name] for name in ('pinned_image_oracle', 'held_pair_launcher')}
+          sys.modules['test_hosted_pair_source'].HELD_H_SOURCE = held['hosted_companion_resources']
+          sys.modules['test_hosted_pair_source'].HELD_BRIDGE_SOURCE = held['borrowed_scanner_bridge']
           result = unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromModule(sys.modules['test_hosted_pair_source']))
-          if result.testsRun != 13 or not result.wasSuccessful():
+          if result.testsRun != 18 or not result.wasSuccessful():
               raise SystemExit('Source controls refused')
           owner = sys.modules['qualify_hosted_pair']
           try:

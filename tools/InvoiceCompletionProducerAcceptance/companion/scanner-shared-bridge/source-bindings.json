@@ -30,8 +30,8 @@
     {
       "name": "held_pair_launcher",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/held_pair_launcher.py",
-      "sha256": "8a77702c9c03c8a3e1abc48a17448e45aced3ed6336fbe22249caa085c300349",
-      "length": 13976
+      "sha256": "606616e55992cb739fb2fd7e7f00edce5bd7e8396d15c30a99270b8a526f3763",
+      "length": 14031
     },
     {
       "name": "owned_storage_backend",
@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "bd5d1cb8009d791119ad4167ad99932a12823bcfb38832eead925b46d78830fa",
-      "length": 7875
+      "sha256": "60a6162e603e06b62b0a0e1b49c8c4b21c401cc9195330e10d11ad0fa2578bfc",
+      "length": 19591
     }
   ],
   "rawControls": {
@@ -123,5 +123,10 @@
   ],
   "diagnosticSuccessorBase": "4c7b53c0cc8a60ff8daf3bfd389f3f24647b0f67",
   "diagnosticOnly": true,
-  "stagingSuccessorBase": "6cf5572b907a2bfef6a57c7da15e16269a25222f"
+  "stagingSuccessorBase": "6cf5572b907a2bfef6a57c7da15e16269a25222f",
+  "codeSiteDiagnosticBase": "ef7706b2915d9cc39a595ede30a4ac4dea903dd9",
+  "ownerDiagnosticSourceSha256": "58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f",
+  "ownerDiagnosticSiteTableSha256": "c00aba56c681457c7dc4a52a7d17ae601d5a2dc34be8b847d96e1e9562dffdc2",
+  "bridgeDiagnosticSourceSha256": "e7dccdfdfa498d6da439adc9fe2a7ac1f1e08a229529658839bb406366178b91",
+  "bridgeDiagnosticSiteTableSha256": "54a9c7fa745defa33b7f7df0c613678dc0281af279a406912036e2565461687b"
 }

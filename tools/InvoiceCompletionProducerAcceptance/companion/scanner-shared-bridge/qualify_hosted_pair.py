@@ -20,7 +20,7 @@ import uuid
 
 
 LIMIT = 1048576
-MANIFEST_SHA256 = 'e8ff699d10d95281b2535bbba5a68e71343b04aea75f0e159f53df047c886ab9'
+MANIFEST_SHA256 = 'ff552dc110f005b8aac65f28bd1334a8a6bd40e0a1b50762697d593ca94e8fa2'
 
 
 class Refused(ValueError):
@@ -250,6 +250,14 @@ def admit_and_load():
     import qualify_pair_resources as qualifier
     import scanner_docker_command as runner
     require(runner.command_receipts() == () and not owners_retained())
+    import pair_failure_diagnostic as diagnostic
+    require(type(h.__spec__.loader) is HeldImports
+            and h.__spec__.loader.held['hosted_companion_resources'] is held['hosted_companion_resources'])
+    diagnostic.capture_h_sites(h, held['hosted_companion_resources'])
+    bridge = sys.modules['borrowed_scanner_bridge']
+    require(type(bridge.__spec__.loader) is HeldImports
+            and bridge.__spec__.loader.held['borrowed_scanner_bridge'] is held['borrowed_scanner_bridge'])
+    diagnostic.capture_bridge_sites(bridge, held['borrowed_scanner_bridge'])
     return root, head, manifest, manifest_bytes, h, qualifier, runner
 
 
