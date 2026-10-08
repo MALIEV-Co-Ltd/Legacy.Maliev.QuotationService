@@ -1,0 +1,1057 @@
+name: Financial HTTP counter codec qualification
+
+# Assigned draft PR128 is bound in both marked locations.
+# Every unrelated PR is refused. This workflow never claims the real financial run.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'tools/FinancialHttpCounters/**'
+      - '.github/workflows/financial-http-counter-qualification.yml'
+      - 'tools/InvoiceCompletionProducerAcceptance/companion/**'
+      - 'tools/FinancialOwnerReceiptCoordinator/**'
+      - 'tools/FinancialCompositionAdapter.Qualification/owned_command.py'
+      - 'docs/financial-held-phase-qualification.md'
+      - '.github/workflows/financial-held-phase-qualification.yml'
+permissions:
+  contents: read
+concurrency:
+  group: financial-http-counter-codec-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+jobs:
+  codec-qualification:
+    # ASSIGNED_PR_NUMBER_GUARD: actual draft PR128.
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 128 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'codex/financial-http-counters-20261007'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      # ASSIGNED_PR_NUMBER_INPUT: actual draft PR128, matching the guard above.
+      EXPECTED_PR_NUMBER: '128'
+      EXPECTED_SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
+      DOTNET_CLI_UI_LANGUAGE: en
+      DOTNET_CLI_USE_MSBUILD_SERVER: '0'
+      DOTNET_GCHeapHardLimit: '20000000'
+    steps:
+      - name: Check out exact guarded source head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.x
+      - name: Locked audit build and actual synthetic codec witness
+        shell: bash
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          umask 077
+          timeout --signal=TERM --kill-after=5s 710s python3 -B - <<'PY'
+          import copy, ctypes, hashlib, json, os, pathlib, re, selectors, shutil, signal, subprocess, sys, tempfile, time
+
+          # NuGet JSON v1 schema checked against primary ListPackageJsonRenderer/GetReportParameters:
+          # https://github.com/NuGet/NuGet.Client/blob/fa1508b1123e9d1d86a39cd702f969d3db242884/src/NuGet.Core/NuGet.CommandLine.XPlat/ListPackage/ListPackageJsonRenderer.cs
+          # Empty top-level arrays and omitted transitive arrays are the documented clean vulnerable report.
+          SOURCE_INVENTORY = [{'path': 'README.md', 'rawSha256': '4d3820d800d257c97a4c87aeef595930e5a8ba9f2768c7a6d3546034871625aa'}, {'path': 'controls/FinancialHttpCounters.Controls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'controls/Program.cs', 'rawSha256': 'd24495f6370c0ed49b121e39e5ee1f55f04ca6c1c826e649713fddbac7032e53'}, {'path': 'descriptor-provenance.json', 'rawSha256': '475008becd77ae3555fcf6ddad4bc18406bdf563441c74af4d7fdb9511778da3'}, {'path': 'helper-controls/HelperHostedControls.csproj', 'rawSha256': 'b80e57f135ffd22216a0d7439e089e8f1e92f8fe0b48d6a8f9cea71f19d5e057'}, {'path': 'helper-controls/Program.cs', 'rawSha256': '1b353b259d141711a62829ddfee092e52413c30cedd2cdf1fd0373c99350a70b'}, {'path': 'helper-controls/fixture_git.py', 'rawSha256': '628703d47e3c02a74ed4f119164cc1b20d13b0a1f2c6de14422a173d7d074637'}, {'path': 'native-controls/AdmissionNativeControls.cs', 'rawSha256': 'dfa0bd6ebdd7ff770b5a4c6463d71835c112761a54510998cf5600e266c4efe6'}, {'path': 'native-controls/FinancialHttpCounters.NativeControls.csproj', 'rawSha256': '583554e4e68a442586b100329c72894ad64d9ea26192699cb4679d2e47bfabe0'}, {'path': 'native-controls/Program.cs', 'rawSha256': 'c12ed04b492bb4b40013b4ba94acd04df23949a5da17cbf0f41be752d9d276e7'}, {'path': 'native-controls/WitnessLease.cs', 'rawSha256': '14785041e6c39dcd0e33972c767ce271f4c75727153b5db42977d4e64e41e9ed'}, {'path': 'native-controls/WitnessLifecycleControls.cs', 'rawSha256': '5f8706a7152d46bb3422a611c1eb87b1f3dd2ca2ae6112229ae2e58243ba5419'}, {'path': 'source-provenance.json', 'rawSha256': '5e66670d9469696a85d14bb74b5e89a2080fa19d59f94662aa708f54a49a4a62'}, {'path': 'source/CounterState.cs', 'rawSha256': 'b3fdc9721bca9c3c9fc7d0f3536c51eebbaa5bd3f7e077a30fb40c2e361026ad'}, {'path': 'source/DescriptorBoundFrontFile.cs', 'rawSha256': '79e6c218c9776888e86cf7fc92ed3f16b8e26058b91df86ab5e2166441e9b185'}, {'path': 'source/DescriptorBoundOutput.cs', 'rawSha256': 'b6c1d45b958db1362c784b64154fdd552711639d5fb5f065a273dd4f9fe974ac'}, {'path': 'source/EventCollector.cs', 'rawSha256': '3b7a557c787f1631a74ead1311df194501c462c75359857724dee06c2b6801e0'}, {'path': 'source/FinancialHttpCounters.csproj', 'rawSha256': '5254ec772153643963d71a2b03d76b8dcc230f9a4a69978d5c7bc6367a8423f9'}, {'path': 'source/NativeWitnessAccess.cs', 'rawSha256': 'b73b4e725d926eb08e4caa5b03ab21febef6a7f713b7ffca0bef6acd37852cea'}, {'path': 'source/ProcessAdmission.cs', 'rawSha256': '349a504e0b206037fc721ccc96cc0972602e6c9eacc7d6942954874256e37aec'}, {'path': 'source/Program.cs', 'rawSha256': 'bb227e581745a355c8df6e3bba50c6cd29d0222d72b5ea073a2266de6c4ea461'}, {'path': 'witness-host/FinancialHttpCounters.WitnessHost.csproj', 'rawSha256': '25e9385fa7053264d6b20be455942ad1548a587fc006e017350d193d6a1a36b4'}, {'path': 'witness-host/Program.cs', 'rawSha256': 'be6dddd2461f1077ff0832859bd8c63bd28ed6ef2d995fc5054556481ddd775e'}]
+          PROJECTS = (
+              'source/FinancialHttpCounters.csproj',
+              'controls/FinancialHttpCounters.Controls.csproj',
+              'native-controls/FinancialHttpCounters.NativeControls.csproj',
+              'witness-host/FinancialHttpCounters.WitnessHost.csproj',
+              'helper-controls/HelperHostedControls.csproj',
+          )
+          LOCKS = tuple(str(pathlib.PurePosixPath(p).parent / 'packages.lock.json') for p in PROJECTS)
+
+          class Refused(Exception): pass
+
+          def require(condition):
+              if not condition: raise Refused()
+
+          def pairs(items):
+              result = {}
+              for key, value in items:
+                  require(key not in result); result[key] = value
+              return result
+
+          def parse(raw, maximum=1024 * 1024):
+              require(type(raw) is bytes and 0 < len(raw) <= maximum)
+              return json.loads(raw.decode('utf-8'), object_pairs_hook=pairs,
+                                parse_constant=lambda _: (_ for _ in ()).throw(Refused()))
+
+          def clean_audit(raw, expected_project):
+              value = parse(raw)
+              require(type(value) is dict and set(value) in (
+                  {'version', 'parameters', 'sources', 'projects'},
+                  {'version', 'parameters', 'sources', 'projects', 'problems'}))
+              require(type(value['version']) is int and value['version'] == 1)
+              require(value['parameters'] == '--vulnerable --include-transitive')
+              require(value['sources'] == ['https://api.nuget.org/v3/index.json'])
+              require(type(value.get('problems', [])) is list and value.get('problems', []) == [])
+              require(type(value['projects']) is list and len(value['projects']) == 1)
+              project = value['projects'][0]
+              require(type(project) is dict and set(project) == {'path', 'frameworks'} and project['path'] == expected_project)
+              require(type(project['frameworks']) is list and len(project['frameworks']) == 1)
+              frame = project['frameworks'][0]
+              require(type(frame) is dict and set(frame) in (
+                  {'framework', 'topLevelPackages'}, {'framework', 'topLevelPackages', 'transitivePackages'}))
+              require(frame['framework'] == 'net10.0')
+              # --vulnerable reports only vulnerable packages. Any entry refuses acceptance,
+              # including an entry with missing/empty/malformed vulnerability details.
+              require(type(frame['topLevelPackages']) is list and frame['topLevelPackages'] == [])
+              require(type(frame.get('transitivePackages', [])) is list and frame.get('transitivePackages', []) == [])
+
+          def parser_controls():
+              positive = {'version': 1, 'parameters': '--vulnerable --include-transitive',
+                          'sources': ['https://api.nuget.org/v3/index.json'], 'projects': [
+                              {'path': '/owned/project.csproj', 'frameworks': [{'framework': 'net10.0', 'topLevelPackages': []}]}]}
+              def encoded(value): return json.dumps(value).encode()
+              clean_audit(encoded(positive), '/owned/project.csproj')
+              with_empty = copy.deepcopy(positive); with_empty['problems'] = []
+              with_empty['projects'][0]['frameworks'][0]['transitivePackages'] = []
+              clean_audit(encoded(with_empty), '/owned/project.csproj')
+              cases = [b'', b'prefix' + encoded(positive), encoded(positive) + b'{}', encoded(positive).replace(b'"version": 1', b'"version": 1, "version": 1', 1),
+                       b'{"version":NaN}', encoded(positive) * 20000]
+              def variant(change):
+                  value = copy.deepcopy(positive); change(value); cases.append(encoded(value))
+              variant(lambda v: v.update(version=True))
+              variant(lambda v: v.update(version=2))
+              variant(lambda v: v.update(parameters='--vulnerable'))
+              variant(lambda v: v.update(sources=[]))
+              variant(lambda v: v.update(sources=['https://private.invalid/index.json']))
+              variant(lambda v: v.update(problems=[{'level': 'warning', 'text': 'audit unavailable'}]))
+              variant(lambda v: v.update(problems={}))
+              variant(lambda v: v.update(unknown=[]))
+              variant(lambda v: v.update(projects=[]))
+              variant(lambda v: v['projects'].append(copy.deepcopy(v['projects'][0])))
+              variant(lambda v: v['projects'][0].update(path='/other/project.csproj'))
+              variant(lambda v: v['projects'][0].pop('frameworks'))
+              variant(lambda v: v['projects'][0].update(frameworks=[]))
+              variant(lambda v: v['projects'][0]['frameworks'][0].update(framework='net9.0'))
+              variant(lambda v: v['projects'][0]['frameworks'][0].update(topLevelPackages={}))
+              variant(lambda v: v['projects'][0]['frameworks'][0].update(topLevelPackages=[{'id': 'vulnerable', 'vulnerabilities': [{'severity': 'Low'}]}]))
+              variant(lambda v: v['projects'][0]['frameworks'][0].update(transitivePackages=[{'id': 'missing-details'}]))
+              variant(lambda v: v['projects'][0]['frameworks'][0].update(vulnerabilities=[]))
+              for raw in cases:
+                  refused = False
+                  try: clean_audit(raw, '/owned/project.csproj')
+                  except (Refused, ValueError, UnicodeError, TypeError, KeyError): refused = True
+                  require(refused)
+              return {'PositiveCasesObserved': 2, 'NegativeCasesObserved': len(cases)}
+
+          # Typed Linux kernel reads are separate from source files. The spawned leader remains
+          # unreaped until teardown: WNOWAIT reserves its PID/session ID against reuse.
+          def generation(pid):
+              require(type(pid) is int and pid > 0)
+              with open('/proc/' + str(pid) + '/stat', 'rb') as stream: raw = stream.read(8193)
+              require(0 < len(raw) <= 8192)
+              end = raw.rfind(b')'); require(end > 0 and int(raw[:raw.index(b'(')].strip()) == pid)
+              fields = raw[end + 2:].split(); require(len(fields) >= 20)
+              return (int(fields[19]), int(fields[1]), int(fields[2]), int(fields[3]), fields[0].decode('ascii'))
+
+          def session_members(session, deadline):
+              entries = list(pathlib.Path('/proc').iterdir()); require(len(entries) <= 32768)
+              result = {}
+              for entry in entries:
+                  require(time.monotonic() < deadline)
+                  if re.fullmatch(r'[1-9][0-9]*', entry.name) is None: continue
+                  try: observed = generation(int(entry.name))
+                  except FileNotFoundError: continue  # A vanished kernel process is absent, never an invented owned success.
+                  if observed[3] == session: result[int(entry.name)] = observed
+              return result
+
+          LAST_CLEANUP = None
+
+          def dispose_owned_session(process, held):
+              deadline = time.monotonic() + 5
+              failures = []; observed = None; members = None; anchor = held
+              # Recovery reobserves the exact un-reaped leader independently of reader setup.
+              for attempt in range(2):
+                  try:
+                      current = generation(process.pid)
+                      require(process.returncode is None and current[1:4] == (os.getpid(), process.pid, process.pid))
+                      if anchor is not None: require(current[:4] == anchor[:4])
+                      anchor = current; observed = current
+                      break
+                  except Exception as error:
+                      failures.append(type(error).__name__)
+              if observed is not None:
+                  try:
+                      members = session_members(process.pid, deadline)
+                      require(members.get(process.pid, ())[:4] == anchor[:4])
+                  except Exception as error: failures.append(type(error).__name__)
+                  for attempt in range(2):
+                      try:
+                          # The unreaped leader reserves its PID; reobserve before EACH retry.
+                          current = generation(process.pid)
+                          require(process.returncode is None and current[:4] == anchor[:4] and time.monotonic() < deadline)
+                          try: os.killpg(process.pid, signal.SIGKILL)
+                          except ProcessLookupError:
+                              require(current[4] == 'Z' and members is not None and all(x[4] == 'Z' for x in members.values()))
+                          break
+                      except Exception as error: failures.append(type(error).__name__)
+              # Reaping and readback are attempted even when signal/census failed. Never signal after reaping.
+              try: process.wait(timeout=max(0.001, deadline - time.monotonic()))
+              except Exception as error: failures.append(type(error).__name__)
+              remaining = None
+              try:
+                  while True:
+                      remaining = session_members(process.pid, deadline)
+                      if not remaining: break
+                      for pid, value in remaining.items():
+                          if pid != process.pid and value[1] == os.getpid() and value[4] == 'Z':
+                              require(generation(pid) == value)
+                              reaped, _ = os.waitpid(pid, os.WNOHANG); require(reaped in (0, pid))
+                      require(time.monotonic() < deadline); time.sleep(0.02)
+              except Exception as error: failures.append(type(error).__name__)
+              if observed is None or members is None or remaining != {} or process.returncode is None: failures.append('OwnedCleanupUncertain')
+              receipt = None if failures else {'HeldLeaderExitedBeforeCleanup': observed[4] == 'Z',
+                  'SessionMembersBeforeCleanup': len(members), 'SessionMembersAfterCleanup': len(remaining)}
+              return receipt, failures
+
+          # All allocations after successful childbirth are inside the protected try. Cleanup
+          # attempts remain independent, and recovered uncertainty never becomes a clean receipt.
+          STAGES = ('admission', 'source-head', 'supervisor-control', 'sdk', 'restore', 'locked-restore', 'audit', 'format', 'build', 'controls', 'source-helper', 'native-lifecycle', 'native', 'receipts')
+          CURRENT_STAGE, CURRENT_PROJECT = 'admission', None
+
+          def public_stage(stage, project=None):
+              global CURRENT_STAGE, CURRENT_PROJECT
+              require(stage in STAGES and (project is None or project in PROJECTS))
+              CURRENT_STAGE, CURRENT_PROJECT = stage, project
+              print(json.dumps({'QualificationStage': stage, 'Project': project}), flush=True)
+
+          def public_diagnostics(raw, root, stage):
+              # Runtime child output can include private witness values: project only stages.
+              if stage not in ('restore', 'locked-restore', 'audit', 'format', 'build'): return [], []
+              require(type(raw) is bytes and len(raw) <= 8 * 1024 * 1024)
+              code_pattern = rb'(?:WHITESPACE|(?:NU|CS|MSB|CA|IDE)[0-9]{3,6})'
+              codes = sorted(set(x.decode('ascii') for x in re.findall(rb'\b' + code_pattern + rb'\b', raw)))[:64]
+              locations = set()
+              for item in SOURCE_INVENTORY:
+                  relative = item['path']
+                  if not relative.endswith(('.cs', '.csproj')): continue
+                  # Match an exact allowlisted public source path, not a raw captured path.
+                  for candidate in (str(root / relative), relative):
+                      pattern = rb'(?:^|[\r\n])' + re.escape(candidate.encode()) + rb'\(([0-9]{1,7}),([0-9]{1,7})\):\s*(?:error|warning)\s+(' + code_pattern + rb')\b'
+                      for match in re.finditer(pattern, raw):
+                          line, column = int(match[1]), int(match[2])
+                          if 0 < line <= 1000000 and 0 < column <= 1000000:
+                              locations.add((relative, line, column, match[3].decode('ascii')))
+              return codes, [{'Source': path, 'Line': line, 'Column': column, 'Code': code}
+                             for path, line, column, code in sorted(locations)[:64]]
+
+          NATIVE_CONTROL_ORDER = ('Context', 'AdmissionBegin', 'AdmissionRootCreate', 'AdmissionFifoCreate', 'AdmissionFifoReject', 'AdmissionDeviceReject', 'AdmissionDirectoryReject', 'AdmissionPrivateFileCreate', 'AdmissionSymlinkReplacement', 'AdmissionSymlinkRecovery', 'AdmissionSameBytesReplacement', 'AdmissionReplacementRecovery', 'AdmissionModeReject', 'AdmissionExpiredReject', 'AdmissionOutputPrepare', 'AdmissionRedirectedOutput', 'AdmissionReplacedOutput', 'AdmissionPositiveOutput', 'AdmissionCleanup', 'CallerPaths', 'FaultBegin', 'WitnessReserve', 'WitnessConfigure', 'WitnessBirth', 'WitnessSetup', 'WitnessInjectedFailure', 'WitnessCleanup', 'FaultResult', 'CodecBegin', 'WitnessReserve', 'WitnessConfigure', 'WitnessBirth', 'WitnessSetup', 'WitnessReaders', 'WitnessReadiness', 'WitnessPin', 'WitnessCollectorStart', 'WitnessCanary', 'WitnessCompletion', 'WitnessReplay', 'WitnessDrain', 'WitnessCounters', 'WitnessCleanup', 'CodecResult', 'Receipt')
+          NATIVE_FAILURE_ONLY = ('ReaderParserSetup', 'ReaderProcessIdentity', 'ReaderListenerSchema', 'ReaderBridgeSchema', 'ReaderProjectionArguments', 'ReaderCounterState', 'ReaderParserRead', 'ReaderParserCompletion', 'ReaderStreamCompletion', 'ReaderCancelled', 'ReaderUnknown', 'CanaryMissingHeartbeat', 'CanaryMissingHealth', 'CanaryMissingBoth')
+          NATIVE_WINDOW_FAILURE_ONLY = ('WindowPendingRequests', 'WindowMissingHeartbeat', 'WindowMissingHealthCanary', 'WindowMissingIncomingListener', 'WindowOutgoingListener', 'WindowBoundarySpan', 'WindowGuardInterval', 'ExpectedEffectCounts', 'GenerationDrain')
+          NATIVE_MARKER_LINES = {json.dumps({'NativeControl': control}, separators=(',', ':')).encode('ascii'): control
+                                 for control in frozenset(NATIVE_CONTROL_ORDER + NATIVE_FAILURE_ONLY + NATIVE_WINDOW_FAILURE_ONLY)}
+
+          NATIVE_EFFECT_EQUALITY_KEYS = ('NativeEffectEquality', 'InvoiceRenderEqualsOne', 'FileUploadEqualsOne', 'OtherUploadMethodEqualsOne', 'ReplayAllZero')
+
+          def native_effect_equality_line(line):
+              value = parse(line, 145)
+              require(type(value) is dict and set(value) == set(NATIVE_EFFECT_EQUALITY_KEYS)
+                      and all(type(value[key]) is bool for key in NATIVE_EFFECT_EQUALITY_KEYS)
+                      and value['NativeEffectEquality'] is True
+                      and not all(value[key] for key in NATIVE_EFFECT_EQUALITY_KEYS[1:]))
+              require(json.dumps({key: value[key] for key in NATIVE_EFFECT_EQUALITY_KEYS}, separators=(',', ':')).encode('ascii') == line)
+              return value
+
+          def native_effect_equality_parser_controls():
+              positive = negative = privacy = 0
+              def encoded(markers):
+                  return b''.join(json.dumps({'NativeControl': marker}, separators=(',', ':')).encode('ascii') + b'\n' for marker in markers)
+              prefix = NATIVE_CONTROL_ORDER[:NATIVE_CONTROL_ORDER.index('WitnessCounters') + 1] + ('ExpectedEffectCounts',)
+              before = encoded(prefix)
+              cleanup = encoded(('WitnessCleanup',))
+              def refused(raw, success=False):
+                  nonlocal negative
+                  if success:
+                      rejected = False
+                      try: native_control_projection(raw, succeeded=True)
+                      except Refused: rejected = True
+                      require(rejected)
+                  else:
+                      result = native_control_projection(raw)
+                      require(not result['NativeMarkerProtocolAccepted'] and result['NativeControlsObserved'] == []
+                              and not set(NATIVE_EFFECT_EQUALITY_KEYS).intersection(result))
+                  negative += 1
+              canonical = encoded(NATIVE_CONTROL_ORDER)
+              require(native_control_projection(canonical, succeeded=True)['NativeMarkerProtocolAccepted']); positive += 1
+              for bits in range(15):
+                  value = {'NativeEffectEquality': True}
+                  value.update({key: bool(bits & (1 << index)) for index, key in enumerate(NATIVE_EFFECT_EQUALITY_KEYS[1:])})
+                  line = json.dumps(value, separators=(',', ':')).encode('ascii')
+                  require(len(line) <= 145 and native_effect_equality_line(line) == value)
+                  for tail in (b'', cleanup):
+                      raw = before + line + b'\n' + tail
+                      result = native_control_projection(raw)
+                      require(result['NativeMarkerProtocolAccepted'] and result['NativeLastOperation'] == 'ExpectedEffectCounts'
+                              and all(result[key] is value[key] for key in NATIVE_EFFECT_EQUALITY_KEYS))
+                      positive += 1
+                      refused(raw, success=True)
+                  for position in range(len(NATIVE_CONTROL_ORDER) + 1):
+                      refused(encoded(NATIVE_CONTROL_ORDER[:position]) + line + b'\n')
+                  for other in NATIVE_FAILURE_ONLY + NATIVE_WINDOW_FAILURE_ONLY:
+                      if other == 'ExpectedEffectCounts': continue
+                      refused(encoded(prefix[:-1] + (other,)) + line + b'\n' + cleanup)
+                  for raw in (before + line + b'\n' + line + b'\n' + cleanup,
+                              before + cleanup + line + b'\n', before + line + b'\n' + cleanup + line + b'\n',
+                              before + b'private-opaque-value\n' + line + b'\n' + cleanup,
+                              before + b'\n' + line + b'\n' + cleanup,
+                              before + b' \n' + line + b'\n' + cleanup,
+                              before + b'\t\n' + line + b'\n' + cleanup,
+                              before + line + b'\n' + encoded(('CodecResult',)),
+                              canonical + line + b'\n'):
+                      refused(raw)
+                  for key in NATIVE_EFFECT_EQUALITY_KEYS:
+                      changed = value.copy(); del changed[key]
+                      refused(before + json.dumps(changed, separators=(',', ':')).encode() + b'\n' + cleanup)
+                      for replacement in (int(value[key]), None, 'private-opaque-value'):
+                          changed = value.copy(); changed[key] = replacement
+                          refused(before + json.dumps(changed, separators=(',', ':')).encode() + b'\n' + cleanup)
+                  changed = value.copy(); changed['NativeEffectEquality'] = False
+                  refused(before + json.dumps(changed, separators=(',', ':')).encode() + b'\n' + cleanup)
+                  for extra in ({'Private': '/private/path'}, {'Count': 987654}):
+                      changed = value.copy(); changed.update(extra)
+                      raw = before + json.dumps(changed, separators=(',', ':')).encode() + b'\n' + cleanup
+                      refused(raw); require('private' not in json.dumps(native_control_projection(raw)) and '987654' not in json.dumps(native_control_projection(raw))); privacy += 1
+                  for changed in (b' ' + line, line.replace(b':', b': ', 1),
+                                  line.replace(b'"NativeEffectEquality":true', b'"NativeEffectEquality":true,"NativeEffectEquality":true'),
+                                  json.dumps(dict(reversed(list(value.items()))), separators=(',', ':')).encode(),
+                                  line + b' ' * 146):
+                      refused(before + changed + b'\n' + cleanup)
+                  result = native_control_projection(before + line + b'\n' + cleanup + b'private-opaque-value /private/path token-value\n')
+                  require(result['NativeMarkerProtocolAccepted'] and 'private' not in json.dumps(result) and 'token-value' not in json.dumps(result)); privacy += 1
+                  refused(before + line + b'\n' + cleanup + canonical, success=True)
+              all_true = json.dumps({key: True for key in NATIVE_EFFECT_EQUALITY_KEYS}, separators=(',', ':')).encode()
+              refused(before + all_true + b'\n' + cleanup)
+              return {'NativeEffectEqualityParserPositiveCases': positive, 'NativeEffectEqualityParserNegativeCases': negative,
+                      'NativeEffectEqualityPrivacyCases': privacy, 'MaximumEqualityLineBytes': 145,
+                      'ActualCounterEqualityValuesKnown': False, 'LocalNativeExecution': False,
+                      'NativeEventPipeCodecAccepted': False, 'GenuineEightHostFinancialAccepted': False}
+
+          NATIVE_EFFECT_MAGNITUDE_KEYS = ('NativeEffectMagnitude', 'InvoiceBelowOne', 'InvoiceAboveOne', 'UploadBelowOne', 'UploadAboveOne',
+              'OtherUploadBelowOne', 'OtherUploadAboveOne', 'OutgoingObserved', 'OperationalCandidateObserved', 'OperationalOriginRejected',
+              'ClassifiedEffectObserved', 'ClassifiedEffectOutsideWindow')
+          NATIVE_EFFECT_MAGNITUDE_PAIRS = (('InvoiceBelowOne', 'InvoiceAboveOne', 'InvoiceRenderEqualsOne'),
+              ('UploadBelowOne', 'UploadAboveOne', 'FileUploadEqualsOne'), ('OtherUploadBelowOne', 'OtherUploadAboveOne', 'OtherUploadMethodEqualsOne'))
+
+          def native_effect_magnitude_line(line, equality):
+              value = parse(line, 347)
+              require(type(value) is dict and set(value) == set(NATIVE_EFFECT_MAGNITUDE_KEYS)
+                      and all(type(value[key]) is bool for key in NATIVE_EFFECT_MAGNITUDE_KEYS)
+                      and value['NativeEffectMagnitude'] is True and type(equality) is dict)
+              for below, above, equal in NATIVE_EFFECT_MAGNITUDE_PAIRS:
+                  require(not (value[below] and value[above]) and equality[equal] is (not value[below] and not value[above]))
+              require(not value['OperationalCandidateObserved'] or value['OutgoingObserved'])
+              require(not value['OperationalOriginRejected'] or value['OperationalCandidateObserved'])
+              require(not value['ClassifiedEffectObserved'] or value['OperationalCandidateObserved'])
+              require(not value['ClassifiedEffectOutsideWindow'] or value['ClassifiedEffectObserved'])
+              require(json.dumps({key: value[key] for key in NATIVE_EFFECT_MAGNITUDE_KEYS}, separators=(',', ':')).encode('ascii') == line)
+              return value
+
+          def native_effect_magnitude_parser_controls():
+              positive = negative = privacy = 0
+              def encoded(markers):
+                  return b''.join(json.dumps({'NativeControl': marker}, separators=(',', ':')).encode('ascii') + b'\n' for marker in markers)
+              prefix = NATIVE_CONTROL_ORDER[:NATIVE_CONTROL_ORDER.index('WitnessCounters') + 1] + ('ExpectedEffectCounts',)
+              before = encoded(prefix); cleanup = encoded(('WitnessCleanup',))
+              def refused(raw, success=False):
+                  nonlocal negative
+                  if success:
+                      rejected = False
+                      try: native_control_projection(raw, succeeded=True)
+                      except Refused: rejected = True
+                      require(rejected)
+                  else:
+                      result = native_control_projection(raw)
+                      require(not result['NativeMarkerProtocolAccepted'] and result['NativeControlsObserved'] == []
+                              and not set(NATIVE_EFFECT_MAGNITUDE_KEYS + NATIVE_EFFECT_EQUALITY_KEYS).intersection(result))
+                  negative += 1
+              canonical = encoded(NATIVE_CONTROL_ORDER)
+              require(native_control_projection(canonical, succeeded=True)['NativeMarkerProtocolAccepted']); positive += 1
+              representative = None
+              for bits in range(2048):
+                  value = {'NativeEffectMagnitude': True}
+                  value.update({key: bool(bits & (1 << index)) for index, key in enumerate(NATIVE_EFFECT_MAGNITUDE_KEYS[1:])})
+                  equality = {'NativeEffectEquality': True}
+                  equality.update({equal: not value[below] and not value[above] for below, above, equal in NATIVE_EFFECT_MAGNITUDE_PAIRS})
+                  equality['ReplayAllZero'] = False
+                  equality_line = json.dumps(equality, separators=(',', ':')).encode('ascii')
+                  line = json.dumps(value, separators=(',', ':')).encode('ascii')
+                  require(len(line) <= 347)
+                  admissible = (all(not (value[below] and value[above]) for below, above, _ in NATIVE_EFFECT_MAGNITUDE_PAIRS)
+                      and (not value['OperationalCandidateObserved'] or value['OutgoingObserved'])
+                      and (not value['OperationalOriginRejected'] or value['OperationalCandidateObserved'])
+                      and (not value['ClassifiedEffectObserved'] or value['OperationalCandidateObserved'])
+                      and (not value['ClassifiedEffectOutsideWindow'] or value['ClassifiedEffectObserved']))
+                  raw = before + equality_line + b'\n' + line + b'\n' + cleanup
+                  if admissible:
+                      require(native_effect_magnitude_line(line, equality) == value)
+                      for tail in (b'', cleanup):
+                          result = native_control_projection(before + equality_line + b'\n' + line + b'\n' + tail)
+                          require(result['NativeMarkerProtocolAccepted'] and result['NativeLastOperation'] == 'ExpectedEffectCounts'
+                                  and all(result[key] is value[key] for key in NATIVE_EFFECT_MAGNITUDE_KEYS)
+                                  and all(result[key] is equality[key] for key in NATIVE_EFFECT_EQUALITY_KEYS)); positive += 1
+                      refused(raw, success=True)
+                      if not all(equality[key] for key in NATIVE_EFFECT_EQUALITY_KEYS[1:4]):
+                          replay_zero_equality = equality.copy(); replay_zero_equality['ReplayAllZero'] = True
+                          replay_zero_line = json.dumps(replay_zero_equality, separators=(',', ':')).encode('ascii')
+                          for tail in (b'', cleanup):
+                              replay_zero_raw = before + replay_zero_line + b'\n' + line + b'\n' + tail
+                              result = native_control_projection(replay_zero_raw)
+                              require(result['NativeMarkerProtocolAccepted'] and result['ReplayAllZero'] is True
+                                      and all(result[key] is value[key] for key in NATIVE_EFFECT_MAGNITUDE_KEYS)); positive += 1
+                          refused(before + replay_zero_line + b'\n' + line + b'\n' + cleanup, success=True)
+                      if representative is None: representative = (value, equality)
+                  else: refused(raw)
+              value, equality = representative
+              line = json.dumps(value, separators=(',', ':')).encode('ascii')
+              equality_line = json.dumps(equality, separators=(',', ':')).encode('ascii')
+              valid_before = before + equality_line + b'\n'
+              for position in range(len(NATIVE_CONTROL_ORDER) + 1):
+                  refused(encoded(NATIVE_CONTROL_ORDER[:position]) + equality_line + b'\n' + line + b'\n')
+              for gap in (b'\n', b' \n', b'\t\n', b'private-opaque-value\n', cleanup):
+                  refused(valid_before + gap + line + b'\n' + cleanup)
+              for raw in (before + line + b'\n' + cleanup, valid_before + line + b'\n' + line + b'\n' + cleanup,
+                          valid_before + line + b'\n' + cleanup + line + b'\n', valid_before + line + b'\n' + equality_line + b'\n' + cleanup,
+                          valid_before + line + b'\n' + encoded(('CodecResult',)), canonical + line + b'\n'):
+                  refused(raw)
+              for below, above, equal in NATIVE_EFFECT_MAGNITUDE_PAIRS:
+                  changed = equality.copy(); changed[equal] = not changed[equal]
+                  refused(before + json.dumps(changed, separators=(',', ':')).encode() + b'\n' + line + b'\n' + cleanup)
+              for key in NATIVE_EFFECT_MAGNITUDE_KEYS:
+                  changed = value.copy(); del changed[key]
+                  refused(valid_before + json.dumps(changed, separators=(',', ':')).encode() + b'\n' + cleanup)
+                  for replacement in (int(value[key]), None, 'private-opaque-value'):
+                      changed = value.copy(); changed[key] = replacement
+                      refused(valid_before + json.dumps(changed, separators=(',', ':')).encode() + b'\n' + cleanup)
+              changed = value.copy(); changed['NativeEffectMagnitude'] = False
+              refused(valid_before + json.dumps(changed, separators=(',', ':')).encode() + b'\n' + cleanup)
+              for extra in ({'Private': '/private/path'}, {'Count': 987654}):
+                  changed = value.copy(); changed.update(extra)
+                  raw = valid_before + json.dumps(changed, separators=(',', ':')).encode() + b'\n' + cleanup
+                  refused(raw); require('private' not in json.dumps(native_control_projection(raw)) and '987654' not in json.dumps(native_control_projection(raw))); privacy += 1
+              for changed in (b' ' + line, line.replace(b':', b': ', 1), line + b' ' * 348,
+                              line.replace(b'"NativeEffectMagnitude":true', b'"NativeEffectMagnitude":true,"NativeEffectMagnitude":true'),
+                              json.dumps(dict(reversed(list(value.items()))), separators=(',', ':')).encode()):
+                  refused(valid_before + changed + b'\n' + cleanup)
+              result = native_control_projection(valid_before + line + b'\n' + cleanup + b'private-opaque-value /private/path token-value\n')
+              require(result['NativeMarkerProtocolAccepted'] and 'private' not in json.dumps(result) and 'token-value' not in json.dumps(result)); privacy += 1
+              return {'NativeEffectMagnitudeParserPositiveCases': positive, 'NativeEffectMagnitudeParserNegativeCases': negative,
+                      'NativeEffectMagnitudePrivacyCases': privacy, 'MagnitudeBooleanSchemasChecked': 2048, 'MaximumMagnitudeLineBytes': 347,
+                      'ActualMagnitudeValuesKnown': False, 'LocalNativeExecution': False, 'NativeEventPipeCodecAccepted': False,
+                      'GenuineEightHostFinancialAccepted': False}
+
+          def installed_runtime_inventory(raw):
+              require(type(raw) is bytes and 0 < len(raw) <= 32768)
+              lines = raw.decode('utf-8').splitlines()
+              require(0 < len(lines) <= 64)
+              observed = set()
+              for line in lines:
+                  match = re.fullmatch(r'(Microsoft\.(?:NETCore|AspNetCore)\.App) ([0-9]+\.[0-9]+\.[0-9]+) \[(/[^\r\n\[\]]{1,2048})\]', line)
+                  require(match is not None)
+                  identity = (match[1], match[2])
+                  require(identity not in observed); observed.add(identity)
+              # Paths are deliberately discarded; this inventory does not observe a loaded actor runtime.
+              return [{'Component': component, 'Version': version} for component, version in sorted(observed)]
+
+          def installed_runtime_parser_controls():
+              positive = negative = privacy = 0
+              raw = b'Microsoft.AspNetCore.App 10.0.12 [/private/path/shared/Microsoft.AspNetCore.App]\nMicrosoft.NETCore.App 10.0.12 [/private/path/shared/Microsoft.NETCore.App]\n'
+              observed = installed_runtime_inventory(raw)
+              require(observed == [{'Component': 'Microsoft.AspNetCore.App', 'Version': '10.0.12'}, {'Component': 'Microsoft.NETCore.App', 'Version': '10.0.12'}]); positive += 1
+              require('private' not in json.dumps(observed) and 'path' not in json.dumps(observed)); privacy += 1
+              for replacement in (b'/private/token-value', b'/private/another-location'):
+                  value = installed_runtime_inventory(raw.replace(b'/private/path', replacement))
+                  require(value == observed and 'private' not in json.dumps(value) and 'token-value' not in json.dumps(value)); positive += 1; privacy += 1
+              for bad in (b'', raw + raw, raw + b'private-opaque-value\n',
+                          raw.replace(b'Microsoft.NETCore.App', b'Unknown.Private.Runtime'),
+                          raw.replace(b'10.0.12', b'10.0.12-private-opaque-value'),
+                          raw.replace(b'[/private/path', b'[relative-path'),
+                          raw.replace(b'10.0.12 [', b'10.0.12  ['), b'x' * 32769,
+                          raw.replace(b'Microsoft.NETCore.App', b'Microsoft.NETCore.App\x00'),
+                          b'\xff', b'Microsoft.NETCore.App 10.0.12 [/private/path]\n' * 65):
+                  refused = False
+                  try: installed_runtime_inventory(bad)
+                  except (Refused, ValueError): refused = True
+                  require(refused); negative += 1
+              return {'InstalledRuntimeParserPositiveCases': positive, 'InstalledRuntimeParserNegativeCases': negative,
+                      'InstalledRuntimeParserPrivacyCases': privacy, 'LoadedNativeActorRuntimeObserved': False,
+                      'LocalRuntimeInventoryCommandExecuted': False}
+
+          def native_control_projection(raw, succeeded=False):
+              require(type(raw) is bytes and len(raw) <= 4 * 1024 * 1024 and type(succeeded) is bool)
+              markers = []; unknown = malformed = False
+              equality = magnitude = None; previous_line = equality_line = None
+              equality_prefix = NATIVE_CONTROL_ORDER[:NATIVE_CONTROL_ORDER.index('WitnessCounters') + 1] + ('ExpectedEffectCounts',)
+              for line in raw.splitlines():
+                  if line in NATIVE_MARKER_LINES:
+                      markers.append(NATIVE_MARKER_LINES[line]); require(len(markers) <= 128)
+                  elif any(key.encode('ascii') in line for key in NATIVE_EFFECT_MAGNITUDE_KEYS):
+                      try:
+                          require(magnitude is None and equality is not None and tuple(markers) == equality_prefix
+                                  and previous_line == equality_line)
+                          magnitude = native_effect_magnitude_line(line, equality)
+                      except (Refused, ValueError, TypeError, KeyError): malformed = True
+                  elif any(key.encode('ascii') in line for key in NATIVE_EFFECT_EQUALITY_KEYS):
+                      try:
+                          require(equality is None and tuple(markers) == equality_prefix
+                                  and previous_line == b'{"NativeControl":"ExpectedEffectCounts"}')
+                          equality = native_effect_equality_line(line)
+                          equality_line = line
+                      except (Refused, ValueError, TypeError, KeyError): malformed = True
+                  elif line.strip():
+                      unknown = True
+                      if line.startswith(b'{"NativeControl"'): malformed = True
+                  previous_line = line
+              observed = tuple(markers)
+              valid_orders = {NATIVE_CONTROL_ORDER[:index] for index in range(len(NATIVE_CONTROL_ORDER) + 1)}
+              # Failure unwinds through the existing admission/fault/codec finally blocks.
+              # A cleanup marker means entered cleanup, never verified cleanup or acceptance.
+              for index in range(1, len(NATIVE_CONTROL_ORDER)):
+                  prefix = NATIVE_CONTROL_ORDER[:index]
+                  if index <= NATIVE_CONTROL_ORDER.index('AdmissionCleanup'):
+                      if prefix[-1] != 'AdmissionCleanup': valid_orders.add(prefix + ('AdmissionCleanup',))
+                  elif NATIVE_CONTROL_ORDER.index('FaultBegin') < index <= NATIVE_CONTROL_ORDER.index('FaultResult'):
+                      if prefix[-1] != 'WitnessCleanup': valid_orders.add(prefix + ('WitnessCleanup',))
+                  elif NATIVE_CONTROL_ORDER.index('CodecBegin') < index <= NATIVE_CONTROL_ORDER.index('CodecResult'):
+                      if prefix[-1] != 'WitnessCleanup': valid_orders.add(prefix + ('WitnessCleanup',))
+              # One frozen category can explain only the codec canary failure. It never extends success.
+              canary_end = NATIVE_CONTROL_ORDER.index('WitnessCanary') + 1
+              canary_prefix = NATIVE_CONTROL_ORDER[:canary_end]
+              for category in NATIVE_FAILURE_ONLY:
+                  valid_orders.add(canary_prefix + (category,))
+                  valid_orders.add(canary_prefix + (category, 'WitnessCleanup'))
+              # One fixed window category explains only an actual codec counter failure; never success.
+              counter_prefix = NATIVE_CONTROL_ORDER[:NATIVE_CONTROL_ORDER.index('WitnessCounters') + 1]
+              for category in NATIVE_WINDOW_FAILURE_ONLY:
+                  valid_orders.add(counter_prefix + (category,))
+                  valid_orders.add(counter_prefix + (category, 'WitnessCleanup'))
+              accepted = bool(markers) and not malformed and observed in valid_orders
+              if equality is not None: accepted = accepted and observed in (equality_prefix, equality_prefix + ('WitnessCleanup',))
+              if succeeded:
+                  canonical = b''.join(json.dumps({'NativeControl': control}, separators=(',', ':')).encode('ascii') + b'\n'
+                                       for control in NATIVE_CONTROL_ORDER)
+                  require(accepted and observed == NATIVE_CONTROL_ORDER and not unknown and raw == canonical)
+              result = {'NativeMarkerProtocolAccepted': accepted, 'NativeMarkerCount': len(markers),
+                      'NativeControlsObserved': markers[-8:] if accepted else [],
+                      'NativeLastControl': markers[-1] if accepted and markers else None,
+                      'NativeLastOperation': next((x for x in reversed(markers) if x not in ('AdmissionCleanup', 'WitnessCleanup')), None) if accepted else None}
+              if accepted and equality is not None: result.update(equality)
+              if accepted and magnitude is not None: result.update(magnitude)
+              return result
+
+          def native_failure_marker_controls():
+              positive = negative = privacy = 0
+
+              def encoded(markers):
+                  return b''.join(json.dumps({'NativeControl': marker}, separators=(',', ':')).encode('ascii') + b'\n'
+                                  for marker in markers)
+
+              def refused_success(raw):
+                  nonlocal negative
+                  rejected = False
+                  try: native_control_projection(raw, succeeded=True)
+                  except Refused: rejected = True
+                  require(rejected); negative += 1
+
+              canonical = encoded(NATIVE_CONTROL_ORDER)
+              require(len(NATIVE_CONTROL_ORDER) == 45 and native_control_projection(canonical, succeeded=True)['NativeMarkerProtocolAccepted'])
+              positive += 1
+              canary = NATIVE_CONTROL_ORDER.index('WitnessCanary')
+              prefix = NATIVE_CONTROL_ORDER[:canary + 1]
+              require(NATIVE_CONTROL_ORDER.index('CodecBegin') < canary and NATIVE_CONTROL_ORDER[canary + 1] == 'WitnessCompletion')
+              require(len(NATIVE_FAILURE_ONLY) == 14 and len(set(NATIVE_FAILURE_ONLY)) == 14
+                      and not set(NATIVE_FAILURE_ONLY).intersection(NATIVE_CONTROL_ORDER))
+              for marker in NATIVE_FAILURE_ONLY:
+                  for tail in ((), ('WitnessCleanup',)):
+                      raw = encoded(prefix + (marker,) + tail)
+                      result = native_control_projection(raw)
+                      require(result['NativeMarkerProtocolAccepted'] and result['NativeLastOperation'] == marker
+                              and result['NativeMarkerCount'] == len(prefix) + 1 + len(tail))
+                      positive += 1
+                      refused_success(raw)
+                  # Failure categories can occur only immediately after the CODEC canary.
+                  for position in range(len(NATIVE_CONTROL_ORDER) + 1):
+                      if position == canary + 1: continue
+                      result = native_control_projection(encoded(NATIVE_CONTROL_ORDER[:position] + (marker,)))
+                      require(not result['NativeMarkerProtocolAccepted'] and result['NativeControlsObserved'] == [])
+                      negative += 1
+                  for invalid in (prefix + (marker, marker), prefix + (marker, 'WitnessCleanup', marker),
+                                  prefix + (marker, 'WitnessCompletion'), prefix + ('WitnessCleanup', marker),
+                                  prefix + (marker, 'WitnessCleanup', 'WitnessCleanup')):
+                      result = native_control_projection(encoded(invalid))
+                      require(not result['NativeMarkerProtocolAccepted']); negative += 1
+                  # Unknown private trace bytes remain discarded; they never enter typed public results.
+                  raw = encoded(prefix + (marker, 'WitnessCleanup')) + b'private-opaque-value /private/path token-value\n'
+                  result = native_control_projection(raw)
+                  require(result['NativeMarkerProtocolAccepted'] and result['NativeLastOperation'] == marker
+                          and 'private' not in json.dumps(result) and 'token-value' not in json.dumps(result))
+                  privacy += 1
+                  for counterfeit in (b'{"NativeControl":"' + marker.encode() + b'","Private":"opaque"}\n',
+                                      b'{"NativeControl":"' + marker.encode() + b'PrivateSuffix"}\n'):
+                      result = native_control_projection(encoded(prefix) + counterfeit + encoded(('WitnessCleanup',)))
+                      require(not result['NativeMarkerProtocolAccepted'] and 'opaque' not in json.dumps(result))
+                      negative += 1; privacy += 1
+                  for changed_line in (b' ' + encoded((marker,)), encoded((marker,)).replace(b'{"', b'{ "')):
+                      result = native_control_projection(encoded(prefix) + changed_line + encoded(('WitnessCleanup',)))
+                      require(result['NativeLastOperation'] not in NATIVE_FAILURE_ONLY)
+                      negative += 1
+                  refused_success(canonical + encoded((marker,)))
+                  refused_success(encoded(NATIVE_CONTROL_ORDER[:canary + 1] + (marker,) + NATIVE_CONTROL_ORDER[canary + 1:]))
+              for bad_success in (canonical.replace(b'\n', b'\r\n'), canonical + b'\n', canonical[:-1],
+                                  b' ' + canonical, canonical.replace(b':', b': ', 1),
+                                  canonical + b'private-opaque-value\n'):
+                  refused_success(bad_success)
+              return {'NativeFailureMarkerParserPositiveCases': positive,
+                      'NativeFailureMarkerParserNegativeCases': negative,
+                      'NativeFailureMarkerPrivacyCases': privacy,
+                      'UnchangedSuccessMarkerCount': 45, 'FailureOnlyCategoryCount': 14,
+                      'LocalNativeExecution': False, 'GenuineEightHostFinancialAccepted': False}
+
+          def native_window_marker_controls():
+              positive = negative = privacy = 0
+
+              def encoded(markers):
+                  return b''.join(json.dumps({'NativeControl': marker}, separators=(',', ':')).encode('ascii') + b'\n'
+                                  for marker in markers)
+
+              def reject(raw, success=False):
+                  nonlocal negative
+                  if success:
+                      refused = False
+                      try: native_control_projection(raw, succeeded=True)
+                      except Refused: refused = True
+                      require(refused)
+                  else:
+                      result = native_control_projection(raw)
+                      require(not result['NativeMarkerProtocolAccepted'] and result['NativeControlsObserved'] == []
+                              and result['NativeLastOperation'] is None)
+                  negative += 1
+
+              canonical = encoded(NATIVE_CONTROL_ORDER)
+              require(len(NATIVE_CONTROL_ORDER) == 45 and native_control_projection(canonical, succeeded=True)['NativeMarkerProtocolAccepted'])
+              positive += 1
+              counter = NATIVE_CONTROL_ORDER.index('WitnessCounters')
+              prefix = NATIVE_CONTROL_ORDER[:counter + 1]
+              require(NATIVE_CONTROL_ORDER.index('CodecBegin') < counter and NATIVE_CONTROL_ORDER[counter + 1] == 'WitnessCleanup')
+              require(len(NATIVE_WINDOW_FAILURE_ONLY) == 9 and len(set(NATIVE_WINDOW_FAILURE_ONLY)) == 9
+                      and not set(NATIVE_WINDOW_FAILURE_ONLY).intersection(NATIVE_CONTROL_ORDER + NATIVE_FAILURE_ONLY))
+              for marker in NATIVE_WINDOW_FAILURE_ONLY:
+                  for tail in ((), ('WitnessCleanup',)):
+                      raw = encoded(prefix + (marker,) + tail)
+                      result = native_control_projection(raw)
+                      require(result['NativeMarkerProtocolAccepted'] and result['NativeLastOperation'] == marker
+                              and result['NativeMarkerCount'] == len(prefix) + 1 + len(tail))
+                      positive += 1
+                      reject(raw, success=True)
+                  for position in range(len(NATIVE_CONTROL_ORDER) + 1):
+                      if position != counter + 1:
+                          reject(encoded(NATIVE_CONTROL_ORDER[:position] + (marker,)))
+                  for other in NATIVE_WINDOW_FAILURE_ONLY:
+                      reject(encoded(prefix + (marker, other)))
+                      reject(encoded(prefix + (marker, 'WitnessCleanup', other)))
+                  for other in NATIVE_FAILURE_ONLY:
+                      reject(encoded(prefix + (marker, other)))
+                      reject(encoded(NATIVE_CONTROL_ORDER[:NATIVE_CONTROL_ORDER.index('WitnessCanary') + 1] + (other, marker)))
+                  for invalid in (prefix + (marker, 'CodecResult'), prefix + ('WitnessCleanup', marker),
+                                  prefix + (marker, 'WitnessCleanup', 'WitnessCleanup'), prefix + (marker, 'Receipt')):
+                      reject(encoded(invalid))
+                  for counterfeit in (b'{"NativeControl":"' + marker.encode() + b'","Private":"opaque"}\n',
+                                      b'{"NativeControl":"' + marker.encode() + b'PrivateSuffix"}\n',
+                                      b'{"NativeControl":"UnknownWindowCategory"}\n',
+                                      b'{"NativeControl":"' + marker.encode() + b'","Count":987654}\n'):
+                      raw = encoded(prefix) + counterfeit + encoded(('WitnessCleanup',))
+                      reject(raw)
+                      require('opaque' not in json.dumps(native_control_projection(raw)) and '987654' not in json.dumps(native_control_projection(raw)))
+                      privacy += 1
+                  raw = encoded(prefix + (marker, 'WitnessCleanup')) + b'private-opaque-value /private/path token-value\n'
+                  result = native_control_projection(raw)
+                  require(result['NativeMarkerProtocolAccepted'] and result['NativeLastOperation'] == marker
+                          and 'private' not in json.dumps(result) and 'token-value' not in json.dumps(result))
+                  privacy += 1
+                  for changed in (b' ' + encoded((marker,)), encoded((marker,)).replace(b'{"', b'{ "')):
+                      result = native_control_projection(encoded(prefix) + changed + encoded(('WitnessCleanup',)))
+                      require(result['NativeLastOperation'] not in NATIVE_WINDOW_FAILURE_ONLY)
+                      reject(encoded(prefix) + changed + encoded(('WitnessCleanup',)), success=True)
+                  reject(canonical + encoded((marker,)), success=True)
+                  reject(encoded(prefix + (marker,) + NATIVE_CONTROL_ORDER[counter + 1:]), success=True)
+              return {'NativeWindowMarkerParserPositiveCases': positive, 'NativeWindowMarkerParserNegativeCases': negative,
+                      'NativeWindowMarkerPrivacyCases': privacy, 'UnchangedSuccessMarkerCount': 45,
+                      'FailureOnlyWindowCategoryCount': 9, 'LocalNativeExecution': False,
+                      'GenuineEightHostFinancialAccepted': False}
+
+          NATIVE_CLEANUP_FIELDS = ('BirthAttempted', 'ProcessAssociated', 'PidfdBound', 'ExactOriginalExitObserved',
+              'AllRetainedOperationsCompleted', 'OutputEof', 'ErrorEof', 'AllPipeHandlesClosed', 'ProcessWaitHandleClosed',
+              'PidfdClosed', 'CollectorQuiescent', 'CleanupOriginallyFailed', 'PhysicalCleanupCompleted')
+          NATIVE_LIFECYCLE_CASES = ('PostBirthSetupFault', 'ReaderOverflow', 'RetainedWaitTimeout', 'CleanupDeadlineRecovery', 'CollectorReaderFault')
+          NATIVE_LIFECYCLE_FAULTS = ('SetupFaultObserved', 'ReaderFaultObserved', 'CollectorReaderFaultObserved',
+              'WaitTimeoutObserved', 'RetainedWaitPendingAfterTimeout', 'FirstCleanupDeadlineObserved', 'QuarantineRetained',
+              'PhysicalRecoveryCompleted', 'StickyAdmissionRefused')
+
+          def native_cleanup_record(value, originally_failed=False, incomplete=False):
+              require(type(value) is dict and set(value) == set(NATIVE_CLEANUP_FIELDS)
+                      and all(type(value[key]) is bool for key in NATIVE_CLEANUP_FIELDS))
+              if incomplete:
+                  true_fields = {'BirthAttempted', 'ProcessAssociated', 'PidfdBound', 'CollectorQuiescent', 'CleanupOriginallyFailed'}
+                  require(originally_failed is True)
+              else:
+                  true_fields = set(NATIVE_CLEANUP_FIELDS) - {'CleanupOriginallyFailed'}
+                  if originally_failed: true_fields.add('CleanupOriginallyFailed')
+              require(all(value[key] is (key in true_fields) for key in NATIVE_CLEANUP_FIELDS))
+
+          def native_lifecycle_receipt(raw, case):
+              require(case in NATIVE_LIFECYCLE_CASES)
+              value = parse(raw, 8192)
+              fields = set(NATIVE_LIFECYCLE_FAULTS) | {'ControlCase', 'Passed', 'Cleanup', 'RecoveredCleanup',
+                  'NativeEventPipeCodecAccepted', 'GenuineEightHostFinancialAccepted'}
+              require(type(value) is dict and set(value) == fields and type(value['ControlCase']) is str
+                      and value['ControlCase'] == case and value['Passed'] is True
+                      and value['NativeEventPipeCodecAccepted'] is False and value['GenuineEightHostFinancialAccepted'] is False)
+              expected = {
+                  'PostBirthSetupFault': {'SetupFaultObserved'},
+                  'ReaderOverflow': {'ReaderFaultObserved', 'QuarantineRetained'},
+                  'RetainedWaitTimeout': {'WaitTimeoutObserved', 'RetainedWaitPendingAfterTimeout'},
+                  'CleanupDeadlineRecovery': {'FirstCleanupDeadlineObserved', 'QuarantineRetained', 'PhysicalRecoveryCompleted', 'StickyAdmissionRefused'},
+                  'CollectorReaderFault': {'CollectorReaderFaultObserved', 'QuarantineRetained'}
+              }[case]
+              require(all(type(value[key]) is bool and value[key] is (key in expected) for key in NATIVE_LIFECYCLE_FAULTS))
+              require(type(value['Cleanup']) is list and len(value['Cleanup']) == 1)
+              failed = case in ('ReaderOverflow', 'CleanupDeadlineRecovery', 'CollectorReaderFault')
+              recovery = case == 'CleanupDeadlineRecovery'
+              native_cleanup_record(value['Cleanup'][0], originally_failed=failed, incomplete=recovery)
+              if recovery: native_cleanup_record(value['RecoveredCleanup'], originally_failed=True)
+              else: require(value['RecoveredCleanup'] is None)
+              return value
+
+          def native_normal_cleanup_records(value):
+              require(type(value) is list and len(value) == 2)
+              for record in value: native_cleanup_record(record)
+
+          def native_lifecycle_parser_controls():
+              positive = negative = 0
+              def encoded(value): return json.dumps(value, separators=(',', ':')).encode()
+              def refused(raw, case):
+                  nonlocal negative
+                  rejected = False
+                  try: native_lifecycle_receipt(raw, case)
+                  except (Refused, ValueError, TypeError, KeyError): rejected = True
+                  require(rejected); negative += 1
+              complete = {key: key != 'CleanupOriginallyFailed' for key in NATIVE_CLEANUP_FIELDS}
+              native_normal_cleanup_records([complete.copy(), complete.copy()]); positive += 1
+              for case in NATIVE_LIFECYCLE_CASES:
+                  expected = {'PostBirthSetupFault': {'SetupFaultObserved'}, 'ReaderOverflow': {'ReaderFaultObserved', 'QuarantineRetained'},
+                      'RetainedWaitTimeout': {'WaitTimeoutObserved', 'RetainedWaitPendingAfterTimeout'},
+                      'CleanupDeadlineRecovery': {'FirstCleanupDeadlineObserved', 'QuarantineRetained', 'PhysicalRecoveryCompleted', 'StickyAdmissionRefused'},
+                      'CollectorReaderFault': {'CollectorReaderFaultObserved', 'QuarantineRetained'}}[case]
+                  value = {key: key in expected for key in NATIVE_LIFECYCLE_FAULTS}
+                  value.update({'ControlCase': case, 'Passed': True, 'Cleanup': [complete.copy()], 'RecoveredCleanup': None,
+                      'NativeEventPipeCodecAccepted': False, 'GenuineEightHostFinancialAccepted': False})
+                  value['Cleanup'][0]['CleanupOriginallyFailed'] = case in ('ReaderOverflow', 'CleanupDeadlineRecovery', 'CollectorReaderFault')
+                  if case == 'CleanupDeadlineRecovery':
+                      value['Cleanup'][0] = {key: key in {'BirthAttempted', 'ProcessAssociated', 'PidfdBound', 'CollectorQuiescent', 'CleanupOriginallyFailed'} for key in NATIVE_CLEANUP_FIELDS}
+                      value['RecoveredCleanup'] = {key: True for key in NATIVE_CLEANUP_FIELDS}
+                  require(native_lifecycle_receipt(encoded(value), case) == value); positive += 1
+                  for key in value:
+                      changed = copy.deepcopy(value); del changed[key]; refused(encoded(changed), case)
+                  for key in NATIVE_LIFECYCLE_FAULTS + ('Passed', 'NativeEventPipeCodecAccepted', 'GenuineEightHostFinancialAccepted'):
+                      for replacement in (not value[key], int(value[key]), 'private-opaque-value'):
+                          changed = copy.deepcopy(value); changed[key] = replacement; refused(encoded(changed), case)
+                  for key in NATIVE_CLEANUP_FIELDS:
+                      for replacement in (not value['Cleanup'][0][key], int(value['Cleanup'][0][key]), None):
+                          changed = copy.deepcopy(value); changed['Cleanup'][0][key] = replacement; refused(encoded(changed), case)
+                      changed = copy.deepcopy(value); del changed['Cleanup'][0][key]; refused(encoded(changed), case)
+                  for replacement in ([], value['Cleanup'] * 2, None, {}):
+                      changed = copy.deepcopy(value); changed['Cleanup'] = replacement; refused(encoded(changed), case)
+                  for replacement in ('UnknownCase', 'private-opaque-value', 1):
+                      changed = copy.deepcopy(value); changed['ControlCase'] = replacement; refused(encoded(changed), case)
+                  changed = copy.deepcopy(value); changed['Private'] = '/private/path'; refused(encoded(changed), case)
+                  changed = copy.deepcopy(value); changed['Cleanup'][0]['Private'] = '/private/path'; refused(encoded(changed), case)
+                  refused(encoded(value) + b'\n' + encoded(value), case)
+                  refused(encoded(value).replace(b'"Passed":true', b'"Passed":true,"Passed":true'), case)
+                  changed = copy.deepcopy(value); changed['RecoveredCleanup'] = None if case == 'CleanupDeadlineRecovery' else complete.copy(); refused(encoded(changed), case)
+                  if case == 'CleanupDeadlineRecovery':
+                      for key in NATIVE_CLEANUP_FIELDS:
+                          changed = copy.deepcopy(value); changed['RecoveredCleanup'][key] = False; refused(encoded(changed), case)
+                          changed = copy.deepcopy(value); del changed['RecoveredCleanup'][key]; refused(encoded(changed), case)
+              for replacement in ([], [complete], [complete] * 3, {}, None):
+                  rejected = False
+                  try: native_normal_cleanup_records(replacement)
+                  except Refused: rejected = True
+                  require(rejected); negative += 1
+              for key in NATIVE_CLEANUP_FIELDS:
+                  for replacement in (not complete[key], int(complete[key]), None):
+                      changed = [complete.copy(), complete.copy()]; changed[1][key] = replacement
+                      rejected = False
+                      try: native_normal_cleanup_records(changed)
+                      except Refused: rejected = True
+                      require(rejected); negative += 1
+              return {'NativeLifecycleReceiptParserPositiveCases': positive, 'NativeLifecycleReceiptParserNegativeCases': negative,
+                      'ActualNativeLifecycleControlsExecutedLocally': False, 'NativeEventPipeCodecAccepted': False,
+                      'GenuineEightHostFinancialAccepted': False}
+
+          def run(argv, cwd, seconds, stderr_must_be_empty=True, stage="supervisor-control", project=None):
+              global LAST_CLEANUP
+              LAST_CLEANUP = None
+              public_stage(stage, project)
+              end = min(time.monotonic() + seconds, OVERALL_DEADLINE); require(end > time.monotonic())
+              held = selector = primary = observation = None
+              process = subprocess.Popen(argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE, start_new_session=True)
+              try:
+                  output, error = bytearray(), bytearray()
+                  selector = selectors.DefaultSelector()
+                  held = generation(process.pid)
+                  require(held[1:4] == (os.getpid(), process.pid, process.pid))
+                  selector.register(process.stdout, selectors.EVENT_READ, output)
+                  selector.register(process.stderr, selectors.EVENT_READ, error)
+                  while selector.get_map():
+                      require(time.monotonic() < end)
+                      for key, _ in selector.select(min(0.1, max(0, end - time.monotonic()))):
+                          piece = os.read(key.fileobj.fileno(), 4096)
+                          if not piece: selector.unregister(key.fileobj); continue
+                          key.data.extend(piece); require(len(key.data) <= 4 * 1024 * 1024)
+                  while True:
+                      require(time.monotonic() < end)
+                      status = os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+                      if status is not None: break
+                      time.sleep(0.01)
+                  code = status.si_status if status.si_code == os.CLD_EXITED else -status.si_status
+                  if stage == 'native' and code == 0:
+                      native_control_projection(bytes(error), succeeded=True)
+                  if code != 0 or (stderr_must_be_empty and error.strip() and stage != 'native'):
+                      codes, locations = public_diagnostics(bytes(output + b'\n' + error), cwd, stage)
+                      diagnostics = {'QualificationStage': stage, 'Project': project, 'OwnedCommandExitCode': code,
+                                     'DiagnosticCodes': codes, 'SourceDiagnostics': locations}
+                      if stage == 'native': diagnostics.update(native_control_projection(bytes(error)))
+                      print(json.dumps(diagnostics), file=sys.stderr)
+                      raise Refused()
+                  require(re.search(rb'\b(?:warning|error)\s+(?:NU|CS|MSB|CA)[0-9]+', output, re.I) is None)
+                  return bytes(output)
+              except BaseException as error:
+                  primary = error
+                  raise
+              finally:
+                  failures = []
+                  try:
+                      observation, failures = dispose_owned_session(process, held)
+                  except BaseException as error: failures.append(type(error).__name__)
+                  # Each close is attempted even if another close failed or selector never existed.
+                  for owned in (selector, process.stdout, process.stderr):
+                      if owned is not None:
+                          try: owned.close()
+                          except BaseException as error: failures.append(type(error).__name__)
+                  LAST_CLEANUP = None if failures else observation
+                  if failures:
+                      if primary is None: raise Refused()
+                      primary.add_note('Owned cleanup uncertain; no successful cleanup receipt.')
+
+          class InjectedSelectorSetupFailure(Exception): pass
+
+          def supervisor_controls(root):
+              # Real leader exits while its real child retains inherited pipes.
+              program = "import subprocess,sys; subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)']); sys.exit(0)"
+              refused = False
+              try: run([sys.executable, '-c', program], root, 0.75)
+              except Refused: refused = True
+              require(refused and LAST_CLEANUP is not None and LAST_CLEANUP['HeldLeaderExitedBeforeCleanup'] is True
+                      and LAST_CLEANUP['SessionMembersBeforeCleanup'] >= 2 and LAST_CLEANUP['SessionMembersAfterCleanup'] == 0)
+              # Constructor failure occurs AFTER a real child is born, before reader creation.
+              original = selectors.DefaultSelector
+              def fail_after_birth(): raise InjectedSelectorSetupFailure()
+              selectors.DefaultSelector = fail_after_birth
+              injected = False
+              try:
+                  try: run([sys.executable, '-c', 'import time; time.sleep(30)'], root, 3)
+                  except InjectedSelectorSetupFailure: injected = True
+              finally: selectors.DefaultSelector = original
+              require(injected and LAST_CLEANUP is not None and LAST_CLEANUP['SessionMembersBeforeCleanup'] >= 1
+                      and LAST_CLEANUP['SessionMembersAfterCleanup'] == 0)
+              return {'ExitedLeaderPipeDescendantDeadlineRefused': True, 'HeldGenerationSessionCleanupObserved': True,
+                      'PostBirthSelectorConstructorFailureRefused': True, 'ConstructorFailureOwnedCleanupObserved': True}
+
+          def exact_sources(root):
+              for item in SOURCE_INVENTORY:
+                  path = root / item['path']
+                  require(path.is_file() and not path.is_symlink() and hashlib.sha256(path.read_bytes()).hexdigest() == item['rawSha256'])
+
+          def lock_bytes(root):
+              require({p.relative_to(root).as_posix() for p in root.rglob('packages.lock.json')} == set(LOCKS))
+              result = {}
+              for relative in LOCKS:
+                  path = root / relative; require(path.is_file() and not path.is_symlink())
+                  raw = path.read_bytes(); value = parse(raw)
+                  require(type(value) is dict and set(value) == {'version', 'dependencies'} and type(value['version']) is int
+                          and value['version'] in (1, 2) and type(value['dependencies']) is dict and set(value['dependencies']) == {'net10.0'})
+                  for package, data in value['dependencies']['net10.0'].items():
+                      require(re.fullmatch(r'[A-Za-z0-9_.-]+', package) is not None and type(data) is dict
+                              and set(data) <= {'type', 'requested', 'resolved', 'contentHash', 'dependencies'}
+                              and data.get('type') in ('Direct', 'Transitive', 'Project'))
+                      for key in ('requested', 'resolved'):
+                          if key in data: require(type(data[key]) is str and re.fullmatch(r'[A-Za-z0-9.*+, ()\[\]-]+', data[key]) is not None)
+                      if 'contentHash' in data: require(type(data['contentHash']) is str and re.fullmatch(r'[A-Za-z0-9+/]{86}==', data['contentHash']) is not None)
+                      if 'dependencies' in data:
+                          require(type(data['dependencies']) is dict)
+                          for identifier, version in data['dependencies'].items():
+                              require(re.fullmatch(r'[A-Za-z0-9_.-]+', identifier) is not None and type(version) is str
+                                      and re.fullmatch(r'[A-Za-z0-9.*+, ()\[\]-]+', version) is not None)
+                  result[relative] = raw
+              return result
+
+          try:
+              require(sys.platform == 'linux' and os.environ.get('GITHUB_ACTIONS') == 'true')
+              # Only this private supervisor process changes its child-adoption behavior.
+              # No host PID1, credentials, grants or daemon configuration is modified.
+              libc = ctypes.CDLL(None, use_errno=True)
+              libc.prctl.argtypes = (ctypes.c_int, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong)
+              libc.prctl.restype = ctypes.c_int
+              require(libc.prctl(36, 1, 0, 0, 0) == 0)  # PR_SET_CHILD_SUBREAPER
+              observed_subreaper = ctypes.c_int()
+              require(libc.prctl(37, ctypes.cast(ctypes.byref(observed_subreaper), ctypes.c_void_p).value, 0, 0, 0) == 0
+                      and observed_subreaper.value == 1)  # PR_GET_CHILD_SUBREAPER
+              OVERALL_DEADLINE = time.monotonic() + 690
+              workspace = pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve(strict=True)
+              event = parse(pathlib.Path(os.environ['GITHUB_EVENT_PATH']).read_bytes())
+              number = os.environ['EXPECTED_PR_NUMBER']; require(re.fullmatch(r'[1-9][0-9]*', number) is not None)
+              require(os.environ['GITHUB_EVENT_NAME'] == 'pull_request' and event['number'] == int(number)
+                      and event['pull_request']['head']['ref'] == 'codex/financial-http-counters-20261007'
+                      and event['pull_request']['head']['repo']['full_name'] == os.environ['GITHUB_REPOSITORY']
+                      and os.environ['GITHUB_REPOSITORY'] == 'MALIEV-Co-Ltd/Legacy.Maliev.QuotationService')
+              head = os.environ['EXPECTED_SOURCE_HEAD']; require(re.fullmatch(r'[0-9a-f]{40}', head) is not None)
+              require(event['pull_request']['head']['sha'] == head and run(['git', 'rev-parse', 'HEAD'], workspace, 10, stage='source-head').decode().strip() == head)
+              parser_receipt = parser_controls()
+              native_failure_parser_receipt = native_failure_marker_controls()
+              print(json.dumps(native_failure_parser_receipt), flush=True)
+              native_window_parser_receipt = native_window_marker_controls()
+              print(json.dumps(native_window_parser_receipt), flush=True)
+              native_lifecycle_parser_receipt = native_lifecycle_parser_controls()
+              print(json.dumps(native_lifecycle_parser_receipt), flush=True)
+              native_equality_parser_receipt = native_effect_equality_parser_controls()
+              print(json.dumps(native_equality_parser_receipt), flush=True)
+              native_magnitude_parser_receipt = native_effect_magnitude_parser_controls()
+              print(json.dumps(native_magnitude_parser_receipt), flush=True)
+              installed_runtime_parser_receipt = installed_runtime_parser_controls()
+              print(json.dumps(installed_runtime_parser_receipt), flush=True)
+              source = workspace / 'tools/FinancialHttpCounters'; exact_sources(source)
+              # Isolate the four projects from unrelated repository/user build configuration.
+              with tempfile.TemporaryDirectory(prefix='financial-http-codec-', dir=os.environ['RUNNER_TEMP']) as owned:
+                  root = pathlib.Path(owned); os.chmod(root, 0o700)
+                  for item in SOURCE_INVENTORY:
+                      target = root / item['path']; target.parent.mkdir(parents=True, exist_ok=True)
+                      target.write_bytes((source / item['path']).read_bytes())
+                  exact_sources(root)
+                  supervisor_receipt = supervisor_controls(root)
+                  (root / 'NuGet.Config').write_text('<configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources><auditSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></auditSources></configuration>')
+                  dotnet = str(pathlib.Path(shutil.which('dotnet')).resolve(strict=True))
+                  sdk = run([dotnet, '--version'], root, 10, stage='sdk').decode().strip(); require(re.fullmatch(r'10\.0\.[0-9]+', sdk) is not None)
+                  installed_runtimes = installed_runtime_inventory(run([dotnet, '--list-runtimes'], root, 10, stage='sdk'))
+                  flags = ['-p:ImportDirectoryBuildProps=false', '-p:ImportDirectoryBuildTargets=false', '-p:ManagePackageVersionsCentrally=false',
+                           '-p:RestorePackagesWithLockFile=true', '-p:NuGetAudit=true', '-p:NuGetAuditMode=all', '-p:TreatWarningsAsErrors=true',
+                           '-p:WarningsAsErrors=', '-p:NoWarn=', '-p:UseSharedCompilation=false', '-nodeReuse:false']
+                  for project in PROJECTS:
+                      run([dotnet, 'restore', str(root / project), '--configfile', str(root / 'NuGet.Config'), '--disable-parallel', '--verbosity', 'minimal', *flags], root, 90, stage='restore', project=project)
+                  locks = lock_bytes(root)
+                  for project in PROJECTS:
+                      run([dotnet, 'restore', str(root / project), '--locked-mode', '--configfile', str(root / 'NuGet.Config'), '--disable-parallel', '--verbosity', 'minimal', *flags], root, 60, stage='locked-restore', project=project)
+                  require(lock_bytes(root) == locks)
+                  for project in PROJECTS:
+                      audit = run([dotnet, 'package', 'list', '--project', str(root / project), '--no-restore', '--vulnerable', '--include-transitive', '--format', 'json', '--output-version', '1'], root, 45, stage='audit', project=project)
+                      clean_audit(audit, str(root / project))
+                      run([dotnet, 'format', str(root / project), '--verify-no-changes', '--no-restore', '--verbosity', 'minimal'], root, 90, stage='format', project=project)
+                      run([dotnet, 'build', str(root / project), '--configuration', 'Release', '--no-restore', '--disable-build-servers', '--verbosity', 'minimal', '-warnaserror', *flags], root, 60, stage='build', project=project)
+                  exact_sources(root); require(lock_bytes(root) == locks)
+                  controls_raw = run([dotnet, str(root / 'controls/bin/Release/net10.0/FinancialHttpCounters.Controls.dll')], root, 30, stage='controls', project=PROJECTS[1])
+                  controls = parse(controls_raw, 4096)
+                  require(type(controls) is dict and set(controls) == {'ControlledCasesPassed', 'HostedEventPipeWitness', 'GenuineEightHostFinancialAccepted'}
+                          and type(controls['ControlledCasesPassed']) is int and controls['ControlledCasesPassed'] == 50
+                          and controls['HostedEventPipeWitness'] is False and controls['GenuineEightHostFinancialAccepted'] is False)
+                  public = workspace / 'TestResults/FinancialHttpCounterCodec'
+                  require(not public.exists() and public.resolve() == public); public.mkdir(parents=True)
+                  (public / 'runtime-metadata.json').write_bytes(json.dumps({'SourceHead': head, 'RunId': os.environ['GITHUB_RUN_ID'], 'RunAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'SdkVersion': sdk, 'InstalledRuntimeInventory': installed_runtimes, 'LoadedNativeActorRuntimeObserved': False}, sort_keys=True).encode() + b'\n')
+                  helper_receipts = []
+                  for case in ('fast', 'overflow', 'timeout', 'inherited'):
+                      case_root = root / ('source-helper-' + case)
+                      helper_raw = run([dotnet, str(root / 'helper-controls/bin/Release/net10.0/HelperHostedControls.dll'), case, str(case_root)], root, 60, stage='source-helper', project=PROJECTS[4])
+                      helper = parse(helper_raw, 4096)
+                      require(type(helper) is dict and set(helper) == {'Case', 'Outcome', 'ActualVerifySourceAsyncInvoked', 'ActualSyntheticGitBirths', 'ExactOriginalChildrenExited', 'RetainedOriginalTasksObserved', 'RecoveredHeldHandlesClosed', 'StickyRefusalAndNoNewBirth', 'ExactOwnedPipeIdentitiesAbsent', 'ExactSyntheticWriterPidfdExitObserved', 'NaturalParentExitObserved', 'CausalOverflowObserved', 'FiniteTimeoutObserved', 'ElapsedMilliseconds', 'FinancialAdmissionAccepted'})
+                      require(helper['Case'] == case and helper['Outcome'] == 'Passed'
+                              and helper['ActualVerifySourceAsyncInvoked'] is True
+                              and type(helper['ActualSyntheticGitBirths']) is int and helper['ActualSyntheticGitBirths'] == (3 if case == 'fast' else 1)
+                              and helper['ExactOriginalChildrenExited'] is True and helper['ExactOwnedPipeIdentitiesAbsent'] is True
+                              and helper['FinancialAdmissionAccepted'] is False
+                              and type(helper['ElapsedMilliseconds']) is int and 0 <= helper['ElapsedMilliseconds'] < 45000)
+                      for key in ('RetainedOriginalTasksObserved', 'RecoveredHeldHandlesClosed', 'StickyRefusalAndNoNewBirth', 'ExactSyntheticWriterPidfdExitObserved', 'NaturalParentExitObserved'):
+                          require(helper[key] is (case == 'inherited'))
+                      require(helper['CausalOverflowObserved'] is (case == 'overflow') and helper['FiniteTimeoutObserved'] is (case == 'timeout'))
+                      # Retain this bounded case receipt even if the later codec remains refused.
+                      (public / ('source-helper-' + case + '.json')).write_bytes(json.dumps({'SourceHead': head, 'RunId': os.environ['GITHUB_RUN_ID'], 'RunAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'Control': helper}, sort_keys=True).encode() + b'\n')
+                      helper_receipts.append(helper)
+                  (public / 'source-helper-slice.json').write_bytes(json.dumps({'SourceHead': head, 'ActualCasesPassed': len(helper_receipts), 'FullLifecycleFaultCoverageAccepted': False, 'SourceAdmissionAccepted': False, 'GenuineEightHostFinancialAccepted': False}, sort_keys=True).encode() + b'\n')
+                  native_dll = (root / 'native-controls/bin/Release/net10.0/FinancialHttpCounters.NativeControls.dll').resolve(strict=True)
+                  native_lifecycle_receipts = []
+                  for case in NATIVE_LIFECYCLE_CASES:
+                      # Each fixed fault case gets a fresh owned parent and a finite outer deadline.
+                      lifecycle_raw = run([dotnet, str(native_dll), dotnet, str(native_dll), case], root, 50, stage='native-lifecycle', project=PROJECTS[2])
+                      lifecycle = native_lifecycle_receipt(lifecycle_raw, case)
+                      (public / ('native-lifecycle-' + case + '.json')).write_bytes(json.dumps({'SourceHead': head, 'RunId': os.environ['GITHUB_RUN_ID'], 'RunAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'Control': lifecycle}, sort_keys=True).encode() + b'\n')
+                      native_lifecycle_receipts.append(lifecycle)
+                  witness = (root / 'witness-host/bin/Release/net10.0/FinancialHttpCounters.WitnessHost.dll').resolve(strict=True)
+                  native_raw = run([dotnet, str(root / 'native-controls/bin/Release/net10.0/FinancialHttpCounters.NativeControls.dll'), dotnet, str(witness)], root, 140, stage='native', project=PROJECTS[2])
+                  native = parse(native_raw, 4096)
+                  require(type(native) is dict and set(native) == {'NativeEventPipeCodecWitnessPassed', 'NativePostBirthFaultCleanupPassed', 'SourceAdmissionAccepted', 'RealBusinessSchemaAccepted',
+                          'SmtpNoSendProven', 'SocketNoSendProven', 'GenuineEightHostFinancialAccepted', 'NativeWitnessCleanup'}
+                          and native['NativeEventPipeCodecWitnessPassed'] is True and native['NativePostBirthFaultCleanupPassed'] is True
+                          and all(native[key] is False for key in native if key not in ('NativeEventPipeCodecWitnessPassed', 'NativePostBirthFaultCleanupPassed', 'NativeWitnessCleanup')))
+                  native_normal_cleanup_records(native['NativeWitnessCleanup'])
+                  exact_sources(root); exact_sources(source); require(lock_bytes(root) == locks)
+                  public_stage('receipts')
+                  (public / 'controls.json').write_bytes(json.dumps(controls, sort_keys=True).encode() + b'\n')
+                  (public / 'native-codec.json').write_bytes(json.dumps(native, sort_keys=True).encode() + b'\n')
+                  for relative, raw in locks.items():
+                      target = public / 'locks' / relative; target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(raw)
+                  (public / 'qualification.json').write_text(json.dumps({'SourceHead': head, 'RunId': os.environ['GITHUB_RUN_ID'],
+                      'RunAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'SdkVersion': sdk, 'InstalledRuntimeInventory': installed_runtimes, 'LoadedNativeActorRuntimeObserved': False, 'InstalledRuntimeParserControls': installed_runtime_parser_receipt, 'AuditJsonV1ProjectsAccepted': len(PROJECTS),
+                      'AuditParserControls': parser_receipt, 'NativeFailureMarkerParserControls': native_failure_parser_receipt, 'NativeWindowMarkerParserControls': native_window_parser_receipt, 'NativeLifecycleReceiptParserControls': native_lifecycle_parser_receipt, 'NativeEffectEqualityParserControls': native_equality_parser_receipt, 'NativeEffectMagnitudeParserControls': native_magnitude_parser_receipt, 'ActualNativeLifecycleControlCasesPassed': len(native_lifecycle_receipts), 'OwnedSupervisorControls': supervisor_receipt, 'LockedRestoreRepeated': True,
+                      'NuGetLockSha256': {p: hashlib.sha256(raw).hexdigest() for p, raw in locks.items()},
+                      'SourceAdmissionAccepted': False, 'SelectedHostCountersAccepted': False, 'GenuineEightHostFinancialAccepted': False,
+                      'SmtpNoSendProven': False, 'SocketNoSendProven': False}, sort_keys=True) + '\n')
+          except Exception as error:
+              # Never print private child exceptions/stdout/stderr/environment.
+              print(json.dumps({'QualificationRefused': True, 'QualificationStage': CURRENT_STAGE,
+                                'Project': CURRENT_PROJECT}), file=sys.stderr)
+              sys.exit(1)
+          PY
+      - name: Retain only public qualification receipts and five fixed NuGet locks
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: financial-http-counter-codec-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            TestResults/FinancialHttpCounterCodec/source-helper-fast.json
+            TestResults/FinancialHttpCounterCodec/source-helper-overflow.json
+            TestResults/FinancialHttpCounterCodec/source-helper-timeout.json
+            TestResults/FinancialHttpCounterCodec/source-helper-inherited.json
+            TestResults/FinancialHttpCounterCodec/source-helper-slice.json
+            TestResults/FinancialHttpCounterCodec/native-lifecycle-PostBirthSetupFault.json
+            TestResults/FinancialHttpCounterCodec/native-lifecycle-ReaderOverflow.json
+            TestResults/FinancialHttpCounterCodec/native-lifecycle-RetainedWaitTimeout.json
+            TestResults/FinancialHttpCounterCodec/native-lifecycle-CleanupDeadlineRecovery.json
+            TestResults/FinancialHttpCounterCodec/native-lifecycle-CollectorReaderFault.json
+            TestResults/FinancialHttpCounterCodec/runtime-metadata.json
+            TestResults/FinancialHttpCounterCodec/controls.json
+            TestResults/FinancialHttpCounterCodec/native-codec.json
+            TestResults/FinancialHttpCounterCodec/qualification.json
+            TestResults/FinancialHttpCounterCodec/locks/source/packages.lock.json
+            TestResults/FinancialHttpCounterCodec/locks/controls/packages.lock.json
+            TestResults/FinancialHttpCounterCodec/locks/native-controls/packages.lock.json
+            TestResults/FinancialHttpCounterCodec/locks/witness-host/packages.lock.json
+            TestResults/FinancialHttpCounterCodec/locks/helper-controls/packages.lock.json
+          if-no-files-found: error
+          retention-days: 7
