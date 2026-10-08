@@ -1,0 +1,97 @@
+{
+  "SchemaVersion": 1,
+  "SourceBase": "7be03d9149e74091566ccad44965d8a6f344d5f8",
+  "Files": [
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py",
+      "bytes": 37534,
+      "sha256": "e75cb62607c1471bd86db0cd1450f4389f51c1d18aff171b7896742cce98568a"
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_docker_command.py",
+      "bytes": 17068,
+      "sha256": "ea5097db7e52ca9138e22af276f59c95a12b827546edc53dfe29eaa6954544fc"
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/test_scanner_docker_command.py",
+      "bytes": 17239,
+      "sha256": "5d827b6ce891c6e2c20fc0c895252cb910a6df39a0585535c4288dab6ad6f9b5"
+    },
+    {
+      "path": "docs/scanner-helper-hosted-controls.md",
+      "bytes": 5029,
+      "sha256": "343d66950f5a7b6974a1b3ec70dfadcc58759a8f3eaa27afb9f7d4f10d18d84d"
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_helper_hosted_controls.py",
+      "bytes": 19441,
+      "sha256": "24a7ff019f7fa58f2b0c48f71989195bc523a7c3eb4eab98b58b388b17122cb9"
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/test_scanner_helper_hosted_source.py",
+      "bytes": 6727,
+      "sha256": "79e387a81e65092e9a41e73fc9969cbce96d20851a19a629b8d01c959c0476b6"
+    }
+  ],
+  "NativeCases": [
+    "natural",
+    "selector-register",
+    "post-signal",
+    "post-waitid"
+  ],
+  "NativeFlagKeys": [
+    "ActualPopenDelegated",
+    "ActualGenerationBound",
+    "ActualSelectorReturned",
+    "ActualWaitidDelegated",
+    "ActualWaitpidOriginalReaped",
+    "ActualKillDelegated",
+    "SelectorRegisterFaultInjected",
+    "PostSignalFaultInjected",
+    "PostWaitidFaultInjected",
+    "SourceOriginalFailure",
+    "SourceCleanupVerified",
+    "SourceQuarantined",
+    "SourceOriginalReaped",
+    "PhysicalOriginalReaped",
+    "OriginalReadersEof",
+    "OriginalReadersClosed",
+    "OriginalSelectorClosed",
+    "OriginalPidfdClosed",
+    "OriginalPipeIdentitiesAbsent",
+    "StickyQuarantineRetained",
+    "RecoveryAttempted",
+    "OriginalFailurePreserved",
+    "NaturalControlExitZeroObserved"
+  ],
+  "NativeCasesExpected": 4,
+  "ActualNativeCasesExecuted": 0,
+  "RunnerPureMockedMethods": 26,
+  "HarnessPureModeledMethods": 8,
+  "ReceiptContextKeys": [
+    "SourceHead",
+    "RunId",
+    "Attempt",
+    "RunnerEnvironment"
+  ],
+  "DiagnosticStages": [
+    "admission",
+    "load",
+    "control",
+    "recovery",
+    "receipt",
+    "completed"
+  ],
+  "DiagnosticCategories": [
+    "None",
+    "ControlRefused",
+    "Timeout",
+    "Lifecycle",
+    "InjectedRegister",
+    "InjectedPostSignal",
+    "InjectedPostWaitid",
+    "Other"
+  ],
+  "ManifestSelfHashMustBePinnedExternally": true,
+  "FinancialEightAccepted": false
+}
