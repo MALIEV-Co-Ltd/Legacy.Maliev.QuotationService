@@ -18,8 +18,8 @@
     {
       "name": "hosted_scanner_readiness",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py",
-      "sha256": "d2cd1141975f808bcdb3454a5df18287962413ce89ce4cd8a491289155cbc060",
-      "length": 49158
+      "sha256": "34f794ca4d05dcd8664fbb8a919975fd0864802bb0ecbd95edae9d67acbd63b6",
+      "length": 49622
     },
     {
       "name": "scanner_loopback_relay",
@@ -66,7 +66,7 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "a113f206b64aad4d4ac9ccfee3aa197827dbeda1da62a1196308a6b05457ec2d",
+      "sha256": "a2ad8b3412c7d1aff1309afe1871d67f8a2b3142b6f868e1906b65811fd617ec",
       "length": 36289
     }
   ],
@@ -82,7 +82,7 @@
   },
   "startupControls": {
     "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_startup_ping_handoff.py",
-    "sha256": "1092a603ad9e8a768370e4158cb35c451d00ec3315fe114da6010fcc6457b02a",
-    "length": 51314
+    "sha256": "72546f759534532fc7090e65ad1f6937675f01b32df16df07478a0abd27845eb",
+    "length": 56038
   }
 }

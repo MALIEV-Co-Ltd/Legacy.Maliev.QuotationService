@@ -773,7 +773,7 @@ class ConfiguredNetworkControls(unittest.TestCase):
 
     def test_ipam_split_original_admitted_forms_error_type_message_and_cli_order(self):
         import json
-        before=HELD_SCANNER_SOURCE
+        before=HELD_SCANNER_SOURCE.replace(b"        if type(ipam) is not dict:\n            raise ValueError('Configured network census IPAM shape differs')\n        config = ipam.get('Config')\n        if type(config) is not list:\n            if 'Config' not in ipam:\n                raise ValueError('Configured network census IPAM shape differs')\n            if config is None:\n                builtin_driver = rows[0].get('Driver')\n                builtin_name = rows[0].get('Name')\n                builtin_scope = rows[0].get('Scope')\n                if (type(builtin_driver) is not str or type(builtin_name) is not str\n                        or type(builtin_scope) is not str or builtin_scope != 'local'\n                        or (builtin_driver, builtin_name) not in (('host', 'host'), ('null', 'none'))):\n                    raise ValueError('Configured network census IPAM shape differs')\n                config = []\n            else:\n                raise ValueError('Configured network census IPAM shape differs')\n        if len(config) > 8:\n            raise ValueError('Configured network census IPAM shape differs')\n", b"        if type(ipam) is not dict:\n            raise ValueError('Configured network census IPAM shape differs')\n        config = ipam.get('Config')\n        if type(config) is not list:\n            if 'Config' not in ipam:\n                raise ValueError('Configured network census IPAM shape differs')\n            if config is None:\n                raise ValueError('Configured network census IPAM shape differs')\n            raise ValueError('Configured network census IPAM shape differs')\n        if len(ipam['Config']) > 8:\n            raise ValueError('Configured network census IPAM shape differs')\n").replace(b"if not config and driver not in", b"if not ipam['Config'] and driver not in").replace(b"for row in config:", b"for row in ipam['Config']:")
         split="        if type(ipam) is not dict:\n            raise ValueError('Configured network census IPAM shape differs')\n        config = ipam.get('Config')\n        if type(config) is not list:\n            if 'Config' not in ipam:\n                raise ValueError('Configured network census IPAM shape differs')\n            if config is None:\n                raise ValueError('Configured network census IPAM shape differs')\n            raise ValueError('Configured network census IPAM shape differs')\n        if len(ipam['Config']) > 8:\n            raise ValueError('Configured network census IPAM shape differs')\n"
         original="        if type(ipam) is not dict or type(ipam.get('Config')) is not list or len(ipam['Config']) > 8:\n            raise ValueError('Configured network census IPAM shape differs')\n"
         self.assertEqual(before.decode().count(split),1)
@@ -817,7 +817,53 @@ class ConfiguredNetworkControls(unittest.TestCase):
         self.assertEqual(ast.unparse(rows[0].test),'type(ipam) is not dict')
         self.assertEqual(ast.unparse(rows[1]),"config = ipam.get('Config')")
         self.assertEqual(ast.unparse(rows[2].test),'type(config) is not list')
-        self.assertEqual(ast.unparse(rows[3].test),"len(ipam['Config']) > 8")
+        self.assertEqual(ast.unparse(rows[3].test),"len(config) > 8")
         nested=rows[2].body
         self.assertEqual(ast.unparse(nested[0].test),"'Config' not in ipam")
         self.assertEqual(ast.unparse(nested[1].test),'config is None')
+
+    def test_present_null_requires_exact_builtin_name_driver_and_local_scope(self):
+        import itertools,json
+        m=self.module()
+        for driver,name,scope in itertools.product(('host','null','bridge','custom',None,False),('host','none','custom',None,False),('local','global',None,False)):
+            calls=[];row={'Id':'a'*64,'Driver':driver,'Name':name,'Scope':scope,'IPAM':{'Config':None}}
+            def docker(*args,**kw):
+                calls.append(args)
+                return 'a'*64 if args[1]=='ls' else json.dumps([row])
+            accepted=type(driver)is str and type(name)is str and scope=='local' and (driver,name) in (('host','host'),('null','none'))
+            if accepted:
+                self.assertEqual(m.configured_network_census(docker),('10.253.240.0/28','10.253.240.1'))
+                self.assertEqual([a[1] for a in calls],['ls','inspect','ls'])
+            else:
+                with self.assertRaises(ValueError):m.configured_network_census(docker)
+                self.assertEqual([a[1] for a in calls],['ls','inspect'])
+            self.assertIsNone(row['IPAM']['Config'])
+
+    def test_builtin_null_does_not_skip_relist_identity_or_other_network_overlap(self):
+        import json
+        m=self.module();calls=[]
+        rows={'a'*64:{'Id':'a'*64,'Driver':'host','Name':'host','Scope':'local','IPAM':{'Config':None}},'b'*64:{'Id':'b'*64,'Driver':'bridge','IPAM':{'Config':[{'Subnet':'10.253.240.0/28'}]}}}
+        def docker(*args,**kw):
+            calls.append(args)
+            return '\n'.join(rows) if args[1]=='ls' else json.dumps([rows[args[2]]])
+        self.assertEqual(m.configured_network_census(docker),('10.253.240.16/28','10.253.240.17'))
+        self.assertEqual([a[1] for a in calls],['ls','inspect','inspect','ls'])
+        calls=[]
+        def changed(*args,**kw):
+            calls.append(args)
+            return ('a'*64 if len(calls)==1 else 'b'*64) if args[1]=='ls' else json.dumps([rows['a'*64]])
+        with self.assertRaises(ValueError):m.configured_network_census(changed)
+        rows['a'*64]['Id']='c'*64;calls=[]
+        with self.assertRaises(ValueError):m.configured_network_census(docker)
+        self.assertEqual([a[1] for a in calls],['ls','inspect'])
+
+    def test_builtin_identity_does_not_admit_missing_or_malformed_config(self):
+        import json
+        m=self.module()
+        for ipam in (None,{}, {'Config':{}},{'Config':False},{'Config':'null'},{'Config':[{}]*9}):
+            calls=[]
+            def docker(*args,**kw):
+                calls.append(args)
+                return 'a'*64 if args[1]=='ls' else json.dumps([{'Id':'a'*64,'Driver':'host','Name':'host','Scope':'local','IPAM':ipam}])
+            with self.assertRaises(ValueError):m.configured_network_census(docker)
+            self.assertEqual([a[1] for a in calls],['ls','inspect'])

@@ -20,7 +20,7 @@ import uuid
 
 
 LIMIT = 1048576
-MANIFEST_SHA256 = '9bffcc3f81d0cfd8dee4bea56f7dc1598eb76b6eb9476ca3114d88398906e2c9'
+MANIFEST_SHA256 = 'e6d2831df6cc4d4d1a98a67db5d8bc3bde1a0a0d60c3d497b1fd4b9935f62ac1'
 
 
 class Refused(ValueError):
@@ -150,9 +150,9 @@ def execute_startup_controls(data, relay_source, scanner_source):
     module.HELD_RELAY_SOURCE = relay_source
     module.HELD_SCANNER_SOURCE = scanner_source
     suite = unittest.defaultTestLoader.loadTestsFromModule(module)
-    require(suite.countTestCases() == 52)
+    require(suite.countTestCases() == 55)
     result = unittest.TextTestRunner().run(suite)
-    require(result.wasSuccessful() and result.testsRun == 52)
+    require(result.wasSuccessful() and result.testsRun == 55)
 
 
 def execute_oracle_controls(data, oracle_source):

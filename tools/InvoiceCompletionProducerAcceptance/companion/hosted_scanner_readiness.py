@@ -147,17 +147,25 @@ def configured_network_census(docker):
             if 'Config' not in ipam:
                 raise ValueError('Configured network census IPAM shape differs')
             if config is None:
+                builtin_driver = rows[0].get('Driver')
+                builtin_name = rows[0].get('Name')
+                builtin_scope = rows[0].get('Scope')
+                if (type(builtin_driver) is not str or type(builtin_name) is not str
+                        or type(builtin_scope) is not str or builtin_scope != 'local'
+                        or (builtin_driver, builtin_name) not in (('host', 'host'), ('null', 'none'))):
+                    raise ValueError('Configured network census IPAM shape differs')
+                config = []
+            else:
                 raise ValueError('Configured network census IPAM shape differs')
-            raise ValueError('Configured network census IPAM shape differs')
-        if len(ipam['Config']) > 8:
+        if len(config) > 8:
             raise ValueError('Configured network census IPAM shape differs')
         driver = rows[0].get('Driver')
         if type(driver) is not str or re.fullmatch('[a-zA-Z0-9_.-]{1,64}', driver) is None:
             raise ValueError('Configured network census driver differs')
-        if not ipam['Config'] and driver not in ('host', 'null'):
+        if not config and driver not in ('host', 'null'):
             raise ValueError('Configured network census unknown empty IPAM refused')
         seen = set()
-        for row in ipam['Config']:
+        for row in config:
             if type(row) is not dict or type(row.get('Subnet')) is not str:
                 raise ValueError('Configured network census subnet shape differs')
             subnet = ipaddress.ip_network(row['Subnet'], strict=True)
