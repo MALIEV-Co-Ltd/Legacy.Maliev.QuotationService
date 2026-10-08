@@ -1,0 +1,40 @@
+name: Held host lifetime acquisition controls
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - tools/InvoiceCompletionProducerAcceptance/companion/held_host_lifetime.py
+      - tools/InvoiceCompletionProducerAcceptance/companion/owned_front_host.py
+      - tools/InvoiceCompletionProducerAcceptance/companion/held-host-controls/**
+      - .github/workflows/held-host-lifetime-qualification.yml
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-held-lifetime:
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'codex/held-host-lifetime-native-20261008')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      REVIEWED_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify pure caller-custody regressions
+        run: python3 -B tools/InvoiceCompletionProducerAcceptance/companion/held-host-controls/test_harness_custody.py
+      - name: Exercise original-wrapper synthetic acquisition lifetimes
+        run: python3 -B tools/InvoiceCompletionProducerAcceptance/companion/held-host-controls/hosted_controls.py
+      - name: Retain allowlisted synthetic lifetime receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: held-host-native-${{ github.event.pull_request.head.sha || github.sha }}
+          path: TestResults/HeldHostNative/native-lifetime.json
+          if-no-files-found: error
+          retention-days: 7
+          include-hidden-files: false
