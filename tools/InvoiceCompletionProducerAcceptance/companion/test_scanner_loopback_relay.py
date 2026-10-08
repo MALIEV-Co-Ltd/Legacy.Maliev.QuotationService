@@ -88,7 +88,9 @@ class RelayTests(unittest.TestCase):
         container = {"Id": scanner.container_id, "Image": scanner.image_id, "Created": "created",
                      "State": {"Running": True, "Paused": False, "Restarting": False, "StartedAt": "started"},
                      "Config": {"Labels": {"financial.acceptance.run": scanner.run_id}},
-                     "HostConfig": {"NetworkMode": scanner.network_id, "PortBindings": {}, "PublishAllPorts": False},
+                     "HostConfig": {"NetworkMode": scanner.network_id, "PortBindings": {}, "PublishAllPorts": False,
+                                    "Memory": 1610612736, "NanoCpus": 2000000000, "CapDrop": ["ALL"],
+                                    "CapAdd": None, "ReadonlyRootfs": True},
                      "NetworkSettings": {"Networks": {"owned": attached}, "Ports": {"3310/tcp": None}}}
         network = {"Id": scanner.network_id, "Internal": True, "Driver": "bridge", "Labels": {"financial.acceptance.run": scanner.run_id},
                    "Containers": {scanner.container_id: {"IPv4Address": "172.31.0.2/16", "EndpointID": "d"*64}},
