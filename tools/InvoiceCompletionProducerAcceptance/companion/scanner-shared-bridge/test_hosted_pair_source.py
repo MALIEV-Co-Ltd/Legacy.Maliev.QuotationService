@@ -658,3 +658,35 @@ class StorageDiagnosticControls(unittest.TestCase):
         for family in ('launcher','scanner','runner'):
             d,*rest=self.original_failure(reference,clone=family)
             self.assertEqual(d.FIRST[2],'storage-denial-frame-globals')
+
+    def test_complete_create_wrapper_is_format_only_private_candidate(self):
+        prefix='Error response from daemon: invalid config for network '
+        suffix=': invalid endpoint settings:\nuser specified IP address is supported only when connecting to networks with user configured subnets'
+        for network in ('a'*64,'0123456789abcdef'*4):
+            for ending in ('','\n'):
+                message=prefix+network+suffix+ending
+                d,*rest=self.original_failure(message)
+                self.assertEqual(d.FIRST,('storage-create','cli-nonzero','docker-create-wrapped-static-ip-requires-configured-subnet'))
+                self.assertEqual(__import__('re').compile(d.STORAGE_CREATE_WRAPPED_PATTERN).groups,0)
+                d.bind('b'*40,'123',1,'c'*64,'pair');receipt=d.projection()
+                self.assertEqual(len(receipt),14)
+                for key in ('pairAccepted','cleanupAccepted','fileRuntimeAccepted','genuineEightHostFinancialAccepted'):
+                    self.assertIs(receipt[key],False)
+                self.assertNotIn(network,__import__('json').dumps(receipt))
+                self.assertNotIn(message,__import__('json').dumps(receipt))
+
+    def test_create_wrapper_rejects_identifier_injection_and_foreign_route(self):
+        prefix='Error response from daemon: invalid config for network '
+        suffix=': invalid endpoint settings:\nuser specified IP address is supported only when connecting to networks with user configured subnets'
+        reference=prefix+'a'*64+suffix
+        ids=('a'*63,'a'*65,'A'*64,'g'*64,'private-network','a'*31+'\n'+'a'*32,'a'*31+':'+'a'*32,'a'*32+' PRIVATE '+'a'*32)
+        variants=tuple(prefix+network+suffix for network in ids)+(reference+'.',reference+'\n\n',reference+'\r\n',reference.replace('\n','\r\n'),reference+'\nSECOND','PRIVATE '+reference,reference+' PRIVATE',reference+'\x00',reference.replace('settings:','settings :'),reference[:-1])
+        for value in variants:
+            d,*rest=self.original_failure(value)
+            self.assertEqual(d.FIRST[2],'storage-denial-stderr-grammar')
+        for family in ('launcher','scanner','runner'):
+            d,*rest=self.original_failure(reference,clone=family)
+            self.assertEqual(d.FIRST[2],'storage-denial-frame-globals')
+        d,launcher,scanner,runner,owner,error=self.original_failure(reference,clean=False)
+        self.assertIs(type(error),runner.DockerLifecycleError)
+        self.assertNotEqual(d.FIRST[2],d.STORAGE_CREATE_WRAPPED_CLAUSE)
