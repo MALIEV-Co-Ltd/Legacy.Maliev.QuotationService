@@ -141,8 +141,8 @@ def owner_clause(error):
 
 # This classifier is diagnostic only. The original runner propagates this exact
 # error after cleanup; lifecycle quarantine errors never enter this lane.
-STORAGE_SOURCE_SHA256 = {'launcher': '606616e55992cb739fb2fd7e7f00edce5bd7e8396d15c30a99270b8a526f3763', 'scanner': 'aa6c9591d4df6b5feb7ecd7959be06b8e0743f8f83f717f392b6792d4d5a6eba', 'runner': '89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6'}
-STORAGE_SITES = {'create': (150, 150), 'docker': (120, 120), 'propagate': (385, 385), 'original': (360, 361)}
+STORAGE_SOURCE_SHA256 = {'launcher': '4fc19580f9b36063e9808efc87e18bd1aa0ee5db955c15a9fee2f65eb419a8d9', 'scanner': '9bc5ca10c4d872224a3f096aa305a1893d5b3edc89e3042141c90f3b448af33d', 'runner': '89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6'}
+STORAGE_SITES = {'create': (151, 151), 'docker': (257, 257), 'propagate': (385, 385), 'original': (360, 361)}
 STORAGE_CAPTURE = None
 STORAGE_CLAUSE = 'docker-static-ip-requires-configured-subnet'
 STORAGE_WRAPPED_CLAUSE = 'docker-wrapped-static-ip-requires-configured-subnet'

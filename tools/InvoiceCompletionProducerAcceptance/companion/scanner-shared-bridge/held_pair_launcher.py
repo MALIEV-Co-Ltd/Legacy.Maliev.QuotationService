@@ -78,7 +78,7 @@ class HeldPairLauncher:
                 and callable(scanner_docker_command.run_docker), 'Reviewed owner command seam unavailable')
         self.context = context
         self.executable_sha256 = expected_executable_sha256
-        self.scanner = sm.Scanner(run_id=context.lease_id[5:], deadline_seconds=120)
+        self.scanner = sm.Scanner(run_id=context.lease_id[5:], deadline_seconds=120, configured_network=True)
         self.bridge = None
         self.backend_id = None
         self.backend_name = 'financial-storage-' + self.scanner.run_id
@@ -127,6 +127,7 @@ class HeldPairLauncher:
             diagnostic.stage('scanner-bridge-acquire')
             self.bridge = BorrowedScannerBridge(self.scanner, self.context)
             network = self.inspect('network', self.scanner.network_id)
+            self.scanner.validate_configured_network(network)
             address = select_backend_ip(network)
             diagnostic.stage('storage-image')
             self.scanner.docker('pull', storage.IMAGE, timeout=120)

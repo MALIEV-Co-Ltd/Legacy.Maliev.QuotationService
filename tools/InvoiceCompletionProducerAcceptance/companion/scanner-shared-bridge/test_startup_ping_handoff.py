@@ -586,3 +586,187 @@ class StartupPacingControls(unittest.TestCase):
         self.assertIs(type(error),TimeoutError)
         calls,waits,now,error=self.run_loop(pong=1,slow=121)
         self.assertEqual(len(calls),1);self.assertIs(type(error),TimeoutError)
+
+class ConfiguredNetworkControls(unittest.TestCase):
+    def module(self):
+        import ast,ipaddress,json,re,uuid
+        from datetime import datetime,timezone
+        source=ast.parse(HELD_SCANNER_SOURCE)
+        cls=next(n for n in source.body if isinstance(n,ast.ClassDef) and n.name=='Scanner')
+        keep={'__init__','validate_configured_network','docker','close','counters'}
+        start=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='start')
+        first=next(i for i,n in enumerate(start.body) if isinstance(n,ast.If) and any(isinstance(v,ast.Name) and v.id=='configured_network_census' for v in ast.walk(n)))
+        last=next(i for i,n in enumerate(start.body) if isinstance(n,ast.Assign) and any(isinstance(v,ast.Subscript) and isinstance(v.slice,ast.Constant) and v.slice.value=='resources' for v in n.targets))
+        allocate=ast.FunctionDef(name='allocate',args=ast.arguments(posonlyargs=[],args=[ast.arg(arg='self')],kwonlyargs=[],kw_defaults=[],defaults=[]),body=start.body[first:last],decorator_list=[])
+        cls.body=[n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name in keep]+[allocate]
+        nodes=[n for n in source.body if (isinstance(n,ast.Assign) and any(isinstance(v,ast.Name) and (v.id.startswith('CONFIGURED_') or v.id=='IMAGE') for v in n.targets)) or (isinstance(n,ast.FunctionDef) and n.name=='configured_network_census')]+[cls]
+        m=types.ModuleType('configured_network_source_model')
+        m.__dict__.update(ipaddress=ipaddress,json=json,re=re,uuid=uuid,datetime=datetime,timezone=timezone,Path=__import__('pathlib').Path,time=types.SimpleNamespace(monotonic=lambda:0.0))
+        exec(compile(ast.fix_missing_locations(ast.Module(body=nodes,type_ignores=[])),'<held-configured-network>','exec'),m.__dict__)
+        return m
+
+    def driver(self,m,configs=(),fault=None):
+        import json
+        calls=[];ids=tuple(format(i+1,'064x') for i in range(len(configs)))
+        def docker(*args,timeout=30,**kw):
+            calls.append(args)
+            self.assertGreater(timeout,0);self.assertLessEqual(timeout,3)
+            if fault is not None:raise fault
+            if args[1]=='ls':return '\n'.join(ids)
+            i=ids.index(args[2]);return json.dumps([{'Id':ids[i],'Driver':'bridge','IPAM':{'Config':configs[i]}}])
+        return docker,calls
+
+    def owned(self,m):
+        from datetime import datetime,timedelta,timezone
+        owner=m.Scanner(run_id='modeled-run',configured_network=True)
+        owner.network_id='a'*64;owner._configured_subnet=('10.253.240.0/28','10.253.240.1')
+        owner.receipt['network']={'name':owner.name+'-network','owned':True,'allocationIssuedUtc':(datetime.now(timezone.utc)-timedelta(seconds=5)).isoformat()}
+        row={'Id':owner.network_id,'Name':owner.name+'-network','Labels':{'financial.acceptance.run':owner.run_id},'Created':datetime.now(timezone.utc).isoformat(),'Containers':{},'Internal':True,'Driver':'bridge','Scope':'local','EnableIPv6':False,'Ingress':False,'Attachable':False,'IPAM':{'Driver':'default','Config':[{'Subnet':owner._configured_subnet[0],'Gateway':owner._configured_subnet[1]}]}}
+        return owner,row
+
+    def test_default_option_and_source_finite_private_host_bounds(self):
+        import ipaddress
+        m=self.module();self.assertIs(m.Scanner(run_id='modeled').configured_network,False)
+        for value in (1,None,'true'):
+            with self.assertRaises(ValueError):m.Scanner(run_id='modeled',configured_network=value)
+        self.assertEqual(len(m.CONFIGURED_SUBNET_CANDIDATES),16)
+        for value in m.CONFIGURED_SUBNET_CANDIDATES:
+            subnet=ipaddress.ip_network(value,strict=True)
+            self.assertEqual(str(subnet),value);self.assertEqual(subnet.prefixlen,28)
+            self.assertTrue(subnet.subnet_of(ipaddress.ip_network('10.0.0.0/8')))
+            self.assertEqual(len(tuple(subnet.hosts())),14)
+
+    def test_actual_read_only_census_skips_overlap_not_assumed_free(self):
+        m=self.module();docker,calls=self.driver(m,([{'Subnet':'10.253.240.0/28','Gateway':'10.253.240.1'}],[{'Subnet':'172.17.0.0/16'}]))
+        self.assertEqual(m.configured_network_census(docker),('10.253.240.16/28','10.253.240.17'))
+        self.assertEqual([args[1] for args in calls],['ls','inspect','inspect','ls'])
+
+    def test_finite_exhaustion_and_invalid_source_candidate(self):
+        m=self.module();docker,calls=self.driver(m,([{'Subnet':'10.0.0.0/8'}],))
+        with self.assertRaisesRegex(ValueError,'exhausted'):m.configured_network_census(docker)
+        for value in ('10.253.240.1/28','8.8.8.0/28','10.253.240.0/29','fd00::/64'):
+            m.CONFIGURED_SUBNET_CANDIDATES=(value,);docker,calls=self.driver(m)
+            with self.assertRaises(ValueError):m.configured_network_census(docker)
+
+    def test_foreign_duplicate_excess_and_changed_id_census_refuse(self):
+        m=self.module()
+        for listing in ('not-an-id','a'*64+'\n'+'a'*64,'\n'.join(format(i,'064x') for i in range(33))):
+            with self.assertRaises(ValueError):m.configured_network_census(lambda *args,**kw:listing)
+        calls=[]
+        def changed(*args,**kw):
+            calls.append(args);return '' if len(calls)==1 else 'a'*64
+        with self.assertRaisesRegex(ValueError,'changed'):m.configured_network_census(changed)
+
+    def test_malformed_unknown_noncanonical_cidr_and_metadata_refuse(self):
+        m=self.module()
+        for config in (None,{},[{}],[{'Subnet':'10.0.0.1/24'}],[{'Subnet':'not-cidr'}],[{'Subnet':'10.0.0.0/24','Gateway':'11.0.0.1'}],[{'Subnet':'10.0.0.0/24','IPRange':'11.0.0.0/24'}],[{'Subnet':'10.0.0.0/24'}]*2):
+            docker,calls=self.driver(m,(config,))
+            with self.assertRaises(ValueError):m.configured_network_census(docker)
+        import json
+        for row in ({'Id':'b'*64,'IPAM':{'Config':[]}}, {'Id':'a'*64,'IPAM':{}},{}):
+            with self.assertRaises(ValueError):m.configured_network_census(lambda *args,**kw:'a'*64 if args[1]=='ls' else json.dumps([row]))
+
+    def test_census_bounds_deadline_and_original_fault_forbid_more_calls(self):
+        m=self.module()
+        with self.assertRaises(ValueError):m.configured_network_census(lambda *args,**kw:'x'*8193)
+        clocks=iter((0,0,16));m.time.monotonic=lambda:next(clocks);calls=[]
+        with self.assertRaises(TimeoutError):m.configured_network_census(lambda *args,**kw:calls.append(args) or '')
+        self.assertEqual(len(calls),1)
+        m=self.module();error=KeyboardInterrupt('PRIVATE');docker,calls=self.driver(m,fault=error)
+        with self.assertRaises(KeyboardInterrupt) as raised:m.configured_network_census(docker)
+        self.assertIs(raised.exception,error);self.assertEqual(len(calls),1)
+
+    def test_owned_config_generation_retained_before_policy_failure_cleanup_allowed(self):
+        m=self.module();owner,row=self.owned(m);row['Internal']=False
+        with self.assertRaises(ValueError):owner.validate_configured_network(row,empty=True)
+        self.assertEqual(owner._configured_network_created,row['Created']);self.assertTrue(owner._configured_network_failed)
+        owner.validate_configured_network(row,empty=True,cleanup=True)
+        row['Internal']=True
+        with self.assertRaisesRegex(ValueError,'prior'):owner.validate_configured_network(row)
+
+    def test_exact_plan_policy_and_nonempty_census_never_accept(self):
+        import copy
+        m=self.module()
+        mutations=(('Internal',False),('Driver','overlay'),('Scope','swarm'),('EnableIPv6',True),('Ingress',True),('Attachable',True),('Containers',{'foreign':{}}))
+        for key,value in mutations:
+            owner,row=self.owned(m);row[key]=value
+            with self.assertRaises(ValueError):owner.validate_configured_network(row,empty=True)
+        for key,value in (('Subnet','10.253.241.0/28'),('Gateway','10.253.240.2'),('IPRange','10.253.240.0/29'),('AuxiliaryAddresses',{'foreign':'10.253.240.3'})):
+            owner,row=self.owned(m);row['IPAM']['Config'][0][key]=value
+            with self.assertRaises(ValueError):owner.validate_configured_network(row,empty=True)
+
+    def test_cleanup_exact_handle_name_label_generation_census_not_live_policy(self):
+        from datetime import datetime,timedelta,timezone
+        m=self.module();owner,row=self.owned(m);owner.validate_configured_network(row,empty=True)
+        for key,value in (('Id','b'*64),('Name','foreign'),('Labels',{}),('Created',(datetime.now(timezone.utc)+timedelta(seconds=5)).isoformat()),('Containers',{'foreign':{}})):
+            old=row[key];row[key]=value
+            with self.assertRaises(ValueError):owner.validate_configured_network(row,empty=True,cleanup=True)
+            row[key]=old
+        row['Internal']=False;owner.validate_configured_network(row,empty=True,cleanup=True)
+
+    def test_single_atomic_create_has_configured_subnet_and_inspect_before_container(self):
+        import json
+        m=self.module();owner,row=self.owned(m);owner.network_id=None;calls=[]
+        def docker(*args,**kw):
+            calls.append(args)
+            if args[1]=='ls':return ''
+            if args[1]=='create':
+                self.assertIsNotNone(owner._configured_subnet);self.assertIn('allocationIssuedUtc',owner.receipt['network'])
+                row['Created']=m.datetime.now(m.timezone.utc).isoformat()
+                return row['Id']
+            if args[1]=='inspect':return json.dumps([row])
+            self.fail('unexpected actor')
+        owner.docker=docker;owner.allocate()
+        self.assertEqual(sum(args[1]=='create' for args in calls),1)
+        create=next(args for args in calls if args[1]=='create')
+        self.assertEqual(create[create.index('--subnet')+1],'10.253.240.0/28')
+        self.assertEqual(create[create.index('--gateway')+1],'10.253.240.1')
+        self.assertTrue(owner._configured_network_observed);self.assertEqual(calls[-1][:2],('network','inspect'))
+
+    def test_atomic_conflict_does_not_retry_or_abandon_preallocation_custody(self):
+        import subprocess
+        m=self.module();owner,row=self.owned(m);owner.network_id=None;calls=[];error=subprocess.CalledProcessError(1,[],stderr='PRIVATE')
+        def docker(*args,**kw):
+            calls.append(args)
+            if args[1]=='ls':return ''
+            if args[1]=='create':raise error
+            self.fail('retry/foreign operation')
+        owner.docker=docker
+        with self.assertRaises(subprocess.CalledProcessError) as raised:owner.allocate()
+        self.assertIs(raised.exception,error);self.assertIsNone(owner.network_id)
+        self.assertIn('allocationIssuedUtc',owner.receipt['network'])
+        self.assertEqual(sum(args[1]=='create' for args in calls),1)
+
+    def test_actual_cleanup_removes_only_owned_empty_generation_keeps_policy_failure_false(self):
+        import json
+        m=self.module();owner,row=self.owned(m);owner.validate_configured_network(row,empty=True)
+        owner._configured_network_failed=True;calls=[]
+        def docker(*args,**kw):
+            calls.append(args)
+            if args[1]=='inspect':return json.dumps([row])
+            return ''
+        owner.docker=docker
+        self.assertFalse(owner.close());self.assertEqual([args[1] for args in calls],['inspect','rm','ls'])
+        self.assertTrue(owner.receipt['network']['cleanupVerified']);self.assertFalse(owner.receipt['cleanupVerified'])
+        owner,row=self.owned(m);owner.validate_configured_network(row,empty=True);row['Created']='2000-01-01T00:00:00+00:00';calls=[]
+        owner.docker=lambda *args,**kw:calls.append(args) or json.dumps([row]) if args[1]=='inspect' else ''
+        self.assertFalse(owner.close());self.assertFalse(any(args[1]=='rm' for args in calls))
+
+
+    def test_empty_ipam_requires_observed_builtin_host_or_null_driver(self):
+        import json
+        m=self.module()
+        for driver,accepted in (('host',True),('null',True),('bridge',False),('unknown-plugin',False),('',False),(None,False),(1,False)):
+            calls=[]
+            def docker(*args,**kw):
+                calls.append(args)
+                if args[1]=='ls':return 'a'*64
+                row={'Id':'a'*64,'IPAM':{'Config':[]}}
+                if driver is not None:row['Driver']=driver
+                return json.dumps([row])
+            if accepted:
+                self.assertEqual(m.configured_network_census(docker),('10.253.240.0/28','10.253.240.1'))
+                self.assertEqual([args[1] for args in calls],['ls','inspect','ls'])
+            else:
+                with self.assertRaises(ValueError):m.configured_network_census(docker)
+                self.assertEqual([args[1] for args in calls],['ls','inspect'])

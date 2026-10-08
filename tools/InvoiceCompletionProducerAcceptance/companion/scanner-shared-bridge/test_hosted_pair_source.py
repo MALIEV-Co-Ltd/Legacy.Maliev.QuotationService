@@ -488,6 +488,7 @@ class StorageDiagnosticControls(unittest.TestCase):
         owner.finished=False;owner.failure=False;owner.bridge=None;owner.backend_create_attempted=False
         owner.context=object();owner.backend_name='modeled-owned-name';owner.scanner=scanner.Scanner()
         owner.scanner.start=lambda:None;owner.scanner.network_id='modeled-network'
+        owner.scanner.validate_configured_network=lambda network:None
         owner.inspect=lambda kind,handle:({'IPAM':{'Config':[{'Subnet':'172.20.0.0/24'}]},'Containers':{}} if kind=='network' else {'Id':storage.IMAGE_ID,'RepoDigests':[storage.IMAGE],'Config':{}})
         owner.labels=lambda:{};launcher.OWNER=owner
         if clone == 'launcher':
