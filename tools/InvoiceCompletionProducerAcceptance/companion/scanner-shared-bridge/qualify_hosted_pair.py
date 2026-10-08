@@ -20,7 +20,7 @@ import uuid
 
 
 LIMIT = 1048576
-MANIFEST_SHA256 = 'e6d2831df6cc4d4d1a98a67db5d8bc3bde1a0a0d60c3d497b1fd4b9935f62ac1'
+MANIFEST_SHA256 = '9a81de2e9d29a229ed0a3d5da356f7c63f8068a54b696bce486d3d6d0610c3b3'
 
 
 class Refused(ValueError):
@@ -203,6 +203,7 @@ def observe_raw_git_version(runner, qualifier):
 class HeldImports(importlib.abc.MetaPathFinder, importlib.abc.Loader):
     def __init__(self, held):
         self.held = held
+        self._observer_class_births = {}
 
     def find_spec(self, fullname, path=None, target=None):
         if fullname in self.held:
@@ -214,7 +215,14 @@ class HeldImports(importlib.abc.MetaPathFinder, importlib.abc.Loader):
 
     def exec_module(self, module):
         module.__file__ = '<private-held-source:' + module.__name__ + '>'
+        tracked = module.__name__ in ('owned_storage_backend', 'borrowed_scanner_bridge')
+        if tracked:
+            require(module.__name__ not in self._observer_class_births)
+            self._observer_class_births[module.__name__] = (module, None)
         exec(compile(self.held[module.__name__], module.__file__, 'exec'), module.__dict__)
+        if tracked:
+            name = 'AdmissionError' if module.__name__ == 'owned_storage_backend' else 'BridgeRefused'
+            self._observer_class_births[module.__name__] = (module, getattr(module, name))
 
 
 def owners_retained():
@@ -290,6 +298,11 @@ def admit_and_load():
     diagnostic.capture_network_sites(scanner, held['hosted_scanner_readiness'])
     diagnostic.capture_storage_sites(sys.modules['held_pair_launcher'], scanner, runner,
         {'launcher':held['held_pair_launcher'], 'scanner':held['hosted_scanner_readiness'], 'runner':held['scanner_docker_command']})
+    import owned_storage_backend as storage
+    import storage_owner_command as storage_command
+    diagnostic.capture_observer_sites(storage, storage_command, bridge,
+        {'storage':held['owned_storage_backend'], 'command':held['storage_owner_command']},
+        storage.__spec__.loader._observer_class_births)
     return root, head, manifest, manifest_bytes, h, qualifier, runner
 
 

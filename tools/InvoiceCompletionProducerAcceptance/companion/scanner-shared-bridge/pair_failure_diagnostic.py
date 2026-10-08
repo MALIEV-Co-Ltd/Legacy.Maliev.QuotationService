@@ -293,6 +293,97 @@ def storage_clause(error):
         return 'storage-denial-stderr-grammar'
     return STORAGE_CLAUSE
 
+OBSERVER_SOURCE_SHA256 = {'storage': '09a1a03b2da2f10949f21d107d66130ff02e69060f43aa9dd4c01ad500133d24', 'command': 'f91b5f7ec7db47407a37d047ca67db6687b7a5946d0ad835ef6d382df79c9219'}
+OBSERVER_DECLARATIONS = {'storage': ('Lease.validate', 'inspect', 'instant', 'observe', 'observe.refresh', 'observe.ticks', 'require', 'validate_snapshots'), 'command': ('storage_command',)}
+OBSERVER_SITES = (('storage', 'require', 28, 28, 'storage-observer-raise-1952d2c9c0cf', 'direct-raise'), ('storage', 'instant', 36, 36, 'storage-observer-guard-edbc0b38823c', 'require-call'), ('storage', 'Lease.validate', 69, 69, 'storage-observer-guard-ae3e6febffb7', 'require-call'), ('storage', 'Lease.validate', 70, 70, 'storage-observer-guard-d51c78de514b', 'require-call'), ('storage', 'Lease.validate', 71, 71, 'storage-observer-guard-56e29cb41c63', 'require-call'), ('storage', 'Lease.validate', 72, 72, 'storage-observer-guard-14b3e0824ccb', 'require-call'), ('storage', 'Lease.validate', 73, 74, 'storage-observer-guard-2c2af4352e5f', 'require-call'), ('storage', 'Lease.validate', 76, 76, 'storage-observer-guard-5aa8774c15bd', 'require-call'), ('storage', 'Lease.validate', 77, 78, 'storage-observer-guard-5d9fb1a7da11', 'require-call'), ('storage', 'Lease.validate', 80, 80, 'storage-observer-guard-76279b9ee99e', 'require-call'), ('storage', 'Lease.validate', 81, 81, 'storage-observer-guard-51038eb42129', 'require-call'), ('storage', 'validate_snapshots', 96, 96, 'storage-observer-guard-06bd78b7aefb', 'require-call'), ('storage', 'validate_snapshots', 98, 100, 'storage-observer-guard-86e3569a7270', 'require-call'), ('storage', 'validate_snapshots', 101, 102, 'storage-observer-guard-ff1fc20621dc', 'require-call'), ('storage', 'validate_snapshots', 103, 103, 'storage-observer-guard-6a8c0ad2f0fa', 'require-call'), ('storage', 'validate_snapshots', 104, 105, 'storage-observer-guard-6ef702595a5d', 'require-call'), ('storage', 'validate_snapshots', 106, 106, 'storage-observer-guard-479df8bbe28a', 'require-call'), ('storage', 'validate_snapshots', 107, 111, 'storage-observer-guard-868c5a26475c', 'require-call'), ('storage', 'validate_snapshots', 112, 113, 'storage-observer-guard-458064e2a0fe', 'require-call'), ('storage', 'validate_snapshots', 114, 114, 'storage-observer-guard-d224eaa6aecd', 'require-call'), ('storage', 'validate_snapshots', 116, 116, 'storage-observer-guard-0a2ccf3129e2', 'require-call'), ('storage', 'validate_snapshots', 118, 119, 'storage-observer-guard-c89b90240256', 'require-call'), ('storage', 'validate_snapshots', 120, 123, 'storage-observer-guard-afe49d4909a5', 'require-call'), ('storage', 'validate_snapshots', 124, 124, 'storage-observer-guard-b3bc43eca61c', 'require-call'), ('storage', 'validate_snapshots', 125, 126, 'storage-observer-guard-f09d6dc74b0e', 'require-call'), ('storage', 'validate_snapshots', 128, 128, 'storage-observer-guard-45b6c7d391ad', 'require-call'), ('storage', 'inspect', 139, 139, 'storage-observer-guard-5d48a6e5c1a8', 'require-call'), ('storage', 'observe', 150, 151, 'storage-observer-guard-c83a9c00c314', 'require-call'), ('storage', 'observe', 153, 155, 'storage-observer-guard-e81c1224458e', 'require-call'), ('storage', 'observe', 161, 163, 'storage-observer-guard-d8735314e38c', 'require-call'), ('storage', 'observe', 165, 167, 'storage-observer-guard-45d5c757846d', 'require-call'), ('storage', 'observe.refresh', 170, 173, 'storage-observer-guard-d3d34e2d23a6', 'require-call'), ('storage', 'observe.ticks', 188, 188, 'storage-observer-guard-5f8b3d47c32f', 'require-call'), ('storage', 'observe', 190, 190, 'storage-observer-guard-039fb9b4b1bd', 'require-call'), ('storage', 'observe', 191, 191, 'storage-observer-guard-de3ed74a377d', 'require-call'), ('storage', 'observe', 192, 192, 'storage-observer-guard-abd19a8b2aeb', 'require-call'), ('storage', 'observe', 193, 193, 'storage-observer-guard-bb54b93b7f19', 'require-call'), ('storage', 'observe', 195, 195, 'storage-observer-guard-061c297b7ade', 'require-call'), ('storage', 'observe', 199, 199, 'storage-observer-guard-7aabde4732e3', 'require-call'), ('storage', 'observe', 201, 201, 'storage-observer-guard-5446ea54fb7c', 'require-call'), ('storage', 'observe', 203, 203, 'storage-observer-guard-ca809ba630f0', 'require-call'), ('storage', 'observe', 205, 205, 'storage-observer-guard-28a32a81f22f', 'require-call'), ('storage', 'observe', 206, 206, 'storage-observer-guard-2e258852c86e', 'require-call'), ('command', 'storage_command', 15, 15, 'storage-observer-raise-d245d450fc8b', 'direct-raise'), ('command', 'storage_command', 20, 20, 'storage-observer-raise-91f26d2e22db', 'direct-raise'), ('command', 'storage_command', 32, 32, 'storage-observer-raise-1c5d7799be35', 'direct-raise'), ('command', 'storage_command', 35, 35, 'storage-observer-raise-a74aa40dfead', 'direct-raise'))
+OBSERVER_CAPTURE = None
+
+
+def capture_observer_sites(storage, command, bridge, sources, original_classes):
+    global OBSERVER_CAPTURE
+    import hashlib
+    import types
+    modules = {'storage': storage, 'command': command}
+    if (OBSERVER_CAPTURE is not None or type(sources) is not dict or set(sources) != set(modules)
+            or any(type(module) is not types.ModuleType for module in modules.values())
+            or any(type(sources[name]) is not bytes
+                   or hashlib.sha256(sources[name]).hexdigest() != OBSERVER_SOURCE_SHA256[name]
+                   for name in modules)):
+        raise ValueError('Qualified observer source association refused')
+    if (type(original_classes) is not dict
+            or set(original_classes) != {'owned_storage_backend', 'borrowed_scanner_bridge'}
+            or any(type(value) is not tuple or len(value) != 2 for value in original_classes.values())
+            or original_classes['owned_storage_backend'][0] is not storage
+            or original_classes['borrowed_scanner_bridge'][0] is not bridge
+            or storage.AdmissionError is not original_classes['owned_storage_backend'][1]
+            or bridge.BridgeRefused is not original_classes['borrowed_scanner_bridge'][1]
+            or command.BridgeRefused is not original_classes['borrowed_scanner_bridge'][1]):
+        raise ValueError('Qualified observer original class birth differs')
+    if (type(storage.AdmissionError) is not type or storage.AdmissionError.__bases__ != (ValueError,)
+            or storage.AdmissionError.__module__ != storage.__name__
+            or storage.AdmissionError.__qualname__ != 'AdmissionError'
+            or command.BridgeRefused is not bridge.BridgeRefused):
+        raise ValueError('Qualified observer original class differs')
+    captured = {}
+    for name, module in modules.items():
+        expected_module = compile(sources[name], '<qualified-observer-structure>', 'exec', dont_inherit=True)
+        for path in OBSERVER_DECLARATIONS[name]:
+            parts = path.split('.')
+            if parts[0] == 'Lease':
+                value = getattr(module.Lease, parts[1])
+                nested = ()
+            else:
+                value = getattr(module, parts[0])
+                nested = parts[1:]
+            if type(value) is not types.FunctionType or value.__globals__ is not module.__dict__:
+                raise ValueError('Qualified observer declaration differs')
+            code = value.__code__
+            for child in nested:
+                code = expected_code(code, child)
+            if not same_code(expected_code(expected_module, path), code):
+                raise ValueError('Qualified observer declaration differs')
+            captured[(name, path)] = code
+    OBSERVER_CAPTURE = (storage.AdmissionError, command.BridgeRefused, tuple(captured.items()),
+                        tuple((name, module.__dict__) for name, module in modules.items()))
+
+
+def observer_clause(error):
+    if CURRENT_STAGE != 'storage-observe' or OBSERVER_CAPTURE is None:
+        return 'unclassified-source-clause'
+    storage_error, command_error, captured, namespaces = OBSERVER_CAPTURE
+    if type(error) not in (storage_error, command_error):
+        return 'unclassified-source-clause'
+    codes, globals_by_module = dict(captured), dict(namespaces)
+    trace = error.__traceback__
+    frames = []
+    while trace is not None:
+        if len(frames) == TRACE_LIMIT:
+            return 'unclassified-source-clause'
+        frames.append((trace.tb_frame.f_code, trace.tb_lineno, trace.tb_frame.f_globals))
+        trace = trace.tb_next
+    if not frames:
+        return 'unclassified-source-clause'
+    code, line, namespace = frames[-1]
+    if type(error) is command_error:
+        for module, path, start, end, clause, kind in OBSERVER_SITES:
+            if (module == 'command' and kind == 'direct-raise'
+                    and code is codes[(module, path)] and namespace is globals_by_module[module]
+                    and start <= line <= end):
+                return clause
+        return 'unclassified-source-clause'
+    if (len(frames) < 2 or code is not codes[('storage', 'require')]
+            or namespace is not globals_by_module['storage']
+            or not any(module == 'storage' and path == 'require' and kind == 'direct-raise'
+                       and start <= line <= end for module, path, start, end, clause, kind in OBSERVER_SITES)):
+        return 'unclassified-source-clause'
+    code, line, namespace = frames[-2]
+    for module, path, start, end, clause, kind in OBSERVER_SITES:
+        if (module == 'storage' and kind == 'require-call'
+                and code is codes[(module, path)] and namespace is globals_by_module[module]
+                and start <= line <= end):
+            return clause
+    return 'unclassified-source-clause'
+
 CURRENT_STAGE = 'unentered'
 FIRST = None
 BINDING = None
@@ -307,7 +398,7 @@ def stage(value):
 
 def record(category, clause):
     global FIRST
-    if category not in CATEGORIES or clause not in tuple(GUARDS.values()) + tuple(site[3] for site in H_SITES+B_SITES+NETWORK_SITES) + (STORAGE_CLAUSE, STORAGE_WRAPPED_CLAUSE, STORAGE_CREATE_WRAPPED_CLAUSE, *STORAGE_DENIALS, 'unclassified-source-clause',):
+    if category not in CATEGORIES or clause not in tuple(GUARDS.values()) + tuple(site[3] for site in H_SITES+B_SITES+NETWORK_SITES) + tuple(site[4] for site in OBSERVER_SITES) + (STORAGE_CLAUSE, STORAGE_WRAPPED_CLAUSE, STORAGE_CREATE_WRAPPED_CLAUSE, *STORAGE_DENIALS, 'unclassified-source-clause',):
         raise ValueError('Diagnostic code refused')
     if FIRST is None:
         FIRST = (CURRENT_STAGE, category, clause)
@@ -325,6 +416,8 @@ def failure(error):
                 'FileNotFoundError': 'os-failure', 'PermissionError': 'os-failure',
                 'KeyboardInterrupt': 'interrupted', 'SystemExit': 'interrupted'}.get(name, 'unclassified')
     clause = storage_clause(error) if category == 'cli-nonzero' else owner_clause(error)
+    if clause == 'unclassified-source-clause' and category == 'owner-refusal':
+        clause = observer_clause(error)
     if clause == 'unclassified-source-clause':
         clause = network_clause(error)
     record(category, clause)

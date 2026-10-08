@@ -12,6 +12,7 @@ HELD_OWNER_SOURCES = None
 HELD_H_SOURCE = None
 HELD_BRIDGE_SOURCE = None
 HELD_STORAGE_SOURCES = None
+HELD_OBSERVER_SOURCES = None
 ORIGINAL_RELAY_PREFIX = "def _relay(self):\n    relay = self.scanner.relay\n    require(relay is not None and not relay.stop.is_set() and relay.acceptor.is_alive()\n            and relay.ready_history_valid() and relay.listener.fileno() >= 0\n            and relay.listener.getsockname() == relay.endpoint\n            and relay.endpoint == ('127.0.0.1', self.scanner.port), 'Held relay unavailable')\n"
 
 
@@ -819,3 +820,110 @@ class NetworkSiteDiagnosticControls(unittest.TestCase):
             for key in ('pairAccepted','cleanupAccepted','fileRuntimeAccepted','genuineEightHostFinancialAccepted'):self.assertIs(p[key],False)
             self.assertNotIn('a'*64,__import__('json').dumps(p))
         self.assertEqual(len(set(clauses)),5)
+
+
+class StorageObserverSiteControls(unittest.TestCase):
+    def model(self):
+        import types,sys
+        d=types.ModuleType('observer_diagnostic_model')
+        exec(compile(HELD_DIAGNOSTIC_SOURCE,'<held-observer-diagnostic>','exec'),d.__dict__)
+        s=types.ModuleType('owned_storage_backend')
+        b=types.ModuleType('borrowed_scanner_bridge')
+        c=types.ModuleType('storage_owner_command')
+        loader=harness.HeldImports({'owned_storage_backend':HELD_OBSERVER_SOURCES['storage'],
+            'borrowed_scanner_bridge':HELD_BRIDGE_SOURCE,'storage_owner_command':HELD_OBSERVER_SOURCES['command']})
+        with patch.dict(sys.modules,{s.__name__:s,b.__name__:b,c.__name__:c}):
+            loader.exec_module(b);loader.exec_module(s);loader.exec_module(c)
+        d.MODEL_ORIGINAL_CLASSES=loader._observer_class_births
+        d.capture_observer_sites(s,c,b,HELD_OBSERVER_SOURCES,loader._observer_class_births)
+        d.stage('storage-observe')
+        return d,s,c,b
+
+    def observe_refusal(self,s,c):
+        import sys
+        with patch.dict(sys.modules,{'storage_owner_command':c}):
+            return s.observe(None,None,command_runner=object())
+
+    def error(self,operation):
+        try:operation()
+        except BaseException as error:return error
+        self.fail('source guard did not refuse')
+
+    def test_original_storage_first_guards_and_four_command_sites_have_fixed_codes(self):
+        import sys,types
+        d,s,c,b=self.model()
+        operations=(lambda:s.instant('PRIVATE'),lambda:s.Lease(*(['PRIVATE']*16)).validate(None),
+                    lambda:self.observe_refusal(s,c))
+        observed=[]
+        for operation in operations:
+            clause=d.observer_clause(self.error(operation));self.assertTrue(clause.startswith('storage-observer-guard-'));observed.append(clause)
+        self.assertEqual(len(set(observed)),3)
+        runner=types.ModuleType('scanner_docker_command');runner.run_docker=lambda *a,**k:'xx'
+        with patch.dict(sys.modules,{'scanner_docker_command':runner}):
+            for args,maximum in ((None,1),(['docker',1],1),(['docker','rm','a'*64],1),(['docker','exec','a'*64,'cat','/proc/1/stat'],1)):
+                observed.append(d.observer_clause(self.error(lambda:c.storage_command(args,maximum))))
+        self.assertEqual(len(set(observed)),7)
+
+    def test_nested_original_code_matches_only_original_namespace(self):
+        import types
+        d,s,c,b=self.model();code=dict(d.OBSERVER_CAPTURE[2])[('storage','observe.refresh')]
+        values={'handle':SimpleNamespace(refresh=lambda:{'networkId':'b'}),'lease':SimpleNamespace(network_id='a')}
+        def cell(value):return (lambda:value).__closure__[0]
+        closure=tuple(cell(values[name]) for name in code.co_freevars)
+        original=types.FunctionType(code,s.__dict__,closure=closure)
+        foreign=types.FunctionType(code,dict(s.__dict__),closure=closure)
+        self.assertTrue(d.observer_clause(self.error(original)).startswith('storage-observer-guard-'))
+        self.assertEqual(d.observer_clause(self.error(foreign)),'unclassified-source-clause')
+
+    def test_postcapture_foreign_globals_code_class_stage_and_overtrace_refuse(self):
+        import types
+        d,s,c,b=self.model();original=s.require
+        s.require=types.FunctionType(original.__code__,dict(s.__dict__))
+        self.assertEqual(d.observer_clause(self.error(lambda:s.instant('PRIVATE'))),'unclassified-source-clause')
+        s.require=original
+        foreign=types.FunctionType(s.instant.__code__,dict(s.__dict__))
+        self.assertEqual(d.observer_clause(self.error(lambda:foreign('PRIVATE'))),'unclassified-source-clause')
+        original_class=s.AdmissionError
+        s.AdmissionError=type('AdmissionError',(ValueError,),{})
+        self.assertEqual(d.observer_clause(self.error(lambda:s.instant('PRIVATE'))),'unclassified-source-clause')
+        s.AdmissionError=original_class
+        error=self.error(lambda:s.instant('PRIVATE'));d.stage('storage-create')
+        self.assertEqual(d.observer_clause(error),'unclassified-source-clause');d.stage('storage-observe')
+        def recurse(depth):
+            if depth:recurse(depth-1)
+            else:s.instant('PRIVATE')
+        self.assertEqual(d.observer_clause(self.error(lambda:recurse(40))),'unclassified-source-clause')
+
+    def test_precapture_substitution_nested_parent_and_class_route_refuse(self):
+        import types
+        for kind in ('source','function','nested-parent','command-class'):
+            d,s,c,b=self.model();d.OBSERVER_CAPTURE=None;raw=dict(HELD_OBSERVER_SOURCES)
+            if kind=='source':raw['storage']+=b'\n'
+            elif kind=='function':s.instant=types.FunctionType(s.instant.__code__,dict(s.__dict__))
+            elif kind=='nested-parent':s.observe.__code__=(lambda:None).__code__
+            else:c.BridgeRefused=type('BridgeRefused',(ValueError,),{})
+            with self.assertRaises(ValueError):d.capture_observer_sites(s,c,b,raw,d.MODEL_ORIGINAL_CLASSES)
+            self.assertIsNone(d.OBSERVER_CAPTURE)
+
+    def test_fixed_projection_never_reads_exception_text_or_admits_success(self):
+        d,s,c,b=self.model()
+        s.AdmissionError.__str__=lambda self:(_ for _ in ()).throw(AssertionError('text read'))
+        error=self.error(lambda:s.instant('PRIVATE'))
+        error.diagnosticCode='PRIVATE';d.failure(error)
+        d.bind('a'*40,'123',1,'b'*64,'pair')
+        proof=d.projection();self.assertEqual(len(proof),14)
+        self.assertEqual(proof['firstCategory'],'owner-refusal')
+        self.assertTrue(proof['firstDenialClause'].startswith('storage-observer-guard-'))
+        self.assertTrue(all(proof[key] is False for key in ('pairAccepted','cleanupAccepted','fileRuntimeAccepted','genuineEightHostFinancialAccepted')))
+        self.assertNotIn('PRIVATE',repr(proof))
+
+    def test_actual_loader_original_class_birth_rejects_precapture_label_clones(self):
+        for kind in ('storage','joint-bridge-command','class-record-shape','module-binding'):
+            d,s,c,b=self.model();d.OBSERVER_CAPTURE=None;original=dict(d.MODEL_ORIGINAL_CLASSES)
+            if kind=='storage':s.AdmissionError=type('AdmissionError',(ValueError,),{'__module__':s.__name__})
+            elif kind=='joint-bridge-command':
+                b.BridgeRefused=type('BridgeRefused',(ValueError,),{'__module__':b.__name__});c.BridgeRefused=b.BridgeRefused
+            elif kind=='class-record-shape':original['owned_storage_backend']=(s,)
+            else:original['owned_storage_backend']=(object(),s.AdmissionError)
+            with self.assertRaises(ValueError):d.capture_observer_sites(s,c,b,HELD_OBSERVER_SOURCES,original)
+            self.assertIsNone(d.OBSERVER_CAPTURE)

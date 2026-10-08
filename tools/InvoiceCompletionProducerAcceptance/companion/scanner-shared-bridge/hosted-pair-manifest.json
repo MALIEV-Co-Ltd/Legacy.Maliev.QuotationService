@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "a2ad8b3412c7d1aff1309afe1871d67f8a2b3142b6f868e1906b65811fd617ec",
-      "length": 36289
+      "sha256": "ef3b6a3d5238292738b03531206f608bb1c6c45d485c5640d4c03d44ba77d4ae",
+      "length": 46113
     }
   ],
   "rawControls": {
