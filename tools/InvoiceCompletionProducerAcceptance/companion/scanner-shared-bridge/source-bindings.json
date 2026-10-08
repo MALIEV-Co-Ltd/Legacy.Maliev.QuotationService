@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "2c73da1d8775bdc8085353825399358a28c51efbbc3452213fd0429bdf6d5731",
-      "length": 25365
+      "sha256": "8f92442b3f7d9151edb612bbebdb13ce067e57bb49127ee2f72d5ae587c2317c",
+      "length": 25755
     }
   ],
   "rawControls": {
@@ -164,5 +164,7 @@
     "storage-denial-stderr-type",
     "storage-denial-stderr-bound",
     "storage-denial-stderr-grammar"
-  ]
+  ],
+  "storageWrappedGrammarBase": "ff38417b376bd19a34a58f91f037e012d5e3369a",
+  "storageWrappedGrammarScope": "Exact complete source-referenced wrapper/no period, optional single terminalLF; installedEngine/cause unknown;14falsefields"
 }

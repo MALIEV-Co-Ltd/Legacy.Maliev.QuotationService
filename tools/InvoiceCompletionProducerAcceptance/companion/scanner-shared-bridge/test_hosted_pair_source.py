@@ -627,3 +627,34 @@ class StorageDiagnosticControls(unittest.TestCase):
             d.FIRST=None;d.record('cli-nonzero',code)
             self.assertEqual(d.projection()['firstDenialClause'],code)
         with self.assertRaises(ValueError):d.record('cli-nonzero','storage-denial-PRIVATE')
+
+    def test_complete_source_referenced_wrapper_has_separate_fixed_category(self):
+        expected='Error response from daemon: invalid endpoint settings:\nuser specified IP address is supported only when connecting to networks with user configured subnets'
+        original=self.prepare()[0]
+        self.assertEqual(original.STORAGE_WRAPPED_LINE,expected)
+        for ending in ('','\n'):
+            d,*rest=self.original_failure(expected+ending)
+            self.assertEqual(d.FIRST,('storage-create','cli-nonzero','docker-wrapped-static-ip-requires-configured-subnet'))
+            d.bind('a'*40,'123',1,'b'*64,'pair');receipt=d.projection()
+            self.assertEqual(len(receipt),14)
+            for key in ('pairAccepted','cleanupAccepted','fileRuntimeAccepted','genuineEightHostFinancialAccepted'):
+                self.assertIs(receipt[key],False)
+            self.assertNotIn(expected,__import__('json').dumps(receipt))
+
+    def test_wrapper_is_not_prefix_stripping_or_embedded_multicause_matching(self):
+        reference=self.prepare()[0].STORAGE_WRAPPED_LINE
+        variants=(reference+'.',reference+'.\n',reference.replace('\n','\r\n'),reference+'\r\n',
+                  reference+'\n\n',reference+'\nSECOND', 'PRIVATE '+reference,reference+' PRIVATE',
+                  reference.replace('Error response from daemon: ',''),reference.replace('settings:','settings :'),
+                  reference.replace('\n',' '),reference.replace('invalid endpoint settings:','invalid endpoint settings: invalid endpoint settings:'),
+                  reference[:-1],reference+'\x00')
+        for value in variants:
+            d,*rest=self.original_failure(value)
+            self.assertEqual(d.FIRST,('storage-create','cli-nonzero','storage-denial-stderr-grammar'))
+        # Existing source/owner refusal precedes matching even for exact newtext.
+        d,launcher,scanner,runner,owner,error=self.original_failure(reference,clean=False)
+        self.assertIs(type(error),runner.DockerLifecycleError)
+        self.assertNotEqual(d.FIRST[2],d.STORAGE_WRAPPED_CLAUSE)
+        for family in ('launcher','scanner','runner'):
+            d,*rest=self.original_failure(reference,clone=family)
+            self.assertEqual(d.FIRST[2],'storage-denial-frame-globals')

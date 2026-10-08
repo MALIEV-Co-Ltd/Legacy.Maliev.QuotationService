@@ -145,6 +145,8 @@ STORAGE_SOURCE_SHA256 = {'launcher': '606616e55992cb739fb2fd7e7f00edce5bd7e8396d
 STORAGE_SITES = {'create': (150, 150), 'docker': (120, 120), 'propagate': (385, 385), 'original': (360, 361)}
 STORAGE_CAPTURE = None
 STORAGE_CLAUSE = 'docker-static-ip-requires-configured-subnet'
+STORAGE_WRAPPED_CLAUSE = 'docker-wrapped-static-ip-requires-configured-subnet'
+STORAGE_WRAPPED_LINE = 'Error response from daemon: invalid endpoint settings:\nuser specified IP address is supported only when connecting to networks with user configured subnets'
 STORAGE_DENIALS = ('storage-denial-source-not-captured', 'storage-denial-error-type', 'storage-denial-trace-limit', 'storage-denial-trace-short', 'storage-denial-frame-code', 'storage-denial-frame-globals', 'storage-denial-frame-line', 'storage-denial-stderr-type', 'storage-denial-stderr-bound', 'storage-denial-stderr-grammar')
 STORAGE_ENGINE_LINE = 'Error response from daemon: user specified IP address is supported only when connecting to networks with user configured subnets'
 
@@ -218,6 +220,8 @@ def storage_clause(error):
         return 'storage-denial-stderr-type'
     if not 0 < len(value) < 4096:
         return 'storage-denial-stderr-bound'
+    if value in (STORAGE_WRAPPED_LINE, STORAGE_WRAPPED_LINE+'\n'):
+        return STORAGE_WRAPPED_CLAUSE
     if value not in (STORAGE_ENGINE_LINE,STORAGE_ENGINE_LINE+'\n',STORAGE_ENGINE_LINE+'.',STORAGE_ENGINE_LINE+'.\n'):
         return 'storage-denial-stderr-grammar'
     return STORAGE_CLAUSE
@@ -236,7 +240,7 @@ def stage(value):
 
 def record(category, clause):
     global FIRST
-    if category not in CATEGORIES or clause not in tuple(GUARDS.values()) + tuple(site[3] for site in H_SITES+B_SITES) + (STORAGE_CLAUSE, *STORAGE_DENIALS, 'unclassified-source-clause',):
+    if category not in CATEGORIES or clause not in tuple(GUARDS.values()) + tuple(site[3] for site in H_SITES+B_SITES) + (STORAGE_CLAUSE, STORAGE_WRAPPED_CLAUSE, *STORAGE_DENIALS, 'unclassified-source-clause',):
         raise ValueError('Diagnostic code refused')
     if FIRST is None:
         FIRST = (CURRENT_STAGE, category, clause)
