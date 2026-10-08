@@ -15,7 +15,7 @@ TOP_KEYS = frozenset(("schemaVersion", "runId", "imageReference", "genuineEightH
                       "derivedImage", "network", "allocationIssuedUtc", "startupDiagnostic", "containerGeneration",
                       "portIsolation", "loopbackRelay", "runtimePolicy", "measurement", "version", "daemonProcess",
                       "scannerPlan", "parentAdmission", "endpoint", "controls", "counters", "counterScope",
-                      "stoppedContainerObserved", "cleanupErrors", "runtimeBoundaryObservations"))
+                      "stoppedContainerObserved", "cleanupErrors", "runtimeBoundaryObservations", "startupRelayHandoff"))
 
 
 class ReceiptRefused(ValueError):
@@ -128,6 +128,22 @@ def receipt_shapes(value):
             and all(type(item) is str and re.fullmatch(r"[A-Za-z][A-Za-z0-9]{0,79}", item) for item in value["loopbackRelay"]["connectionFailureTypes"]))
 
 
+def startup_handoff(value):
+    handoff = value["startupRelayHandoff"]
+    object_keys(handoff, ("originalStartupAttempts", "originalSettledConnectRefusals",
+                          "originalStartupPongObserved", "originalStartupWorkersSettled"))
+    attempts = handoff["originalStartupAttempts"]
+    refusals = handoff["originalSettledConnectRefusals"]
+    require(type(attempts) is int and 1 <= attempts <= 16)
+    require(type(refusals) is int and 0 <= refusals <= 15 and attempts == refusals + 1)
+    require(handoff["originalStartupPongObserved"] is True and handoff["originalStartupWorkersSettled"] is True)
+    # Startup rows are retained unchanged. The separate, required post-stop
+    # probe reaches the original stopped-container validator and adds ValueError.
+    # These observations do not qualify caller graphs or physical kernel caps.
+    require(value["loopbackRelay"]["connectionFailureTypes"]
+            == ["ConnectionRefusedError"] * refusals + ["ValueError"])
+
+
 def validate_bytes(raw, run, attempt, head, event_sha):
     require(type(raw) is bytes and 0 < len(raw) <= MAXIMUM)
     require(type(run) is str and re.fullmatch(r"[1-9][0-9]{0,19}", run) and int(run) <= 2**63 - 1)
@@ -143,6 +159,7 @@ def validate_bytes(raw, run, attempt, head, event_sha):
     object_keys(value["hostedIdentity"], ("runId", "attempt", "head", "eventSha"))
     require(value["hostedIdentity"] == {"runId": run, "attempt": attempt, "head": head, "eventSha": event_sha})
     receipt_shapes(value)
+    startup_handoff(value)
     require(value["imageReference"] == "clamav/clamav@sha256:7659dcb0db47941d3cf8336af84bbb63c7e70b76fc00601774358412b42ed186")
     require(value["counterScope"] == "Actual readiness control INSTREAM calls; financial File runtime counters remain unobserved")
     require(value["stage"] == "actual-scanner-controls-complete" and value["scannerReady"] is True)

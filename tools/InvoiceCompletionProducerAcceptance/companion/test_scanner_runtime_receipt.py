@@ -221,6 +221,12 @@ SYNTHETIC = {'schemaVersion': 1,
                                                                   'absenceVerified': True}}}}
 
 
+SYNTHETIC["startupRelayHandoff"] = {
+    "originalStartupAttempts": 16, "originalSettledConnectRefusals": 15,
+    "originalStartupPongObserved": True, "originalStartupWorkersSettled": True}
+SYNTHETIC["loopbackRelay"]["connectionFailureTypes"] = ["ConnectionRefusedError"] * 15 + ["ValueError"]
+
+
 def validate(value):
     return validate_bytes(json.dumps(value).encode(), "123", "1", "f" * 40, "1" * 40)
 
@@ -403,6 +409,54 @@ class ScannerRuntimeReceiptTests(unittest.TestCase):
         self.assertEqual([MAXIMUM + 1], reader.requests)
         for raw in (b'', b'x' * (MAXIMUM + 1)):
             with self.assertRaises(ReceiptRefused): bounded_read(Reader(raw))
+
+
+
+    def test_startup_handoff_is_mandatory_exact_and_never_failure_evidence(self):
+        value=copy.deepcopy(SYNTHETIC);del value['startupRelayHandoff'];self.refuse(value)
+        for key in SYNTHETIC['startupRelayHandoff']:
+            value=copy.deepcopy(SYNTHETIC);del value['startupRelayHandoff'][key];self.refuse(value)
+        for replacement in (None,[],True):
+            value=copy.deepcopy(SYNTHETIC);value['startupRelayHandoff']=replacement;self.refuse(value)
+        value=copy.deepcopy(SYNTHETIC);value['startupRelayHandoff']['unknown']=True;self.refuse(value)
+        for key in ('startupAdmissionDiagnostic','failureType','failureReason','failureCommand'):
+            value=copy.deepcopy(SYNTHETIC);value[key]={};self.refuse(value)
+
+    def test_startup_handoff_counts_are_strict_bounded_ints(self):
+        for key,bad_values in (
+            ('originalStartupAttempts',(True,False,16.0,0,-1,17,'16',None)),
+            ('originalSettledConnectRefusals',(True,False,15.0,-1,16,'15',None))):
+            for bad in bad_values:
+                value=copy.deepcopy(SYNTHETIC);value['startupRelayHandoff'][key]=bad;self.refuse(value)
+        for attempts,refusals in ((15,15),(16,14),(1,1)):
+            value=copy.deepcopy(SYNTHETIC)
+            value['startupRelayHandoff']['originalStartupAttempts']=attempts
+            value['startupRelayHandoff']['originalSettledConnectRefusals']=refusals
+            self.refuse(value)
+
+    def test_startup_handoff_flags_require_actual_true_without_aliases(self):
+        for key in ('originalStartupPongObserved','originalStartupWorkersSettled'):
+            for bad in (False,0,1,'true',None,[]):
+                value=copy.deepcopy(SYNTHETIC);value['startupRelayHandoff'][key]=bad;self.refuse(value)
+
+    def test_startup_handoff_rows_remain_exact_with_separate_unavailable_probe(self):
+        for bad in ([],['ValueError'],['ConnectionRefusedError']*16,
+                    ['ConnectionRefusedError']*14+['ValueError'],
+                    ['ValueError']+['ConnectionRefusedError']*15,
+                    ['ConnectionRefusedError']*15+['OSError'],
+                    ['ConnectionRefusedError']*15+['ValueError','ValueError']):
+            value=copy.deepcopy(SYNTHETIC);value['loopbackRelay']['connectionFailureTypes']=bad;self.refuse(value)
+        value=copy.deepcopy(SYNTHETIC);value['startupRelayHandoff']['originalStartupAttempts']=1
+        value['startupRelayHandoff']['originalSettledConnectRefusals']=0
+        value['loopbackRelay']['connectionFailureTypes']=['ValueError']
+        self.assertEqual(validate(value),validate(SYNTHETIC))
+
+    def test_handoff_cannot_replace_existing_owner_control_cleanup_and_scope_gates(self):
+        for group,key,bad in (('hostedIdentity','head','0'*40),('controls','unavailableAfterStop',False),
+                              ('loopbackRelay','cleanupVerified',False),('counters','attempted',3)):
+            value=copy.deepcopy(SYNTHETIC);value[group][key]=bad;self.refuse(value)
+        for key in ('parentAdmission','genuineEightHostFinancialAccepted'):
+            value=copy.deepcopy(SYNTHETIC);value[key]=True;self.refuse(value)
 
 
 if __name__ == "__main__":
