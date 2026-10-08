@@ -20,6 +20,7 @@ SOURCE_PATHS = (
     "tools/QualificationOutcomeWireSource/QualificationOutcomeWire.cs",
     "tools/QualificationOutcomeWireSource/Program.cs",
     "tools/QualificationOutcomeWireSource/ChildStartObservation.cs",
+    "Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj",
     "Legacy.Maliev.QuotationService.Tests/Controllers/QualificationOutcomeWireSourceTests.cs",
 )
 TEST_SOURCE = SOURCE_PATHS[-1]
@@ -29,7 +30,6 @@ METHOD = "ActualControllerSerializer_EmitsReviewedSyntheticWire"
 ASSEMBLIES = {
     "Legacy.Maliev.QuotationService.Application": "Legacy.Maliev.QuotationService.Application",
     "Legacy.Maliev.QuotationService.Api": "Legacy.Maliev.QuotationService.Api",
-    "QualificationOutcomeWireSource": "tools/QualificationOutcomeWireSource",
     TEST_ASSEMBLY: TEST_ASSEMBLY,
 }
 BOUNDARY = "actual DTO + actual controller JsonResult + MVC executor; synthetic service; no routing/authentication/database proof"
@@ -37,7 +37,7 @@ OUTPUT_FILES = {"empty.json", "mixed.json", "empty.metadata.json", "mixed.metada
 RECEIPT_NAME = "qualification-candidate-wire-receipt.json"
 POLICY_FIELDS = {"qualificationScope", "acceptedBase", "sourcePins", "sourceFiles", "manifestSha256"}
 MATERIALIZATION_FIELDS = {"manifestSha256", "manifestBlob", "capsuleBlob", "acceptedBase", "sourcePins", "sourceFiles", "transportCommit", "nativeValidated"}
-METADATA_FIELDS = {"caseName", "statusCode", "contentType", "camelCase", "ignoreCondition", "actualDtoType", "actualMvcExecutorType", "assemblies"}
+METADATA_FIELDS = {"caseName", "statusCode", "contentType", "camelCase", "ignoreCondition", "actualDtoType", "actualMvcExecutorType", "actualHarnessType", "actualHarnessAssembly", "assemblies"}
 POLICY_NAMES = {"quotation-admission-race-policy.json", "quotation-fixture-corrected-policy.json"}
 WIRE_SCOPES = {"admission-race-wire", "fixture-residual-wire"}
 WIRE_FINGERPRINTS = {
@@ -208,7 +208,9 @@ def validate_metadata(value, case_name):
             or value["contentType"] != "application/json; charset=utf-8"
             or value["camelCase"] is not True or value["ignoreCondition"] != "WhenWritingNull"
             or value["actualDtoType"] != "Legacy.Maliev.QuotationService.Application.Models.QualificationOutcomeReadback"
-            or value["actualMvcExecutorType"] != "Microsoft.AspNetCore.Mvc.Infrastructure.SystemTextJsonResultExecutor"):
+            or value["actualMvcExecutorType"] != "Microsoft.AspNetCore.Mvc.Infrastructure.SystemTextJsonResultExecutor"
+            or value["actualHarnessType"] != "QualificationOutcomeWireSource.QualificationOutcomeWire"
+            or value["actualHarnessAssembly"] != TEST_ASSEMBLY):
         raise ValueError("actual controller serializer metadata differs")
     assemblies = value["assemblies"]
     if (not isinstance(assemblies, list) or len(assemblies) != len(ASSEMBLIES)

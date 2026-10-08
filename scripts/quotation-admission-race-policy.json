@@ -24,9 +24,9 @@
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QualificationOutcomeWireSourceTests.cs",
-      "sha256": "0f38b7596b628d651e3b11581d958a7e3cfa2e81fe0c9fcabc990b94ebc391f6",
-      "bytes": 4256
+      "sha256": "de94c9ef71db0f7279f0a07f3e44982daf43ff04c958521d7fc2a7751067bdba",
+      "bytes": 4486
     }
   ],
-  "manifestSha256": "bc1ef9a44c2564ea80fde0549ff073cd53cdfe2167d8299b692bbf74f95351f5"
+  "manifestSha256": "beace66d088e3b318ebf033d045f40e14987ae11c627de3ebcfc3f8aa4a308f1"
 }

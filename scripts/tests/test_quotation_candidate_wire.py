@@ -84,7 +84,9 @@ class CandidateWireTests(unittest.TestCase):
             write_json(self.output / (name + ".metadata.json"), {"caseName": name, "statusCode": 200,
                 "contentType": "application/json; charset=utf-8", "camelCase": True, "ignoreCondition": "WhenWritingNull",
                 "actualDtoType": "Legacy.Maliev.QuotationService.Application.Models.QualificationOutcomeReadback",
-                "actualMvcExecutorType": "Microsoft.AspNetCore.Mvc.Infrastructure.SystemTextJsonResultExecutor", "assemblies": self.assemblies})
+                "actualMvcExecutorType": "Microsoft.AspNetCore.Mvc.Infrastructure.SystemTextJsonResultExecutor",
+                "actualHarnessType": "QualificationOutcomeWireSource.QualificationOutcomeWire",
+                "actualHarnessAssembly": gate.TEST_ASSEMBLY, "assemblies": self.assemblies})
         report = ET.Element(NS + "TestRun"); definitions = ET.SubElement(report, NS + "TestDefinitions")
         results = ET.SubElement(report, NS + "Results"); entries = ET.SubElement(report, NS + "TestEntries")
         for name in ("empty", "mixed"):
@@ -128,7 +130,7 @@ class CandidateWireTests(unittest.TestCase):
         self.assertEqual(2, self.verifications); self.assertEqual("raw-candidate", receipt["mode"])
         self.assertNotIn("head", receipt); self.assertNotIn("tree", receipt)
         self.assertEqual(self.base, receipt["acceptedBase"]); self.assertEqual(gate.digest(self.capsule), receipt["capsuleSha256"])
-        self.assertEqual(7, len(receipt["sources"])); self.assertEqual(4, len(receipt["assemblies"]))
+        self.assertEqual(8, len(receipt["sources"])); self.assertEqual(3, len(receipt["assemblies"]))
         self.assertEqual(6, len(receipt["trustedSources"])); self.assertFalse(path.exists())
 
     def test_context_materialization_and_path_mutations_reject(self):
@@ -155,6 +157,7 @@ class CandidateWireTests(unittest.TestCase):
 
     def test_inherited_source_release_binaries_and_trusted_helpers_reject_substitution(self):
         paths = [self.candidate / gate.SOURCE_PATHS[0],
+                 self.candidate / "Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj",
                  self.candidate / (gate.TEST_ASSEMBLY + "/bin/Release/net10.0/Legacy.Maliev.QuotationService.Api.dll"),
                  self.root / "scripts/check_quotation_candidate_wire.py", self.root / "scripts/materialize_quotation_candidate.py",
                  self.root / "scripts/check_c821_focused_results.py", self.root / "scripts/run_quotation_candidate_native.sh",
@@ -169,7 +172,7 @@ class CandidateWireTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.verify()
         path.write_bytes(original); path = self.output / "empty.metadata.json"; original = path.read_bytes(); metadata = json.loads(original)
         for key, value in (("caseName", "mixed"), ("statusCode", True), ("contentType", "text/plain"), ("camelCase", False),
-                           ("ignoreCondition", "Never"), ("actualDtoType", "Other"), ("actualMvcExecutorType", "Other"), ("assemblies", []), ("extra", 1)):
+                           ("ignoreCondition", "Never"), ("actualDtoType", "Other"), ("actualMvcExecutorType", "Other"), ("actualHarnessType", "Other"), ("assemblies", []), ("extra", 1)):
             write_json(path, {**metadata, key: value})
             with self.subTest(key=key), self.assertRaises(ValueError): self.verify()
         for data in (b'{"caseName":"empty","caseName":"mixed"}', b"x" * (gate.MAX_JSON + 1)):
@@ -178,6 +181,14 @@ class CandidateWireTests(unittest.TestCase):
         path.write_bytes(original); extra = self.output / "unexpected.json"; extra.write_bytes(b"{}")
         with self.assertRaises(ValueError): self.verify()
         extra.unlink(); path.unlink()
+        with self.assertRaises(ValueError): self.verify()
+
+    def test_linked_harness_must_belong_to_tests_assembly(self):
+        path = self.output / "empty.metadata.json"
+        metadata = json.loads(path.read_text())
+        # Compile Link places this harness in Tests.dll, not the standalone tool assembly.
+        metadata["actualHarnessAssembly"] = "QualificationOutcomeWireSource"
+        write_json(path, metadata)
         with self.assertRaises(ValueError): self.verify()
 
     def test_case_loaded_assembly_hashes_must_agree(self):

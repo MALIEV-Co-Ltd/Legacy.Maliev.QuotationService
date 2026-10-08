@@ -74,8 +74,8 @@
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QualificationOutcomeWireSourceTests.cs",
-      "sha256": "0f38b7596b628d651e3b11581d958a7e3cfa2e81fe0c9fcabc990b94ebc391f6",
-      "bytes": 4256
+      "sha256": "de94c9ef71db0f7279f0a07f3e44982daf43ff04c958521d7fc2a7751067bdba",
+      "bytes": 4486
     },
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Controllers/QualificationPrivateObservationTests.cs",
@@ -403,5 +403,5 @@
       "bytes": 14596
     }
   ],
-  "manifestSha256": "3c8f0d2ad5a8f88583b3cf92d54c508161b468b988eabb5a2eafde47f51b38d4"
+  "manifestSha256": "7c8cf634c7b22bd828b9450d272edd32bd2088ef7d48966b8e38299757e9d106"
 }
