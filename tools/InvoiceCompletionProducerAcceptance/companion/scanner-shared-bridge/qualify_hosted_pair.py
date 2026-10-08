@@ -20,7 +20,7 @@ import uuid
 
 
 LIMIT = 1048576
-MANIFEST_SHA256 = 'df62d024b88023359777c37cc0d2d39239d55cdcc7677cd5f85f9f46a5df60d1'
+MANIFEST_SHA256 = 'e8ff699d10d95281b2535bbba5a68e71343b04aea75f0e159f53df047c886ab9'
 
 
 class Refused(ValueError):
@@ -80,7 +80,7 @@ def admit_event(environment, event, head):
 
 
 def hold_sources(root, manifest):
-    require(type(manifest) is dict and set(manifest) == {'schemaVersion', 'fileSource', 'fileSourceRole', 'modules', 'rawControls'}
+    require(type(manifest) is dict and set(manifest) == {'schemaVersion', 'fileSource', 'fileSourceRole', 'modules', 'rawControls', 'oracleControls'}
             and type(manifest['schemaVersion']) is int and manifest['schemaVersion'] == 1
             and manifest['fileSourceRole'] == 'provenance-label-only-no-File-runtime'
             and re.fullmatch('[0-9a-f]{40}', manifest['fileSource']) is not None
@@ -116,6 +116,34 @@ def hold_raw_controls(root, manifest):
     data = bounded_read(root / path, item['length'])
     require(len(data) == item['length'] and hashlib.sha256(data).hexdigest() == item['sha256'])
     return data
+
+
+def hold_oracle_controls(root, manifest):
+    item = manifest['oracleControls']
+    path = 'tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_pinned_image_oracle.py'
+    require(type(item) is dict and set(item) == {'path', 'sha256', 'length'}
+            and item['path'] == path and re.fullmatch('[0-9a-f]{64}', item['sha256']) is not None
+            and type(item['length']) is int and 0 < item['length'] <= LIMIT)
+    data = bounded_read(root / path, item['length'])
+    require(len(data) == item['length'] and hashlib.sha256(data).hexdigest() == item['sha256'])
+    return data
+
+
+def execute_oracle_controls(data, oracle_source):
+    name = 'held_oracle_copy_controls'
+    require(name not in sys.modules)
+    module = types.ModuleType(name)
+    module.__file__ = '<private-held-source:' + name + '>'
+    sys.modules[name] = module
+    exec(compile(data, module.__file__, 'exec'), module.__dict__)
+    module.HELD_ORACLE_SOURCE = oracle_source
+    suite = unittest.defaultTestLoader.loadTestsFromModule(module)
+    require(suite.countTestCases() == 11)
+    result = unittest.TextTestRunner().run(suite)
+    require(result.wasSuccessful() and result.testsRun == 11)
+    oracle = sys.modules['pinned_image_oracle']
+    diagnostic = sys.modules['pair_failure_diagnostic']
+    require(oracle.ORACLE is None and diagnostic.FIRST is None and diagnostic.BINDING is None)
 
 
 def execute_raw_controls(data, qualifier_source):
@@ -213,8 +241,10 @@ def admit_and_load():
     manifest = json.loads(manifest_bytes)
     held = hold_sources(root, manifest)
     raw_controls = hold_raw_controls(root, manifest)
+    oracle_controls = hold_oracle_controls(root, manifest)
     require(not any(name in sys.modules for name in held))
     sys.meta_path.insert(0, HeldImports(held))
+    execute_oracle_controls(oracle_controls, held['pinned_image_oracle'])
     execute_raw_controls(raw_controls, held['qualify_pair_resources'])
     import hosted_companion_resources as h
     import qualify_pair_resources as qualifier

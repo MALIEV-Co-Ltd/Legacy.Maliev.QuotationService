@@ -36,7 +36,7 @@ jobs:
           from pathlib import Path
           prefix = Path('tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge')
           held = {}
-          for name, expected in (('qualify_hosted_pair', '93f061d99b237c840606e5219de9af7395f9a9d51731196a3bc14cc0e772ff0f'), ('test_hosted_pair_source', '109b0dcbe77f5eaad9dffb591dc462eb1054a73c33c0cce210dde8bd55985ed9'), ('pair_failure_diagnostic', '7645e91b9aca64af9370d7dfb95abb79bea69f168d35484f6ad46bbee15ecf49'), ('pinned_image_oracle', '4f2bdf2078fc304221d1a576b09d62ad14f026f7a90819ed5871d9da8ef00898'), ('held_pair_launcher', '8a77702c9c03c8a3e1abc48a17448e45aced3ed6336fbe22249caa085c300349')):
+          for name, expected in (('qualify_hosted_pair', 'fa356e7eecf05049ca33664514d7fa894fc00554b49baf2cdb8ea654df58633d'), ('test_hosted_pair_source', 'cc8919192e750d398eacef20103c7f3dfaf02a9eaf29f5f4938d001197d37720'), ('pair_failure_diagnostic', 'bd5d1cb8009d791119ad4167ad99932a12823bcfb38832eead925b46d78830fa'), ('pinned_image_oracle', 'da82d89cf595e9e2350f9a15c5e08b61f87c300bc1521d9ed4542400b21f3c5f'), ('held_pair_launcher', '8a77702c9c03c8a3e1abc48a17448e45aced3ed6336fbe22249caa085c300349')):
               path = prefix / (name + '.py')
               fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
               try:
@@ -93,7 +93,7 @@ jobs:
           from pathlib import Path
           prefix = Path('tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge')
           held = {}
-          for name, expected in (('qualify_hosted_pair', '93f061d99b237c840606e5219de9af7395f9a9d51731196a3bc14cc0e772ff0f'), ('test_hosted_pair_source', '109b0dcbe77f5eaad9dffb591dc462eb1054a73c33c0cce210dde8bd55985ed9'), ('pair_failure_diagnostic', '7645e91b9aca64af9370d7dfb95abb79bea69f168d35484f6ad46bbee15ecf49'), ('pinned_image_oracle', '4f2bdf2078fc304221d1a576b09d62ad14f026f7a90819ed5871d9da8ef00898'), ('held_pair_launcher', '8a77702c9c03c8a3e1abc48a17448e45aced3ed6336fbe22249caa085c300349')):
+          for name, expected in (('qualify_hosted_pair', 'fa356e7eecf05049ca33664514d7fa894fc00554b49baf2cdb8ea654df58633d'), ('test_hosted_pair_source', 'cc8919192e750d398eacef20103c7f3dfaf02a9eaf29f5f4938d001197d37720'), ('pair_failure_diagnostic', 'bd5d1cb8009d791119ad4167ad99932a12823bcfb38832eead925b46d78830fa'), ('pinned_image_oracle', 'da82d89cf595e9e2350f9a15c5e08b61f87c300bc1521d9ed4542400b21f3c5f'), ('held_pair_launcher', '8a77702c9c03c8a3e1abc48a17448e45aced3ed6336fbe22249caa085c300349')):
               path = prefix / (name + '.py')
               fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
               try:

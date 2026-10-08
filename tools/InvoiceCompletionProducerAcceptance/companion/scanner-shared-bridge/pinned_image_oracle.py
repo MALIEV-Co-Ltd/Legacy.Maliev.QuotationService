@@ -76,6 +76,13 @@ class PinnedImageOracle:
         self.cap_restore_required = False
         self.rlimit_prior = None
         self.cap_restore_required = False
+        # Staging target is declared before the original CLI can create it.
+        self.stage_path = None
+        self.stage_fd = None
+        self.stage_identity = None
+        self.stage_close_attempted = False
+        self.stage_write_attempted = False
+        self.stage_writer_settled = False
         self.failure = False
         self.finished = False
         ORACLE = self
@@ -135,6 +142,7 @@ class PinnedImageOracle:
             self.directory.mkdir(mode=0o700)
             directory_stat = self.directory.stat()
             self.directory_identity = (directory_stat.st_dev, directory_stat.st_ino)
+            self.stage_path = self.directory / 'copy-staging'
             self.path = self.directory / 'image-executable'
             self.fd = os.open(self.path, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
             initial = os.fstat(self.fd)
@@ -162,7 +170,15 @@ class PinnedImageOracle:
             try:
                 resource.setrlimit(resource.RLIMIT_FSIZE, (soft, prior[1]))
                 diagnostic.stage('oracle-copy')
-                self.docker('cp', self.container_id + ':/bin/fake-gcs-server', str(self.path), timeout=30)
+                self.require_stage_parent()
+                try:
+                    self.stage_path.lstat()
+                except FileNotFoundError:
+                    pass
+                else:
+                    require(False, 'Oracle staging target must be absent before writer')
+                self.stage_write_attempted = True
+                self.docker('cp', self.container_id + ':/bin/fake-gcs-server', str(self.stage_path), timeout=30)
             finally:
                 resource.setrlimit(resource.RLIMIT_FSIZE, prior)
                 require(resource.getrlimit(resource.RLIMIT_FSIZE) == prior, 'File cap restoration differs')
@@ -171,6 +187,10 @@ class PinnedImageOracle:
             require(ledger and ledger[-1]['cleanupVerified'] is True and ledger[-1]['quarantined'] is False,
                     'Original copy helper must be settled before file observation')
             diagnostic.stage('oracle-read')
+            require(ledger[-1].get('originalFailure') is False and ledger[-1].get('originalExitCode') == 0,
+                    'Oracle staging writer must complete successfully')
+            self.stage_writer_settled = True
+            self.transfer_staging_file()
             current, linked = os.fstat(self.fd), self.path.lstat()
             require(stat.S_ISREG(current.st_mode) and stat.S_ISREG(linked.st_mode)
                     and (current.st_dev, current.st_ino) == self.file_identity == (linked.st_dev, linked.st_ino)
@@ -200,6 +220,58 @@ class PinnedImageOracle:
         except BaseException:
             self.failure = True
             raise
+
+    def require_stage_parent(self):
+        current = self.directory.lstat()
+        require(stat.S_ISDIR(current.st_mode)
+                and (current.st_dev, current.st_ino) == self.directory_identity
+                and stat.S_IMODE(current.st_mode) == 0o700,
+                'Original private staging parent differs')
+
+    @oracle_operation
+    def transfer_staging_file(self):
+        # No metadata dictionary is an ownership proof. The original CLI created
+        # only this previously absent declared target inside our retained parent.
+        # Its actual owner must be settled before a new descriptor is acquired.
+        import scanner_docker_command as runner
+        require(self.stage_write_attempted and self.stage_writer_settled
+                and self.stage_fd is None and not self.stage_close_attempted,
+                'One settled original staging writer required')
+        require(all(row['cleanupVerified'] is True and row['quarantined'] is False
+                    for row in runner.command_receipts()), 'Staging CLI owners remain quarantined')
+        self.require_stage_parent()
+        self.stage_fd = os.open(self.stage_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+        staged, linked = os.fstat(self.stage_fd), self.stage_path.lstat()
+        self.stage_identity = (staged.st_dev, staged.st_ino)
+        require(stat.S_ISREG(staged.st_mode) and stat.S_ISREG(linked.st_mode)
+                and staged.st_nlink == 1 and linked.st_nlink == 1
+                and self.stage_identity == (linked.st_dev, linked.st_ino)
+                and 0 < staged.st_size <= LIMIT, 'Owned bounded staging file differs')
+        original, original_link = os.fstat(self.fd), self.path.lstat()
+        require(stat.S_ISREG(original.st_mode) and stat.S_ISREG(original_link.st_mode)
+                and original.st_nlink == 1 and original_link.st_nlink == 1
+                and (original.st_dev, original.st_ino) == self.file_identity
+                == (original_link.st_dev, original_link.st_ino)
+                and original.st_size == 0, 'Original empty destination descriptor differs')
+        os.lseek(self.fd, 0, os.SEEK_SET)
+        copied = 0
+        while True:
+            block = os.read(self.stage_fd, min(65536, LIMIT + 1 - copied))
+            if not block:
+                break
+            copied += len(block)
+            require(copied <= staged.st_size <= LIMIT, 'Staging copy byte bound exceeded')
+            position = 0
+            while position < len(block):
+                written = os.write(self.fd, block[position:])
+                require(type(written) is int and 0 < written <= len(block)-position,
+                        'Original descriptor write did not progress')
+                position += written
+        after, after_link = os.fstat(self.stage_fd), self.stage_path.lstat()
+        fields = lambda value: (value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, value.st_nlink)
+        require(copied == staged.st_size and fields(staged) == fields(after) == fields(after_link),
+                'Staging file changed during bounded transfer')
+        self.require_stage_parent()
 
     @oracle_operation
     def close(self):
@@ -264,6 +336,30 @@ class PinnedImageOracle:
                         require(stat.S_ISREG(current.st_mode)
                                 and (current.st_dev, current.st_ino) == self.file_identity, 'Owned file path differs')
                         self.path.unlink()
+            def close_staging_fd():
+                if self.stage_fd is not None:
+                    require(not self.stage_close_attempted, 'Original staging close remains uncertain')
+                    current = os.fstat(self.stage_fd)
+                    require((current.st_dev, current.st_ino) == self.stage_identity,
+                            'Original staging descriptor differs')
+                    self.stage_close_attempted = True
+                    os.close(self.stage_fd)
+                    self.stage_fd = None
+            def unlink_staging_file():
+                if self.stage_path is not None:
+                    self.require_stage_parent()
+                    try:
+                        current = self.stage_path.lstat()
+                    except FileNotFoundError:
+                        current = None
+                    if current is not None:
+                        # Failed/uncertain creation is NOT permission to adopt a
+                        # path or infer its inode. Retain the owner on ambiguity.
+                        require(self.stage_identity is not None and stat.S_ISREG(current.st_mode)
+                                and current.st_nlink == 1
+                                and (current.st_dev, current.st_ino) == self.stage_identity,
+                                'Owned staging cleanup identity differs')
+                        self.stage_path.unlink()
             def remove_directory():
                 if self.directory is not None:
                     try:
@@ -275,7 +371,7 @@ class PinnedImageOracle:
                                 and (current.st_dev, current.st_ino) == self.directory_identity, 'Owned directory differs')
                         self.directory.rmdir()
                     self.directory = None
-            for action in (close_file_fd, unlink_file, remove_directory):
+            for action in (close_staging_fd, close_file_fd, unlink_staging_file, unlink_file, remove_directory):
                 try:
                     action()
                 except BaseException as error:

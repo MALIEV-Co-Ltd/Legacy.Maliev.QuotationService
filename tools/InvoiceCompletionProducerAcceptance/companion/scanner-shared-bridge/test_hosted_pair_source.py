@@ -144,6 +144,8 @@ class HostedPairSourceControls(unittest.TestCase):
         data = b'fixture_model_value = 7\n'
         return {'schemaVersion': 1, 'fileSource': 'a' * 40,
                 'fileSourceRole': 'provenance-label-only-no-File-runtime',
+                'oracleControls': {'path': 'tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_pinned_image_oracle.py',
+                                   'sha256': hashlib.sha256(data).hexdigest(), 'length': len(data)},
                 'rawControls': {'path': 'tools/InvoiceCompletionProducerAcceptance/companion/test_raw_owner_command.py',
                                 'sha256': hashlib.sha256(data).hexdigest(), 'length': len(data)},
                 'modules': [{'name': name, 'path': 'tools/InvoiceCompletionProducerAcceptance/companion/' + name + '.py',

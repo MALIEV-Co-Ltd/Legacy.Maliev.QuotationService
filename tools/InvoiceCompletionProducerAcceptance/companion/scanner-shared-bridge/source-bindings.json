@@ -48,8 +48,8 @@
     {
       "name": "pinned_image_oracle",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pinned_image_oracle.py",
-      "sha256": "4f2bdf2078fc304221d1a576b09d62ad14f026f7a90819ed5871d9da8ef00898",
-      "length": 15422
+      "sha256": "da82d89cf595e9e2350f9a15c5e08b61f87c300bc1521d9ed4542400b21f3c5f",
+      "length": 21001
     },
     {
       "name": "borrowed_scanner_bridge",
@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "7645e91b9aca64af9370d7dfb95abb79bea69f168d35484f6ad46bbee15ecf49",
-      "length": 7009
+      "sha256": "bd5d1cb8009d791119ad4167ad99932a12823bcfb38832eead925b46d78830fa",
+      "length": 7875
     }
   ],
   "rawControls": {
@@ -122,5 +122,6 @@
     "qualified original File/front lifetime/bootstrap/IAM graph before financial join"
   ],
   "diagnosticSuccessorBase": "4c7b53c0cc8a60ff8daf3bfd389f3f24647b0f67",
-  "diagnosticOnly": true
+  "diagnosticOnly": true,
+  "stagingSuccessorBase": "6cf5572b907a2bfef6a57c7da15e16269a25222f"
 }
