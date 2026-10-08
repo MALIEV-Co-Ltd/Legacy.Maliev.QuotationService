@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 HELD_RELAY_SOURCE = None
+HELD_SCANNER_SOURCE = None
 
 
 class StartupTests(unittest.TestCase):
@@ -15,7 +16,7 @@ class StartupTests(unittest.TestCase):
         relay.lock=__import__('threading').Lock()
         relay.stop=types.SimpleNamespace(is_set=lambda:False)
         relay.sockets=set();relay.workers=set();relay.failures=[]
-        relay._startup_tracking=True;relay._startup_attempts=[];relay._startup_peers={};relay._startup_bad=False;relay._startup_sealed=False;relay._startup_unhandled=[];relay._startup_overflow=None
+        relay._startup_tracking=True;relay._startup_attempts=[];relay._startup_peers={};relay._startup_bad=False;relay._startup_sealed=False;relay._startup_unhandled=[];relay._startup_overflow=None;relay._startup_admission=None
         relay.endpoint=('127.0.0.1',7);relay.seconds=10;relay.maximum_bytes=1024
         relay._model_outcome=outcome;relay._model_budgets=[];relay._model_worker_clock=None
         operations=[];clock=[0.0];created=[];threads=[]
@@ -425,3 +426,83 @@ class StartupTests(unittest.TestCase):
         m=self.model('pong');relay=m[1];relay._startup_tracking=False
         with self.assertRaises(ValueError):self.invoke(m)
         self.assertEqual(m[3],[]);self.assertEqual(relay._startup_attempts,[])
+
+    def test_admission_cap_snapshot_preserves_original_counts_before_bad(self):
+        m=self.model();module,relay=m[:2]
+        for index in range(16):
+            with self.assertRaises(module.StartupPingRefused):self.invoke(m)
+        with self.assertRaisesRegex(ValueError,'Startup PING owner quarantined or exhausted'):self.invoke(m)
+        value=relay.startup_admission_diagnostic()
+        self.assertEqual([value[n] for n in ('attempts','history','accounted','succeeded','settled')],[16,16,16,0,16])
+        self.assertFalse(value['badBefore']);self.assertTrue(relay._startup_bad)
+        self.assertTrue(value['capPredicate']);self.assertEqual(value['priorInvalidPredicate'],'UNKNOWN')
+        self.assertFalse(value['stopPredicate']);self.assertFalse(value['badPredicate']);self.assertFalse(value['sealedPredicate'])
+        self.assertEqual(len(relay._startup_attempts),16);self.assertEqual(len(relay.failures),16)
+
+    def test_admission_short_circuit_and_first_snapshot_are_preserved(self):
+        for first in ('stop','bad','sealed'):
+            m=self.model();relay=m[1]
+            relay.stop=types.SimpleNamespace(is_set=lambda:first=='stop')
+            relay._startup_bad=first=='bad';relay._startup_sealed=first=='sealed'
+            with self.assertRaises(ValueError):self.invoke(m)
+            value=relay.startup_admission_diagnostic()
+            order=('stopPredicate','badPredicate','sealedPredicate','capPredicate','priorInvalidPredicate')
+            index=('stop','bad','sealed').index(first)
+            self.assertTrue(value[order[index]])
+            self.assertTrue(all(value[n]=='UNKNOWN' for n in order[index+1:]))
+            relay._startup_bad=False
+            with self.assertRaises(ValueError):
+                relay._startup_bad=True;self.invoke(m)
+            self.assertEqual(relay.startup_admission_diagnostic(),value)
+            self.assertEqual(m[3],[])
+
+    def test_unknown_owned_shape_never_invokes_foreign_getters(self):
+        m=self.model();relay=m[1]
+        class Foreign:
+            def __getattribute__(self,name):raise AssertionError('PRIVATE getter executed')
+        relay._startup_attempts=[Foreign()];relay._startup_bad=True
+        with self.assertRaises(ValueError):self.invoke(m)
+        value=relay.startup_admission_diagnostic()
+        self.assertEqual(value['attempts'],1)
+        for name in ('accounted','succeeded','settled'):self.assertEqual(value[name],'UNKNOWN')
+        self.assertEqual(value['capPredicate'],'UNKNOWN');self.assertEqual(value['priorInvalidPredicate'],'UNKNOWN')
+
+    def test_original_malformed_prior_guard_error_is_not_rewritten(self):
+        m=self.model();module,relay=m[:2]
+        row=module._StartupAttempt();del row.settled;relay._startup_attempts=[row]
+        with self.assertRaises(AttributeError):self.invoke(m)
+        value=relay.startup_admission_diagnostic()
+        self.assertEqual(value['settled'],'UNKNOWN');self.assertEqual(value['priorInvalidPredicate'],'UNKNOWN')
+        self.assertFalse(value['badBefore']);self.assertFalse(relay._startup_bad)
+
+    def test_diagnostic_projection_is_finite_private_free_and_detached(self):
+        m=self.model();relay=m[1];relay._startup_bad=True
+        with self.assertRaises(ValueError):self.invoke(m)
+        value=relay.startup_admission_diagnostic();encoded=__import__('json').dumps(value)
+        self.assertNotIn('PRIVATE',encoded);self.assertNotIn('peer',encoded);self.assertNotIn('error',encoded)
+        value['history']=16;self.assertEqual(relay.startup_admission_diagnostic()['history'],0)
+        for replacement in (16.0,True,17,-1,{},'PRIVATE'):
+            original=relay._startup_admission['history'];relay._startup_admission['history']=replacement
+            self.assertIsNone(relay.startup_admission_diagnostic())
+            relay._startup_admission['history']=original
+
+    def test_original_scanner_projection_failure_cannot_replace_refusal(self):
+        import ast
+        tree=ast.parse(HELD_SCANNER_SOURCE)
+        cls=next(node for node in tree.body if isinstance(node,ast.ClassDef) and node.name=='Scanner')
+        start=next(node for node in cls.body if isinstance(node,ast.FunctionDef) and node.name=='start')
+        loop=next(node for node in start.body if isinstance(node,ast.While))
+        function=ast.FunctionDef(name='run',args=ast.arguments(posonlyargs=[],args=[ast.arg(arg='self')],kwonlyargs=[],kw_defaults=[],defaults=[]),body=[loop],decorator_list=[])
+        module=ast.fix_missing_locations(ast.Module(body=[function],type_ignores=[]))
+        for projection_fault in (False,True):
+            original=ValueError('PRIVATE original');projected={'schemaVersion':1}
+            def ping(**kwargs):raise original
+            def project():
+                if projection_fault:raise KeyboardInterrupt('PRIVATE projection')
+                return projected
+            ns={'time':types.SimpleNamespace(monotonic=lambda:0),'deadline':120,'StartupPingRefused':type('StartupPingRefused',(OSError,),{})}
+            exec(compile(module,'<held-scanner-failure-loop>','exec'),ns)
+            owner=types.SimpleNamespace(relay=types.SimpleNamespace(startup_ping=ping,startup_admission_diagnostic=project),receipt={})
+            with self.assertRaises(ValueError) as caught:ns['run'](owner)
+            self.assertIs(caught.exception,original)
+            self.assertEqual('startupAdmissionDiagnostic' in owner.receipt,not projection_fault)

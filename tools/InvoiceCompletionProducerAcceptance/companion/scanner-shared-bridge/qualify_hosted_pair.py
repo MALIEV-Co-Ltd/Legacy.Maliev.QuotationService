@@ -20,7 +20,7 @@ import uuid
 
 
 LIMIT = 1048576
-MANIFEST_SHA256 = '542b0d302d990485222f22ff150a3d70f473bc0993c52a821ca73c61095ed5d7'
+MANIFEST_SHA256 = 'd80743686799587c10a8cdb1a84ac91a6ebdcd3112fa2cbda29fdda228d4e79c'
 
 
 class Refused(ValueError):
@@ -140,7 +140,7 @@ def hold_startup_controls(root, manifest):
     return data
 
 
-def execute_startup_controls(data, relay_source):
+def execute_startup_controls(data, relay_source, scanner_source):
     name = 'held_startup_ping_controls'
     require(name not in sys.modules)
     module = types.ModuleType(name)
@@ -148,10 +148,11 @@ def execute_startup_controls(data, relay_source):
     sys.modules[name] = module
     exec(compile(data, module.__file__, 'exec'), module.__dict__)
     module.HELD_RELAY_SOURCE = relay_source
+    module.HELD_SCANNER_SOURCE = scanner_source
     suite = unittest.defaultTestLoader.loadTestsFromModule(module)
-    require(suite.countTestCases() == 25)
+    require(suite.countTestCases() == 31)
     result = unittest.TextTestRunner().run(suite)
-    require(result.wasSuccessful() and result.testsRun == 25)
+    require(result.wasSuccessful() and result.testsRun == 31)
 
 
 def execute_oracle_controls(data, oracle_source):
@@ -271,7 +272,7 @@ def admit_and_load():
     require(not any(name in sys.modules for name in held))
     sys.meta_path.insert(0, HeldImports(held))
     execute_oracle_controls(oracle_controls, held['pinned_image_oracle'])
-    execute_startup_controls(startup_controls, held['scanner_loopback_relay'])
+    execute_startup_controls(startup_controls, held['scanner_loopback_relay'], held['hosted_scanner_readiness'])
     execute_raw_controls(raw_controls, held['qualify_pair_resources'])
     import hosted_companion_resources as h
     import qualify_pair_resources as qualifier

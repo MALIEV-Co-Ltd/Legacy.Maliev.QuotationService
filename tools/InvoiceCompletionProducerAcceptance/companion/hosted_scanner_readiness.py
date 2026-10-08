@@ -265,6 +265,15 @@ class Scanner:
                     break
             except StartupPingRefused:
                 pass
+            except BaseException:
+                # Projection cannot replace the original refusal or cleanup path.
+                try:
+                    projection = self.relay.startup_admission_diagnostic()
+                    if projection is not None:
+                        self.receipt["startupAdmissionDiagnostic"] = projection
+                except BaseException:
+                    pass
+                raise
             time.sleep(0.5)
         else:
             raise TimeoutError("Actual clamd readiness deadline expired")

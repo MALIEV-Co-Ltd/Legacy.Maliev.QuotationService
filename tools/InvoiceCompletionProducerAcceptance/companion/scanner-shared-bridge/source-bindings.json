@@ -18,14 +18,14 @@
     {
       "name": "hosted_scanner_readiness",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py",
-      "sha256": "91514191d18afaa649b066935f464b8aa8374d881add0798474ec46c2ec7fa2f",
-      "length": 37717
+      "sha256": "3382d80c3837b9f5001bf44562ad95e7858190d97ecee73afbf5feb200ce9c57",
+      "length": 38141
     },
     {
       "name": "scanner_loopback_relay",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_loopback_relay.py",
-      "sha256": "4fa292c337b3ec57e1b1bf8447d755a25c779bffae682bdc30351277e9663cbe",
-      "length": 23122
+      "sha256": "7a209ff9b1a5defbfb861075a6e211fb25b95840df19fe8534068959f8baae31",
+      "length": 26792
     },
     {
       "name": "held_pair_launcher",
@@ -134,9 +134,11 @@
   "relayConjunctDiagnosticOnly": true,
   "startupControls": {
     "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_startup_ping_handoff.py",
-    "sha256": "495917d9790f893c1a73d931359dd118f007795d888f1458b78f994d0f76249e",
-    "length": 24412
+    "sha256": "689bd0148e2ebc9d151b40e7819cf50647b1e467ebffd24dbe9c77078bcdd57e",
+    "length": 29905
   },
   "startupHandoffSourceBase": "93dd69993414f99603a9d11610ca4aa07020b28d",
-  "startupHandoffScope": "Original owned startup PING ECONNREFUSED only; full history retained; no native acceptance"
+  "startupHandoffScope": "Original owned startup PING ECONNREFUSED only; full history retained; no native acceptance",
+  "startupAdmissionDiagnosticBase": "74c87a5777310a06d5e3138d3ab70e87e4d4c402",
+  "startupAdmissionDiagnosticScope": "Finite original lock snapshot before quarantine; UNKNOWN unevaluated/unknown shape; no cap/deadline/retry or acceptance change"
 }

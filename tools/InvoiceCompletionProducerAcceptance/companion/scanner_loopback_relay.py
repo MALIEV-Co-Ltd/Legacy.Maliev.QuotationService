@@ -47,6 +47,7 @@ class LoopbackRelay:
         self._startup_sealed = False
         self._startup_unhandled = []
         self._startup_overflow = None
+        self._startup_admission = None
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             self.listener.bind(("127.0.0.1", 0))
@@ -319,11 +320,27 @@ class LoopbackRelay:
         attempt = _StartupAttempt()
         attempt.deadline = deadline
         with self.lock:
-            if (self.stop.is_set() or self._startup_bad or self._startup_sealed or len(self._startup_attempts) >= 16
-                    or not all(type(row) is _StartupAttempt and row.settled
-                               and (row.accounted != row.succeeded) for row in self._startup_attempts)):
-                self._startup_bad = True
-                raise ValueError("Startup PING owner quarantined or exhausted")
+            counts = self._startup_admission_counts()
+            predicates = {name: "UNKNOWN" for name in
+                          ("stopPredicate", "badPredicate", "sealedPredicate", "capPredicate", "priorInvalidPredicate")}
+            def observe_guard(name, value):
+                predicates[name] = value if type(value) is bool else "UNKNOWN"
+                return value
+            try:
+                if (observe_guard("stopPredicate", self.stop.is_set())
+                        or observe_guard("badPredicate", self._startup_bad)
+                        or observe_guard("sealedPredicate", self._startup_sealed)
+                        or observe_guard("capPredicate", len(self._startup_attempts) >= 16)
+                        or observe_guard("priorInvalidPredicate", not all(type(row) is _StartupAttempt and row.settled
+                                   and (row.accounted != row.succeeded) for row in self._startup_attempts))):
+                    if self._startup_admission is None:
+                        self._startup_admission = {**counts, **predicates}
+                    self._startup_bad = True
+                    raise ValueError("Startup PING owner quarantined or exhausted")
+            except BaseException:
+                if self._startup_admission is None:
+                    self._startup_admission = {**counts, **predicates}
+                raise
             # Retain the actual owner BEFORE any socket allocation or operation.
             self._startup_attempts.append(attempt)
         failure = None
@@ -397,6 +414,51 @@ class LoopbackRelay:
         if not attempt.succeeded:
             raise ValueError("Original startup PING observation refused")
         return answer
+
+    def _startup_admission_counts(self):
+        # Called under the original admission lock; inspect only exact owned
+        # built-in representations, never descriptors or resource getters.
+        result = {"schemaVersion": 1, "snapshotBeforeQuarantine": True,
+                  "attempts": "UNKNOWN", "history": "UNKNOWN",
+                  "accounted": "UNKNOWN", "succeeded": "UNKNOWN", "settled": "UNKNOWN",
+                  "badBefore": self._startup_bad if type(self._startup_bad) is bool else "UNKNOWN",
+                  "sealedBefore": self._startup_sealed if type(self._startup_sealed) is bool else "UNKNOWN"}
+        if type(self.failures) is list and len(self.failures) <= 16:
+            result["history"] = len(self.failures)
+        attempts = self._startup_attempts
+        if type(attempts) is list and len(attempts) <= 16:
+            result["attempts"] = len(attempts)
+            values = []
+            for row in attempts:
+                if type(row) is not _StartupAttempt:
+                    return result
+                fields = object.__getattribute__(row, "__dict__")
+                if type(fields) is not dict:
+                    return result
+                flags = tuple(fields.get(name) for name in ("accounted", "succeeded", "settled"))
+                if not all(type(flag) is bool for flag in flags):
+                    return result
+                values.append(flags)
+            for index, name in enumerate(("accounted", "succeeded", "settled")):
+                result[name] = sum(row[index] for row in values)
+        return result
+
+    def startup_admission_diagnostic(self):
+        with self.lock:
+            value = self._startup_admission
+            counts = ("attempts", "history", "accounted", "succeeded", "settled")
+            flags = ("badBefore", "sealedBefore", "stopPredicate", "badPredicate", "sealedPredicate", "capPredicate", "priorInvalidPredicate")
+            expected = {"schemaVersion", "snapshotBeforeQuarantine", *counts, *flags}
+            if type(value) is not dict or set(value) != expected:
+                return None
+            if type(value["schemaVersion"]) is not int or value["schemaVersion"] != 1 or value["snapshotBeforeQuarantine"] is not True:
+                return None
+            if not all((type(value[name]) is int and 0 <= value[name] <= 16)
+                       or (type(value[name]) is str and value[name] == "UNKNOWN") for name in counts):
+                return None
+            if not all(type(value[name]) is bool or (type(value[name]) is str and value[name] == "UNKNOWN") for name in flags):
+                return None
+            return dict(value)
 
     def _startup_history_valid(self):
         attempts = self._startup_attempts
