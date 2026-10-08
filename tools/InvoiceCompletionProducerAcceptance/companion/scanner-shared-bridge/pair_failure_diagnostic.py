@@ -139,6 +139,69 @@ def owner_clause(error):
     return 'unclassified-source-clause'
 
 
+NETWORK_SOURCE_SHA256 = '9bc5ca10c4d872224a3f096aa305a1893d5b3edc89e3042141c90f3b448af33d'
+NETWORK_SITES = (('configured_network_census', 141, 141, 'scanner-network-guard-2cb16c6f486e', 'ValueError', 'Configured network census inspect identity differs'), ('configured_network_census', 144, 144, 'scanner-network-guard-a6e3d5fb3523', 'ValueError', 'Configured network census IPAM shape differs'), ('configured_network_census', 147, 147, 'scanner-network-guard-877630af149f', 'ValueError', 'Configured network census driver differs'), ('configured_network_census', 149, 149, 'scanner-network-guard-0338d87e116a', 'ValueError', 'Configured network census unknown empty IPAM refused'), ('configured_network_census', 153, 153, 'scanner-network-guard-01e2d20df250', 'ValueError', 'Configured network census subnet shape differs'), ('configured_network_census', 156, 156, 'scanner-network-guard-f718864206c4', 'ValueError', 'Configured network census subnet differs'), ('configured_network_census', 162, 162, 'scanner-network-guard-726400773bb5', 'ValueError', 'Configured network census IPAM value differs'), ('configured_network_census', 166, 166, 'scanner-network-guard-f867d540644d', 'ValueError', 'Configured network census gateway differs'), ('configured_network_census', 170, 170, 'scanner-network-guard-d22aabe4c0b7', 'ValueError', 'Configured network census address range differs'), ('configured_network_census', 174, 174, 'scanner-network-guard-d1a237746ca5', 'ValueError', 'Configured network census changed before selection'), ('configured_network_census', 180, 180, 'scanner-network-guard-5a534e6cf4bb', 'ValueError', 'Configured network source candidate differs'), ('configured_network_census', 183, 183, 'scanner-network-guard-203e6061190e', 'ValueError', 'Configured network finite candidates exhausted'), ('configured_network_census.observed', 116, 116, 'scanner-network-guard-334d6f9b4133', 'TimeoutError', 'Configured network census deadline expired'), ('configured_network_census.observed', 119, 119, 'scanner-network-guard-b8ae81983907', 'TimeoutError', 'Configured network census deadline expired'), ('configured_network_census.observed', 121, 121, 'scanner-network-guard-7e9af2c3c599', 'ValueError', 'Configured network census output type differs'), ('configured_network_census.observed', 125, 125, 'scanner-network-guard-2136b999aba8', 'ValueError', 'Configured network census output bound exceeded'), ('configured_network_census.listed', 133, 133, 'scanner-network-guard-592095591b73', 'ValueError', 'Configured network census identity differs'), ('Scanner.validate_configured_network', 219, 219, 'scanner-network-guard-465d0ff76a70', 'ValueError', 'Original configured network plan required'), ('Scanner.validate_configured_network', 226, 226, 'scanner-network-guard-c3a3ac1bd8f9', 'ValueError', 'Configured network original ownership differs'), ('Scanner.validate_configured_network', 230, 230, 'scanner-network-guard-39d755f9f730', 'ValueError', 'Configured network generation changed'), ('Scanner.validate_configured_network', 232, 232, 'scanner-network-guard-3b957a47bb5c', 'ValueError', 'Configured network exact census differs'), ('Scanner.validate_configured_network', 236, 236, 'scanner-network-guard-a0b9285acfda', 'ValueError', 'Configured network prior admission failed'), ('Scanner.validate_configured_network', 249, 249, 'scanner-network-guard-e35eef59e833', 'ValueError', 'Configured network actual IPAM or isolation differs'), ('Scanner.start', 330, 330, 'scanner-network-guard-c30acc1c7fe6', 'ValueError', 'Pulled image digest not observed'), ('Scanner.start', 341, 341, 'scanner-network-guard-1ff631aabc32', 'ValueError', 'Invalid observed derived image identity'), ('Scanner.start', 344, 344, 'scanner-network-guard-57920f6ada6e', 'ValueError', 'Derived image ownership differs'), ('Scanner.start', 360, 360, 'scanner-network-guard-8b44c405e750', 'ValueError', 'Invalid owned network identity'), ('Scanner.start', 366, 366, 'scanner-network-guard-df936985f2c3', 'ValueError', 'One original configured network observation required'), ('Scanner.start', 379, 379, 'scanner-network-guard-46cbd54ccbcd', 'ValueError', 'Invalid observed created container identity'), ('Scanner.start', 387, 387, 'scanner-network-guard-72718f3fae76', 'ValueError', 'Actual scanner container is not running immediately after start'), ('Scanner.start', 398, 398, 'scanner-network-guard-fb25793c4983', 'ValueError', 'Runtime image or immutable root policy differs'), ('Scanner.start', 402, 402, 'scanner-network-guard-a4de6ff1d2ed', 'ValueError', 'Unexpected runtime mounts or persistent volumes'), ('Scanner.start', 405, 405, 'scanner-network-guard-f82e1dc3b803', 'ValueError', 'Dedicated network observation differs'), ('Scanner.start', 425, 425, 'scanner-network-guard-8906a5ab029a', 'TimeoutError', 'Actual clamd readiness deadline expired'), ('Scanner.start', 430, 430, 'scanner-network-guard-434f936aaa47', 'TimeoutError', 'Actual clamd readiness deadline expired'), ('Scanner.start', 433, 433, 'scanner-network-guard-a72fadacf1d7', 'TimeoutError', 'Actual clamd readiness deadline expired'), ('Scanner.start', 436, 436, 'scanner-network-guard-6dfd480f244d', 'ValueError', 'Original startup PING result refused'), ('Scanner.start', 456, 456, 'scanner-network-guard-f6641f4db154', 'TimeoutError', 'Actual clamd readiness deadline expired'), ('Scanner.start', 460, 460, 'scanner-network-guard-8d41df129ce3', 'ValueError', 'Engine/database readiness not observed'), ('Scanner.start', 475, 475, 'scanner-network-guard-47510acf8d63', 'ValueError', 'Loaded VERSION differs from observed daily database'), ('Scanner.start', 478, 478, 'scanner-network-guard-8ea2856fefa6', 'ValueError', 'Benign complete-file control failed'), ('Scanner.start', 480, 480, 'scanner-network-guard-8105029986f7', 'ValueError', 'EICAR complete-file control failed'), ('Scanner.start', 482, 482, 'scanner-network-guard-300d2232efd3', 'ValueError', 'Actual EICAR signature detection not observed'), ('Scanner.start', 485, 485, 'scanner-network-guard-8eaa8a84128a', 'ValueError', 'Scanner executable/config/databases changed during controls'), ('Scanner.start', 487, 487, 'scanner-network-guard-5e0d7c43dd28', 'ValueError', 'Scanner socket owner/generation changed during controls'))
+NETWORK_SITE_TABLE_SHA256 = '877ff5fc70368224b3f353870513acb4816864c0df18627c6baf5106118898cd'
+NETWORK_CAPTURE = None
+
+
+def capture_network_sites(scanner, source):
+    global NETWORK_CAPTURE
+    import hashlib
+    import types
+    if (NETWORK_CAPTURE is not None or type(scanner) is not types.ModuleType
+            or type(source) is not bytes or hashlib.sha256(source).hexdigest() != NETWORK_SOURCE_SHA256):
+        raise ValueError('Qualified network diagnostic source refused')
+    expected = compile(source, '<qualified-network-structure>', 'exec', dont_inherit=True)
+    functions = {'configured_network_census': scanner.configured_network_census,
+                 'Scanner.validate_configured_network': scanner.Scanner.validate_configured_network,
+                 'Scanner.start': scanner.Scanner.start}
+    captured = {}
+    for name, function in functions.items():
+        if (type(function) is not types.FunctionType or function.__globals__ is not scanner.__dict__
+                or not same_code(expected_code(expected, name), function.__code__)):
+            raise ValueError('Qualified network diagnostic declaration differs')
+        captured[name] = function.__code__
+    for name in ('observed', 'listed'):
+        path = 'configured_network_census.' + name
+        actual = expected_code(captured['configured_network_census'], name)
+        if not same_code(expected_code(expected, path), actual):
+            raise ValueError('Qualified network nested declaration differs')
+        captured[path] = actual
+    NETWORK_CAPTURE = (tuple(captured.items()), scanner.__dict__)
+
+
+def network_clause(error):
+    # Only original fixed literal raises; never infer a compound subpredicate.
+    if CURRENT_STAGE != 'scanner-start' or NETWORK_CAPTURE is None or type(error) not in (ValueError, TimeoutError):
+        return 'unclassified-source-clause'
+    trace = BaseException.__traceback__.__get__(error, BaseException)
+    frames = []
+    while trace is not None:
+        if len(frames) == TRACE_LIMIT:
+            return 'unclassified-source-clause'
+        frames.append((trace.tb_frame.f_code, trace.tb_frame.f_globals, trace.tb_lineno))
+        trace = trace.tb_next
+    if not frames:
+        return 'unclassified-source-clause'
+    code, namespace, line = frames[-1]
+    codes, original_namespace = NETWORK_CAPTURE
+    if namespace is not original_namespace:
+        return 'unclassified-source-clause'
+    codes = dict(codes)
+    for name, first, last, clause, error_name, literal in NETWORK_SITES:
+        if codes[name] is code and first <= line <= last:
+            expected_type = ValueError if error_name == 'ValueError' else TimeoutError
+            if type(error) is not expected_type:
+                return 'unclassified-source-clause'
+            arguments = BaseException.args.__get__(error, BaseException)
+            if type(arguments) is not tuple or len(arguments) != 1 or type(arguments[0]) is not str or len(arguments[0]) != len(literal) or arguments[0] != literal:
+                return 'unclassified-source-clause'
+            return clause
+    return 'unclassified-source-clause'
+
+
+
 # This classifier is diagnostic only. The original runner propagates this exact
 # error after cleanup; lifecycle quarantine errors never enter this lane.
 STORAGE_SOURCE_SHA256 = {'launcher': '4fc19580f9b36063e9808efc87e18bd1aa0ee5db955c15a9fee2f65eb419a8d9', 'scanner': '9bc5ca10c4d872224a3f096aa305a1893d5b3edc89e3042141c90f3b448af33d', 'runner': '89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6'}
@@ -244,7 +307,7 @@ def stage(value):
 
 def record(category, clause):
     global FIRST
-    if category not in CATEGORIES or clause not in tuple(GUARDS.values()) + tuple(site[3] for site in H_SITES+B_SITES) + (STORAGE_CLAUSE, STORAGE_WRAPPED_CLAUSE, STORAGE_CREATE_WRAPPED_CLAUSE, *STORAGE_DENIALS, 'unclassified-source-clause',):
+    if category not in CATEGORIES or clause not in tuple(GUARDS.values()) + tuple(site[3] for site in H_SITES+B_SITES+NETWORK_SITES) + (STORAGE_CLAUSE, STORAGE_WRAPPED_CLAUSE, STORAGE_CREATE_WRAPPED_CLAUSE, *STORAGE_DENIALS, 'unclassified-source-clause',):
         raise ValueError('Diagnostic code refused')
     if FIRST is None:
         FIRST = (CURRENT_STAGE, category, clause)
@@ -262,6 +325,8 @@ def failure(error):
                 'FileNotFoundError': 'os-failure', 'PermissionError': 'os-failure',
                 'KeyboardInterrupt': 'interrupted', 'SystemExit': 'interrupted'}.get(name, 'unclassified')
     clause = storage_clause(error) if category == 'cli-nonzero' else owner_clause(error)
+    if clause == 'unclassified-source-clause':
+        clause = network_clause(error)
     record(category, clause)
 
 

@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "ce66e4137e44f8838e1604045bc54312a3aa987cb8394eae895f3da7a53df38a",
-      "length": 26234
+      "sha256": "4f32b92c66026fb531acabcd2db53f7dba601c46cffdfa7452e6c0136e1b8bc7",
+      "length": 35725
     }
   ],
   "rawControls": {
@@ -170,5 +170,7 @@
   "storageCreateWrappedGrammarBase": "656b49a29d96f2fd08750666b627352f04f9be02",
   "storageCreateWrappedGrammarScope": "Complete source-referenced create wrapper,64lowerhex format only,no ownership correlation,optional one terminalLF; installedEngine/cause unknown;14falsefields",
   "configuredSubnetBase": "50a79fff79b0e0f597e732f58bb69c4d27cbcdb0",
-  "configuredSubnetScope": "Optin owned configured /28 from bounded read-only census; atomic singlecreate conflict authority; exact IPAM/generation observation beforecontainerbirth; independent exactownership cleanup; ordinarydefault unchanged"
+  "configuredSubnetScope": "Optin owned configured /28 from bounded read-only census; atomic singlecreate conflict authority; exact IPAM/generation observation beforecontainerbirth; independent exactownership cleanup; ordinarydefault unchanged",
+  "networkSourceDiagnosticBase": "3f6a1327fd20c3ffe153b06a58ebefafe171c240",
+  "networkSourceDiagnosticScope": "Fixed direct literal raise site only; exact builtin type/code/globals/finaltrace/line/literal; compoundsubpredicate and nativecause unknown;14falsefields"
 }

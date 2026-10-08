@@ -691,3 +691,110 @@ class StorageDiagnosticControls(unittest.TestCase):
         d,launcher,scanner,runner,owner,error=self.original_failure(reference,clean=False)
         self.assertIs(type(error),runner.DockerLifecycleError)
         self.assertNotEqual(d.FIRST[2],d.STORAGE_CREATE_WRAPPED_CLAUSE)
+
+class NetworkSiteDiagnosticControls(unittest.TestCase):
+    def model(self,capture=True):
+        import types,sys
+        d=types.ModuleType('network_diagnostic_model')
+        exec(compile(HELD_DIAGNOSTIC_SOURCE,'<held-network-diagnostic>','exec'),d.__dict__)
+        m=types.ModuleType('network_scanner_model')
+        relay=types.ModuleType('scanner_loopback_relay');relay.LoopbackRelay=object;relay.StartupPingRefused=type('StartupPingRefused',(OSError,),{})
+        runner=types.ModuleType('scanner_docker_command');runner.run_docker=lambda *a,**k:self.fail('unexpected actor')
+        with patch.dict(sys.modules,{'scanner_loopback_relay':relay,'scanner_docker_command':runner}):
+            exec(compile(HELD_STORAGE_SOURCES['scanner'],'<held-network-scanner>','exec'),m.__dict__)
+        if capture:d.capture_network_sites(m,HELD_STORAGE_SOURCES['scanner'])
+        d.stage('scanner-start');return d,m
+
+    def test_original_nested_direct_and_owned_validator_raise_are_fixed_private_sites(self):
+        for case in ('nested-observed','nested-listed','census-ipam','owned'):
+            d,m=self.model()
+            def docker(*args,**kw):
+                if case=='nested-observed':return object()
+                if case=='nested-listed':return 'PRIVATE INVALID'
+                if args[1]=='ls':return 'a'*64
+                return '[{"Id":"'+('a'*64)+'","Driver":"bridge","IPAM":{"Config":null}}]'
+            try:
+                if case=='owned':m.Scanner('modeled',configured_network=True).validate_configured_network(None)
+                else:m.configured_network_census(docker)
+            except ValueError as error:d.failure(error)
+            else:self.fail('expected original guard')
+            self.assertTrue(d.FIRST[2].startswith('scanner-network-guard-'))
+            d.bind('b'*40,'123',1,'c'*64,'pair');p=d.projection();self.assertEqual(len(p),14)
+            for key in ('pairAccepted','cleanupAccepted','fileRuntimeAccepted','genuineEightHostFinancialAccepted'):self.assertIs(p[key],False)
+            self.assertNotIn('PRIVATE',__import__('json').dumps(p));self.assertNotIn('a'*64,__import__('json').dumps(p))
+
+    def test_original_literal_type_stage_trace_and_unknown_library_remain_refused(self):
+        import json
+        d,m=self.model()
+        try:m.configured_network_census(lambda *args,**kw:object())
+        except ValueError as error:original=error
+        self.assertNotEqual(d.network_clause(original),'unclassified-source-clause')
+        old=original.args;original.args=('PRIVATE substitution',)
+        self.assertEqual(d.network_clause(original),'unclassified-source-clause');original.args=old
+        original.args=(str.__new__(type('ForeignString',(str,),{}),old[0]),)
+        self.assertEqual(d.network_clause(original),'unclassified-source-clause');original.args=old
+        wrong=TimeoutError(*old);wrong.__traceback__=original.__traceback__
+        self.assertEqual(d.network_clause(wrong),'unclassified-source-clause')
+        d.stage('storage-create');self.assertEqual(d.network_clause(original),'unclassified-source-clause')
+        d.stage('scanner-start');d.NETWORK_CAPTURE=None;self.assertEqual(d.network_clause(original),'unclassified-source-clause')
+        d,m=self.model()
+        try:m.configured_network_census(lambda *args,**kw:'a'*64 if args[1]=='ls' else 'INVALID JSON')
+        except json.JSONDecodeError as error:self.assertEqual(d.network_clause(error),'unclassified-source-clause')
+        else:self.fail('expected decoder refusal')
+
+    def test_precapture_source_body_namespace_and_wrong_bytes_refuse_without_actor(self):
+        import types
+        for family in ('census-body','census-namespace','validator-body','validator-namespace'):
+            d,m=self.model(capture=False)
+            owner=m if family.startswith('census') else m.Scanner
+            key='configured_network_census' if family.startswith('census') else 'validate_configured_network'
+            function=getattr(owner,key)
+            if family.endswith('namespace'):
+                setattr(owner,key,types.FunctionType(function.__code__,dict(m.__dict__),argdefs=function.__defaults__))
+            else:
+                ns={};exec(compile('\n'*(function.__code__.co_firstlineno-1)+'def foreign(*args,**kwargs):\n    raise ValueError("PRIVATE")\n','<foreign>','exec'),ns)
+                function.__code__=ns['foreign'].__code__
+            with self.assertRaises(ValueError):d.capture_network_sites(m,HELD_STORAGE_SOURCES['scanner'])
+            self.assertIsNone(d.NETWORK_CAPTURE)
+        d,m=self.model(capture=False)
+        with self.assertRaises(ValueError):d.capture_network_sites(m,b'wrong source')
+        self.assertIsNone(d.NETWORK_CAPTURE)
+
+    def test_postcapture_same_code_foreign_globals_and_bounded_trace_fail_closed(self):
+        import types
+        d,m=self.model()
+        m.configured_network_census=types.FunctionType(m.configured_network_census.__code__,dict(m.__dict__))
+        try:m.configured_network_census(lambda *a,**k:object())
+        except ValueError as error:self.assertEqual(d.network_clause(error),'unclassified-source-clause')
+        else:self.fail('expected source guard')
+        d,m=self.model()
+        original=m.Scanner.validate_configured_network
+        m.Scanner.validate_configured_network=types.FunctionType(original.__code__,dict(m.__dict__))
+        m.Scanner.validate_configured_network.__kwdefaults__=original.__kwdefaults__
+        try:m.Scanner('modeled',configured_network=True).validate_configured_network(None)
+        except ValueError as error:self.assertEqual(d.network_clause(error),'unclassified-source-clause')
+        else:self.fail('expected source guard')
+        d,m=self.model()
+        def recurse(depth):
+            if depth:return recurse(depth-1)
+            return m.configured_network_census(lambda *a,**k:object())
+        try:recurse(40)
+        except ValueError as error:self.assertEqual(d.network_clause(error),'unclassified-source-clause')
+        else:self.fail('expected source guard')
+
+    def test_literal_exact_length_precedes_equality_and_overlong_argument_refuses(self):
+        import ast
+        tree=ast.parse(HELD_DIAGNOSTIC_SOURCE)
+        fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='network_clause')
+        test=next(n.test for n in ast.walk(fn) if isinstance(n,ast.If) and isinstance(n.test,ast.BoolOp) and any(isinstance(v,ast.Compare) and isinstance(v.left,ast.Call) and isinstance(v.left.func,ast.Name) and v.left.func.id=='len' and isinstance(v.left.args[0],ast.Subscript) for v in n.test.values))
+        rendered=[ast.unparse(n) for n in test.values]
+        self.assertEqual(rendered[-3:],['type(arguments[0]) is not str','len(arguments[0]) != len(literal)','arguments[0] != literal'])
+        d,m=self.model()
+        try:m.configured_network_census(lambda *args,**kw:object())
+        except ValueError as error:original=error
+        capture=d.NETWORK_CAPTURE;trace=original.__traceback__
+        original.args=('PRIVATE overlong argument'*1000,)
+        self.assertEqual(d.network_clause(original),'unclassified-source-clause')
+        self.assertIs(d.NETWORK_CAPTURE,capture);self.assertIs(original.__traceback__,trace)
+        d.failure(original);d.bind('a'*40,'123',1,'b'*64,'pair')
+        self.assertNotIn('PRIVATE',__import__('json').dumps(d.projection()))

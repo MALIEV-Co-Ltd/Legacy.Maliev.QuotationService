@@ -20,7 +20,7 @@ import uuid
 
 
 LIMIT = 1048576
-MANIFEST_SHA256 = 'd85d978b86d67b6649197b5b7542f28514dfe7cc241877f99e5bbfadfcb5c210'
+MANIFEST_SHA256 = 'aa3eb61f639b9511e4955e2c02beaf7a0abd20a1596c08a8a24ec163245ce8f2'
 
 
 class Refused(ValueError):
@@ -287,6 +287,7 @@ def admit_and_load():
             and bridge.__spec__.loader.held['borrowed_scanner_bridge'] is held['borrowed_scanner_bridge'])
     diagnostic.capture_bridge_sites(bridge, held['borrowed_scanner_bridge'])
     import hosted_scanner_readiness as scanner
+    diagnostic.capture_network_sites(scanner, held['hosted_scanner_readiness'])
     diagnostic.capture_storage_sites(sys.modules['held_pair_launcher'], scanner, runner,
         {'launcher':held['held_pair_launcher'], 'scanner':held['hosted_scanner_readiness'], 'runner':held['scanner_docker_command']})
     return root, head, manifest, manifest_bytes, h, qualifier, runner
