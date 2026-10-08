@@ -11,6 +11,7 @@ HELD_DIAGNOSTIC_SOURCE = None
 HELD_OWNER_SOURCES = None
 HELD_H_SOURCE = None
 HELD_BRIDGE_SOURCE = None
+HELD_STORAGE_SOURCES = None
 ORIGINAL_RELAY_PREFIX = "def _relay(self):\n    relay = self.scanner.relay\n    require(relay is not None and not relay.stop.is_set() and relay.acceptor.is_alive()\n            and relay.ready_history_valid() and relay.listener.fileno() >= 0\n            and relay.listener.getsockname() == relay.endpoint\n            and relay.endpoint == ('127.0.0.1', self.scanner.port), 'Held relay unavailable')\n"
 
 
@@ -433,3 +434,151 @@ class HostedPairSourceControls(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class StorageDiagnosticControls(unittest.TestCase):
+    def prepare(self):
+        import ast,types
+        d=types.ModuleType('storage_diagnostic_model')
+        exec(compile(HELD_DIAGNOSTIC_SOURCE,'<held-storage-diagnostic>','exec'),d.__dict__)
+        runner=types.ModuleType('scanner_docker_command')
+        exec(compile(HELD_STORAGE_SOURCES['runner'],'<held-storage-runner>','exec'),runner.__dict__)
+        scanner=types.ModuleType('held_storage_scanner_model')
+        # Compile only the actual actor-free method declaration, preserving its
+        # qualified code, source line table and actual admitted globals mapping.
+        tree=ast.parse(HELD_STORAGE_SOURCES['scanner'])
+        cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='Scanner')
+        cls.body=[n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='docker']
+        scanner.run_docker=runner.run_docker
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[cls],type_ignores=[])),'<held-scanner-method-model>','exec'),scanner.__dict__)
+        launcher=types.ModuleType('held_storage_launcher_model')
+        borrowed=types.ModuleType('borrowed_scanner_bridge');borrowed.BridgeRefused=type('BridgeRefused',(ValueError,),{})
+        borrowed.BorrowedScannerBridge=lambda *args:types.SimpleNamespace(_failure=False)
+        seam=types.ModuleType('storage_owner_command');seam.storage_command=lambda *args:self.fail('unexpected storage process actor')
+        with patch.dict(harness.sys.modules,{'pair_failure_diagnostic':d,'borrowed_scanner_bridge':borrowed,'storage_owner_command':seam}):
+            exec(compile(HELD_STORAGE_SOURCES['launcher'],'<held-storage-launcher>','exec'),launcher.__dict__)
+        return d,launcher,scanner,runner
+
+    def original_failure(self,value=None,clean=True,capture=True,clone=None):
+        import types,subprocess
+        d,launcher,scanner,runner=self.prepare()
+        if capture:d.capture_storage_sites(launcher,scanner,runner,HELD_STORAGE_SOURCES)
+        if clone == 'runner':
+            runner._run_fenced=types.FunctionType(runner._run_fenced.__code__,dict(runner.__dict__),argdefs=runner._run_fenced.__defaults__)
+        elif clone == 'scanner':
+            original=scanner.Scanner.docker
+            scanner.Scanner.docker=types.FunctionType(original.__code__,dict(scanner.__dict__),argdefs=original.__defaults__)
+            scanner.Scanner.docker.__kwdefaults__=original.__kwdefaults__
+        error_line=d.STORAGE_ENGINE_LINE if value is None else value
+        stdin=object();stdout=object();stderr=object();commands=[]
+        def birth(args,**kwargs):
+            commands.append(args[1])
+            return types.SimpleNamespace(returncode=1 if args[1]=='create' else 0,stdout=stdout,stderr=stderr)
+        class Lease:
+            def __init__(self,timeout):
+                self.original_failure=None;self.cleanup_failures=[];self.receipt={'cleanupVerified':True}
+                self.output={stdout:b'',stderr:error_line.encode()}
+            def bind(self):pass
+            def drain(self):pass
+            def cleanup(self):
+                self.receipt['cleanupVerified']=clean or self.process.returncode==0
+                if self.receipt['cleanupVerified']:runner._OWNERS.remove(self)
+        storage=types.ModuleType('owned_storage_backend');storage.IMAGE='modeled-owned-image';storage.IMAGE_ID='modeled-id'
+        owner=object.__new__(launcher.HeldPairLauncher)
+        owner.finished=False;owner.failure=False;owner.bridge=None;owner.backend_create_attempted=False
+        owner.context=object();owner.backend_name='modeled-owned-name';owner.scanner=scanner.Scanner()
+        owner.scanner.start=lambda:None;owner.scanner.network_id='modeled-network'
+        owner.inspect=lambda kind,handle:({'IPAM':{'Config':[{'Subnet':'172.20.0.0/24'}]},'Containers':{}} if kind=='network' else {'Id':storage.IMAGE_ID,'RepoDigests':[storage.IMAGE],'Config':{}})
+        owner.labels=lambda:{};launcher.OWNER=owner
+        if clone == 'launcher':
+            function=launcher.HeldPairLauncher.start.__wrapped__
+            launcher.HeldPairLauncher.start=types.FunctionType(function.__code__,dict(launcher.__dict__))
+        if clone == 'runner':runner._run_fenced.__globals__['_Lease']=Lease
+        with patch.dict(harness.sys.modules,{'owned_storage_backend':storage}),patch.object(runner,'_Lease',Lease),patch.object(subprocess,'Popen',birth):
+            try:owner.start()
+            except BaseException as error:observed=error
+            else:self.fail('expected actual source create refusal')
+        if d.FIRST is None:d.failure(observed)
+        self.assertEqual(commands,['pull','create']);self.assertTrue(owner.failure)
+        return d,launcher,scanner,runner,owner,observed
+
+    def test_original_settled_source_route_emits_only_fixed_clause(self):
+        for ending in ('','\n','.','.\n'):
+            d0,*_=self.prepare()
+            d,launcher,scanner,runner,owner,error=self.original_failure(d0.STORAGE_ENGINE_LINE+ending)
+            self.assertEqual(d.FIRST,('storage-create','cli-nonzero','docker-static-ip-requires-configured-subnet'))
+            self.assertEqual(runner._OWNERS,[])
+            d.bind('a'*40,'123',1,'b'*64,'pair')
+            receipt=d.projection();self.assertEqual(len(receipt),14)
+            self.assertFalse(receipt['pairAccepted']);self.assertFalse(receipt['cleanupAccepted'])
+            self.assertFalse(receipt['fileRuntimeAccepted']);self.assertFalse(receipt['genuineEightHostFinancialAccepted'])
+            text=__import__('json').dumps(receipt)
+            self.assertNotIn(d.STORAGE_ENGINE_LINE,text);self.assertNotIn('modeled-owned',text)
+
+    def test_unsupported_payload_stage_type_and_foreign_route_refuse(self):
+        import subprocess
+        baseline=self.prepare()[0].STORAGE_ENGINE_LINE
+        for value in ('OTHER '+baseline,baseline+' OTHER',baseline+'\nSECOND',baseline[:-1],'x'*4096,'x'*5000):
+            d,*rest=self.original_failure(value)
+            self.assertEqual(d.FIRST[2],'unclassified-source-clause')
+        d,*rest=self.original_failure();error=rest[-1]
+        for value in (None,b'PRIVATE',True,{},4096):
+            error.__dict__['stderr']=value
+            self.assertEqual(d.storage_clause(error),'unclassified-source-clause')
+        error.__dict__['stderr']=baseline
+        d.stage('storage-start');self.assertEqual(d.storage_clause(error),'unclassified-source-clause')
+        d.stage('storage-create')
+        for foreign in (subprocess.CalledProcessError(1,['PRIVATE'],stderr=baseline),type('CalledProcessError',(Exception,),{})()):
+            self.assertEqual(d.storage_clause(foreign),'unclassified-source-clause')
+        try:raise subprocess.CalledProcessError(1,['PRIVATE'],stderr=baseline)
+        except subprocess.CalledProcessError as foreign:
+            self.assertEqual(d.storage_clause(foreign),'unclassified-source-clause')
+
+    def test_precapture_foreign_body_and_namespace_are_refused(self):
+        import types
+        for family,path in (('launcher','start'),('scanner','docker'),('runner','_run_fenced')):
+            for change in ('body','globals'):
+                d,launcher,scanner,runner=self.prepare()
+                owner={'launcher':launcher,'scanner':scanner,'runner':runner}[family]
+                function=launcher.HeldPairLauncher.start.__wrapped__ if family=='launcher' else scanner.Scanner.docker if family=='scanner' else runner._run_fenced
+                if change=='body':
+                    namespace={};exec(compile('\n'*(function.__code__.co_firstlineno-1)+'def foreign(*a,**k):\n    return None\n','<foreign-body>','exec'),namespace)
+                    function.__code__=namespace['foreign'].__code__
+                else:
+                    replacement=types.FunctionType(function.__code__,{})
+                    if family=='launcher':launcher.HeldPairLauncher.start.__wrapped__=replacement
+                    elif family=='scanner':scanner.Scanner.docker=replacement
+                    else:runner._run_fenced=replacement
+                with self.assertRaises(ValueError):d.capture_storage_sites(launcher,scanner,runner,HELD_STORAGE_SOURCES)
+                self.assertIsNone(d.STORAGE_CAPTURE)
+
+    def test_unsettled_original_command_retains_owner_and_never_classifies(self):
+        d,launcher,scanner,runner,owner,error=self.original_failure(clean=False)
+        self.assertIs(type(error),runner.DockerLifecycleError)
+        self.assertNotEqual(d.FIRST[2],d.STORAGE_CLAUSE)
+        self.assertTrue(owner.failure);self.assertTrue(runner._OWNERS)
+        self.assertEqual(d.storage_clause(error),'unclassified-source-clause')
+
+    def test_source_tamper_duplicate_capture_and_postcapture_substitution_refuse(self):
+        d,launcher,scanner,runner=self.prepare()
+        wrong=dict(HELD_STORAGE_SOURCES);wrong['runner']+=b'\n'
+        with self.assertRaises(ValueError):d.capture_storage_sites(launcher,scanner,runner,wrong)
+        self.assertIsNone(d.STORAGE_CAPTURE)
+        d.capture_storage_sites(launcher,scanner,runner,HELD_STORAGE_SOURCES)
+        with self.assertRaises(ValueError):d.capture_storage_sites(launcher,scanner,runner,HELD_STORAGE_SOURCES)
+        # Same original error type/text at a foreign source frame is not an
+        # original settled command, even after valid source capture.
+        import subprocess
+        d.stage('storage-create')
+        namespace={'subprocess':subprocess,'line':d.STORAGE_ENGINE_LINE}
+        exec(compile('def foreign():\n    raise subprocess.CalledProcessError(1,[],stderr=line)\n','<foreign-after-capture>','exec'),namespace)
+        try:namespace['foreign']()
+        except subprocess.CalledProcessError as error:
+            self.assertEqual(d.storage_clause(error),'unclassified-source-clause')
+
+    def test_postcapture_same_code_foreign_globals_never_gains_clause(self):
+        for family in ('launcher','scanner','runner'):
+            d,launcher,scanner,runner,owner,error=self.original_failure(clone=family)
+            self.assertEqual(d.FIRST[2],'unclassified-source-clause')
+            self.assertEqual(d.storage_clause(error),'unclassified-source-clause')
+            self.assertTrue(owner.failure);self.assertEqual(runner._OWNERS,[])

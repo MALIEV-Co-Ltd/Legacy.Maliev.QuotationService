@@ -66,8 +66,8 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "78fbd2cb63921da23f55b7c2c48ff7b101a002e15a219967e237ade53209a5c9",
-      "length": 20125
+      "sha256": "eed08e8e71741a6637c89232a13f193bf3c3e0c3d15bb024fc82cdaa85dff74e",
+      "length": 24653
     }
   ],
   "rawControls": {
@@ -142,5 +142,14 @@
   "startupAdmissionDiagnosticBase": "74c87a5777310a06d5e3138d3ab70e87e4d4c402",
   "startupAdmissionDiagnosticScope": "Finite original lock snapshot before quarantine; UNKNOWN unevaluated/unknown shape; no cap/deadline/retry or acceptance change",
   "sameBudgetPacingBase": "e6e3ea1f6abb27ba79c87f60c0c14f7d2e509740",
-  "sameBudgetPacingScope": "Same max16/source settlement/per-call3s and absolute120/180 deadline; paced original attempts only; no cap/network/runner change"
+  "sameBudgetPacingScope": "Same max16/source settlement/per-call3s and absolute120/180 deadline; paced original attempts only; no cap/network/runner change",
+  "storageDiagnosticBase": "a6b5564a0fe73e6626bdb2583c329a8cccadd947",
+  "storageDiagnosticOnly": true,
+  "storageDiagnosticSourceAssociation": {
+    "launcher": "606616e55992cb739fb2fd7e7f00edce5bd7e8396d15c30a99270b8a526f3763",
+    "scanner": "aa6c9591d4df6b5feb7ecd7959be06b8e0743f8f83f717f392b6792d4d5a6eba",
+    "runner": "89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6"
+  },
+  "storageDiagnosticIdentityOnlyGlobalsRequired": true,
+  "historicalWithheldStorageDiagnosticSeal": "8aa75745ce029c0997c5df5088ad09da7137dd47ff6db8b43df2eb4fd9d0f073"
 }

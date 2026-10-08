@@ -137,6 +137,79 @@ def owner_clause(error):
             return clause
     return 'unclassified-source-clause'
 
+
+# This classifier is diagnostic only. The original runner propagates this exact
+# error after cleanup; lifecycle quarantine errors never enter this lane.
+STORAGE_SOURCE_SHA256 = {'launcher': '606616e55992cb739fb2fd7e7f00edce5bd7e8396d15c30a99270b8a526f3763', 'scanner': 'aa6c9591d4df6b5feb7ecd7959be06b8e0743f8f83f717f392b6792d4d5a6eba', 'runner': '89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6'}
+STORAGE_SITES = {'create': (150, 150), 'docker': (120, 120), 'propagate': (385, 385), 'original': (360, 361)}
+STORAGE_CAPTURE = None
+STORAGE_CLAUSE = 'docker-static-ip-requires-configured-subnet'
+STORAGE_ENGINE_LINE = 'Error response from daemon: user specified IP address is supported only when connecting to networks with user configured subnets'
+
+
+def capture_storage_sites(launcher, scanner, runner, sources):
+    global STORAGE_CAPTURE
+    import hashlib
+    import subprocess
+    import types
+    if STORAGE_CAPTURE is not None or type(sources) is not dict or set(sources) != set(STORAGE_SOURCE_SHA256):
+        raise ValueError('Qualified storage source association refused')
+    modules = {'launcher': launcher, 'scanner': scanner, 'runner': runner}
+    declarations = (('launcher','HeldPairLauncher.start',launcher.HeldPairLauncher.start.__wrapped__),
+                    ('scanner','Scanner.docker',scanner.Scanner.docker),
+                    ('runner','run_docker',runner.run_docker),
+                    ('runner','_run_fenced',runner._run_fenced))
+    compiled = {}
+    for name,module in modules.items():
+        data = sources[name]
+        if type(module) is not types.ModuleType or type(data) is not bytes or hashlib.sha256(data).hexdigest() != STORAGE_SOURCE_SHA256[name]:
+            raise ValueError('Qualified storage source association refused')
+        compiled[name] = compile(data, '<qualified-storage-structure>', 'exec', dont_inherit=True)
+    codes = {}
+    namespaces = {}
+    for name,path,value in declarations:
+        if type(value) is not types.FunctionType or value.__globals__ is not modules[name].__dict__ or not same_code(expected_code(compiled[name],path),value.__code__):
+            raise ValueError('Qualified storage declaration differs')
+        codes[path] = value.__code__
+        namespaces[path] = value.__globals__
+    if scanner.run_docker is not runner.run_docker or runner.subprocess is not subprocess:
+        raise ValueError('Qualified storage route differs')
+    STORAGE_CAPTURE = (subprocess.CalledProcessError,tuple(codes.items()),tuple(namespaces.items()))
+
+
+def storage_clause(error):
+    if CURRENT_STAGE != 'storage-create' or STORAGE_CAPTURE is None or type(error) is not STORAGE_CAPTURE[0]:
+        return 'unclassified-source-clause'
+    codes = dict(STORAGE_CAPTURE[1])
+    namespaces = dict(STORAGE_CAPTURE[2])
+    trace = error.__traceback__
+    frames = []
+    while trace is not None:
+        if len(frames) == TRACE_LIMIT:
+            return 'unclassified-source-clause'
+        frames.append((trace.tb_frame.f_code,trace.tb_lineno,trace.tb_frame.f_globals))
+        trace = trace.tb_next
+    # Ordered original call route and the two _run_fenced raise sites. No caller
+    # metadata or error text establishes provenance. Other intervening code is
+    # allowed only outside this exact contiguous source-owned suffix.
+    if len(frames) < 5:
+        return 'unclassified-source-clause'
+    route = frames[-5:]
+    paths = ('HeldPairLauncher.start','Scanner.docker','run_docker','_run_fenced','_run_fenced')
+    ranges = (STORAGE_SITES['create'],STORAGE_SITES['docker'],None,STORAGE_SITES['propagate'],STORAGE_SITES['original'])
+    for (code,line,namespace),path,bounds in zip(route,paths,ranges):
+        if code is not codes[path] or namespace is not namespaces[path] or (bounds is not None and not bounds[0] <= line <= bounds[1]):
+            return 'unclassified-source-clause'
+    # Exact original class uses the built-in dict; no descriptor, args, command,
+    # exception formatting, frame locals/globals or private output is projected.
+    data = BaseException.__dict__['__dict__'].__get__(error,type(error))
+    value = dict.get(data,'stderr')
+    if type(value) is not str or not 0 < len(value) < 4096:
+        return 'unclassified-source-clause'
+    if value not in (STORAGE_ENGINE_LINE,STORAGE_ENGINE_LINE+'\n',STORAGE_ENGINE_LINE+'.',STORAGE_ENGINE_LINE+'.\n'):
+        return 'unclassified-source-clause'
+    return STORAGE_CLAUSE
+
 CURRENT_STAGE = 'unentered'
 FIRST = None
 BINDING = None
@@ -151,7 +224,7 @@ def stage(value):
 
 def record(category, clause):
     global FIRST
-    if category not in CATEGORIES or clause not in tuple(GUARDS.values()) + tuple(site[3] for site in H_SITES+B_SITES) + ('unclassified-source-clause',):
+    if category not in CATEGORIES or clause not in tuple(GUARDS.values()) + tuple(site[3] for site in H_SITES+B_SITES) + (STORAGE_CLAUSE, 'unclassified-source-clause',):
         raise ValueError('Diagnostic code refused')
     if FIRST is None:
         FIRST = (CURRENT_STAGE, category, clause)
@@ -168,7 +241,8 @@ def failure(error):
                 'CalledProcessError': 'cli-nonzero', 'OSError': 'os-failure',
                 'FileNotFoundError': 'os-failure', 'PermissionError': 'os-failure',
                 'KeyboardInterrupt': 'interrupted', 'SystemExit': 'interrupted'}.get(name, 'unclassified')
-    record(category, owner_clause(error))
+    clause = storage_clause(error) if category == 'cli-nonzero' else owner_clause(error)
+    record(category, clause)
 
 
 def bind(head, run, attempt, manifest_digest, mode):
