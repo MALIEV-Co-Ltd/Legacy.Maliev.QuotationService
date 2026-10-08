@@ -770,3 +770,54 @@ class ConfiguredNetworkControls(unittest.TestCase):
             else:
                 with self.assertRaises(ValueError):m.configured_network_census(docker)
                 self.assertEqual([args[1] for args in calls],['ls','inspect'])
+
+    def test_ipam_split_original_admitted_forms_error_type_message_and_cli_order(self):
+        import json
+        before=HELD_SCANNER_SOURCE
+        split="        if type(ipam) is not dict:\n            raise ValueError('Configured network census IPAM shape differs')\n        config = ipam.get('Config')\n        if type(config) is not list:\n            if 'Config' not in ipam:\n                raise ValueError('Configured network census IPAM shape differs')\n            if config is None:\n                raise ValueError('Configured network census IPAM shape differs')\n            raise ValueError('Configured network census IPAM shape differs')\n        if len(ipam['Config']) > 8:\n            raise ValueError('Configured network census IPAM shape differs')\n"
+        original="        if type(ipam) is not dict or type(ipam.get('Config')) is not list or len(ipam['Config']) > 8:\n            raise ValueError('Configured network census IPAM shape differs')\n"
+        self.assertEqual(before.decode().count(split),1)
+        with patch.dict(globals(),{'HELD_SCANNER_SOURCE':before.replace(split.encode(),original.encode())}):old=self.module()
+        new=self.module()
+        values=(None,[],{}, {'Config':None},{'Config':'PRIVATE'},{'Config':{}},{'Config':1},{'Config':False},{'Config':[]},{'Config':[{'Subnet':'172.17.0.0/16'}]},{'Config':[{}]*8},{'Config':[{}]*9})
+        for driver in ('host','null','bridge','unknown-plugin'):
+            for value in values:
+                outcomes=[]
+                for m in (old,new):
+                    calls=[]
+                    def docker(*args,**kw):
+                        calls.append(args)
+                        if args[1]=='ls':return 'a'*64
+                        return json.dumps([{'Id':'a'*64,'Driver':driver,'IPAM':value}])
+                    try:outcome=('result',m.configured_network_census(docker))
+                    except BaseException as error:outcome=(type(error),error.args)
+                    outcomes.append((outcome,calls))
+                self.assertEqual(outcomes[0],outcomes[1])
+
+    def test_ipam_split_all_five_refusals_stop_before_second_inspect_or_allocation(self):
+        import json
+        m=self.module()
+        for value in (None,{}, {'Config':None},{'Config':{}},{'Config':[{}]*9}):
+            calls=[]
+            def docker(*args,**kw):
+                calls.append(args)
+                if args[1]=='ls':return 'a'*64+'\n'+'b'*64
+                return json.dumps([{'Id':'a'*64,'Driver':'host','IPAM':value}])
+            with self.assertRaises(ValueError) as raised:m.configured_network_census(docker)
+            self.assertEqual(raised.exception.args,('Configured network census IPAM shape differs',))
+            self.assertEqual([args[1] for args in calls],['ls','inspect'])
+
+    def test_ipam_split_builtin_only_classification_preserves_get_and_length_order(self):
+        import ast
+        source=ast.parse(HELD_SCANNER_SOURCE)
+        fn=next(n for n in source.body if isinstance(n,ast.FunctionDef) and n.name=='configured_network_census')
+        loop=next(n for n in fn.body if isinstance(n,ast.For) and isinstance(n.target,ast.Name) and n.target.id=='network_id')
+        first=next(i for i,n in enumerate(loop.body) if isinstance(n,ast.Assign) and any(isinstance(v,ast.Name) and v.id=='ipam' for v in n.targets))
+        rows=loop.body[first+1:first+5]
+        self.assertEqual(ast.unparse(rows[0].test),'type(ipam) is not dict')
+        self.assertEqual(ast.unparse(rows[1]),"config = ipam.get('Config')")
+        self.assertEqual(ast.unparse(rows[2].test),'type(config) is not list')
+        self.assertEqual(ast.unparse(rows[3].test),"len(ipam['Config']) > 8")
+        nested=rows[2].body
+        self.assertEqual(ast.unparse(nested[0].test),"'Config' not in ipam")
+        self.assertEqual(ast.unparse(nested[1].test),'config is None')

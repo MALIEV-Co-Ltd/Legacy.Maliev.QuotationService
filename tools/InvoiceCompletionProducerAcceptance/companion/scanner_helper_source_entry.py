@@ -9,7 +9,7 @@ import types
 import unittest
 
 INVENTORY_BYTES = 2807
-INVENTORY_SHA = "f9067b75d04c24fc3358f5c6f4dfa7edb91677b238782865661c6335fe2df890"
+INVENTORY_SHA = "1c73ad2a2637c3e74801ba85712b172d308edafa15cbefa4e4c29d0adfd9730b"
 PROGRAM = "tools/InvoiceCompletionProducerAcceptance/companion/scanner_helper_hosted_controls.py"
 PATHS = {
     "tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py",

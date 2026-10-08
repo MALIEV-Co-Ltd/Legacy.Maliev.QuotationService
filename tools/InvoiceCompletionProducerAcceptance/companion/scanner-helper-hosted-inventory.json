@@ -4,8 +4,8 @@
   "Files": [
     {
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py",
-      "bytes": 48732,
-      "sha256": "9bc5ca10c4d872224a3f096aa305a1893d5b3edc89e3042141c90f3b448af33d"
+      "bytes": 49158,
+      "sha256": "d2cd1141975f808bcdb3454a5df18287962413ce89ce4cd8a491289155cbc060"
     },
     {
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_docker_command.py",

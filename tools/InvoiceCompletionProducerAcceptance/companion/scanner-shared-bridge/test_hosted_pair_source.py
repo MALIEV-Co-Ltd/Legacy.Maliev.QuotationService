@@ -798,3 +798,24 @@ class NetworkSiteDiagnosticControls(unittest.TestCase):
         self.assertIs(d.NETWORK_CAPTURE,capture);self.assertIs(original.__traceback__,trace)
         d.failure(original);d.bind('a'*40,'123',1,'b'*64,'pair')
         self.assertNotIn('PRIVATE',__import__('json').dumps(d.projection()))
+
+    def test_original_ipam_type_missing_null_nonlist_oversize_have_distinct_fixed_sites(self):
+        import json
+        clauses=[]
+        for value in (None,{}, {'Config':None},{'Config':{}},{'Config':[{}]*9}):
+            d,m=self.model();calls=[]
+            def docker(*args,**kw):
+                calls.append(args)
+                if args[1]=='ls':return 'a'*64
+                return json.dumps([{'Id':'a'*64,'Driver':'host','IPAM':value}])
+            try:m.configured_network_census(docker)
+            except ValueError as error:
+                self.assertEqual(error.args,('Configured network census IPAM shape differs',))
+                d.failure(error)
+            else:self.fail('unchanged source refusal required')
+            self.assertEqual([args[1] for args in calls],['ls','inspect'])
+            self.assertTrue(d.FIRST[2].startswith('scanner-network-guard-'));clauses.append(d.FIRST[2])
+            d.bind('b'*40,'123',1,'c'*64,'pair');p=d.projection();self.assertEqual(len(p),14)
+            for key in ('pairAccepted','cleanupAccepted','fileRuntimeAccepted','genuineEightHostFinancialAccepted'):self.assertIs(p[key],False)
+            self.assertNotIn('a'*64,__import__('json').dumps(p))
+        self.assertEqual(len(set(clauses)),5)

@@ -140,7 +140,16 @@ def configured_network_census(docker):
         if type(rows) is not list or len(rows) != 1 or type(rows[0]) is not dict or rows[0].get('Id') != network_id:
             raise ValueError('Configured network census inspect identity differs')
         ipam = rows[0].get('IPAM')
-        if type(ipam) is not dict or type(ipam.get('Config')) is not list or len(ipam['Config']) > 8:
+        if type(ipam) is not dict:
+            raise ValueError('Configured network census IPAM shape differs')
+        config = ipam.get('Config')
+        if type(config) is not list:
+            if 'Config' not in ipam:
+                raise ValueError('Configured network census IPAM shape differs')
+            if config is None:
+                raise ValueError('Configured network census IPAM shape differs')
+            raise ValueError('Configured network census IPAM shape differs')
+        if len(ipam['Config']) > 8:
             raise ValueError('Configured network census IPAM shape differs')
         driver = rows[0].get('Driver')
         if type(driver) is not str or re.fullmatch('[a-zA-Z0-9_.-]{1,64}', driver) is None:
