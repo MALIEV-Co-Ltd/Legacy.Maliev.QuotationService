@@ -6,8 +6,94 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import qualify_hosted_pair as harness
 
+# Workflow injects trusted held bytes before running these pure models.
+HELD_DIAGNOSTIC_SOURCE = None
+HELD_OWNER_SOURCES = None
+
 
 class HostedPairSourceControls(unittest.TestCase):
+    def diagnostic_model(self):
+        import types
+        source = HELD_DIAGNOSTIC_SOURCE
+        module = types.ModuleType('diagnostic_model')
+        exec(compile(source, '<held-diagnostic-model>', 'exec'), module.__dict__)
+        return module
+
+    def test_actual_owner_guard_refusals_preserve_original_custody_and_quarantine(self):
+        import types
+        d = self.diagnostic_model()
+        class ModelBridgeRefused(ValueError): pass
+        borrowed = types.ModuleType('borrowed_scanner_bridge')
+        borrowed.BridgeRefused = ModelBridgeRefused
+        borrowed.BorrowedScannerBridge = object
+        command = types.ModuleType('storage_owner_command')
+        command.storage_command = lambda *args: self.fail('unexpected actor callback')
+        quarantine = [object()]
+        mocked = {'pair_failure_diagnostic': d, 'borrowed_scanner_bridge': borrowed,
+                  'storage_owner_command': command,
+                  'scanner_docker_command': SimpleNamespace(_OWNERS=quarantine)}
+        with patch.dict(harness.sys.modules, mocked):
+            for name, stage in (('pinned_image_oracle', 'oracle-acquire'), ('held_pair_launcher', 'pair-acquire')):
+                d.FIRST = None
+                d.stage(stage)
+                module = types.ModuleType(name)
+                exec(compile(HELD_OWNER_SOURCES[name], '<held-owner-model>', 'exec'), module.__dict__)
+                cls = module.PinnedImageOracle if name == 'pinned_image_oracle' else module.HeldPairLauncher
+                owner = object.__new__(cls)
+                owner.failure = False
+                owner.finished = name == 'held_pair_launcher'
+                if name == 'pinned_image_oracle':
+                    owner.create_attempted = True
+                    module.ORACLE = owner
+                    operation = owner.qualify
+                else:
+                    owner.bridge = SimpleNamespace(_failure=False)
+                    module.OWNER = owner
+                    operation = owner.start
+                with self.assertRaises(ModelBridgeRefused): operation()
+                self.assertTrue(owner.failure)
+                self.assertIs(getattr(module, 'ORACLE' if name == 'pinned_image_oracle' else 'OWNER'), owner)
+                self.assertEqual(d.FIRST[0], stage)
+                self.assertEqual(d.FIRST[1], 'source-guard')
+                self.assertIs(harness.sys.modules['scanner_docker_command']._OWNERS, quarantine)
+
+    def test_first_source_guard_survives_cleanup_stage_and_private_exception(self):
+        d = self.diagnostic_model()
+        d.bind('a'*40, '1', 1, 'b'*64, 'pair')
+        d.stage('oracle-image-metadata')
+        d.guard('Immutable volume-free image differs')
+        first = d.FIRST
+        d.stage('oracle-release')
+        d.failure(RuntimeError('PRIVATE argv PID IP payload'))
+        self.assertEqual(d.FIRST, first)
+        proof = d.projection()
+        self.assertEqual(proof['firstStage'], 'oracle-image-metadata')
+        self.assertNotIn('PRIVATE', str(proof))
+        self.assertFalse(proof['cleanupAccepted'])
+        self.assertFalse(proof['pairAccepted'])
+
+    def test_diagnostic_unknown_or_unbound_values_never_become_public_fields(self):
+        d = self.diagnostic_model()
+        with self.assertRaises(ValueError): d.projection()
+        with self.assertRaises(ValueError): d.stage('PRIVATE')
+        with self.assertRaises(ValueError): d.record('PRIVATE', 'PRIVATE')
+        d.bind('a'*40, '1', 1, 'b'*64, 'pair')
+        d.failure(RuntimeError('PRIVATE'))
+        self.assertEqual(d.projection()['firstCategory'], 'unclassified')
+        self.assertEqual(d.projection()['firstDenialClause'], 'unclassified-source-clause')
+
+    def test_diagnostic_write_failure_does_not_drop_retained_original_owners(self):
+        from unittest.mock import Mock
+        owner = object()
+        d = self.diagnostic_model()
+        d.bind('a'*40, '1', 1, 'b'*64, 'pair')
+        modules = {'pair_failure_diagnostic': d, 'pinned_image_oracle': SimpleNamespace(ORACLE=owner)}
+        with patch.dict(harness.sys.modules, modules), patch.object(harness.Path, 'cwd', side_effect=KeyboardInterrupt):
+            harness.write_failure_diagnostic(RuntimeError('PRIVATE'))
+            self.assertTrue(harness.owners_retained())
+            self.assertIs(harness.sys.modules['pinned_image_oracle'].ORACLE, owner)
+        self.assertIsNotNone(d.FIRST)
+
     def test_invalid_metadata_refuses_before_either_actor_callback(self):
         from unittest.mock import Mock
         manifest, _ = self.manifest()
@@ -54,7 +140,7 @@ class HostedPairSourceControls(unittest.TestCase):
     def manifest(self):
         names = ('scanner_docker_command', 'hosted_companion_resources', 'scanner_loopback_relay',
                  'hosted_scanner_readiness', 'borrowed_scanner_bridge', 'owned_storage_backend',
-                 'storage_owner_command', 'held_pair_launcher', 'pinned_image_oracle', 'qualify_pair_resources')
+                 'storage_owner_command', 'held_pair_launcher', 'pinned_image_oracle', 'qualify_pair_resources', 'pair_failure_diagnostic')
         data = b'fixture_model_value = 7\n'
         return {'schemaVersion': 1, 'fileSource': 'a' * 40,
                 'fileSourceRole': 'provenance-label-only-no-File-runtime',
@@ -67,7 +153,7 @@ class HostedPairSourceControls(unittest.TestCase):
         manifest, data = self.manifest()
         with patch.object(harness, 'bounded_read', return_value=data) as read:
             held = harness.hold_sources(Path.cwd(), manifest)
-        self.assertEqual(read.call_count, 10)
+        self.assertEqual(read.call_count, 11)
         self.assertEqual(set(held), {row['name'] for row in manifest['modules']})
         # Execution receives held bytes; no second filesystem read permits a
         # changed pathname to supply another module after admission.

@@ -20,7 +20,7 @@ import uuid
 
 
 LIMIT = 1048576
-MANIFEST_SHA256 = 'fff4c363a1b2697789462935cc642d89dd3a9aa1f23383d4791f139b44bb04ba'
+MANIFEST_SHA256 = 'df62d024b88023359777c37cc0d2d39239d55cdcc7677cd5f85f9f46a5df60d1'
 
 
 class Refused(ValueError):
@@ -84,7 +84,7 @@ def hold_sources(root, manifest):
             and type(manifest['schemaVersion']) is int and manifest['schemaVersion'] == 1
             and manifest['fileSourceRole'] == 'provenance-label-only-no-File-runtime'
             and re.fullmatch('[0-9a-f]{40}', manifest['fileSource']) is not None
-            and type(manifest['modules']) is list and len(manifest['modules']) == 10)
+            and type(manifest['modules']) is list and len(manifest['modules']) == 11)
     held = {}
     paths = set()
     for item in manifest['modules']:
@@ -103,7 +103,7 @@ def hold_sources(root, manifest):
         paths.add(item['path'])
     require(set(held) == {'scanner_docker_command', 'hosted_companion_resources', 'scanner_loopback_relay',
                          'hosted_scanner_readiness', 'borrowed_scanner_bridge', 'owned_storage_backend',
-                         'storage_owner_command', 'held_pair_launcher', 'pinned_image_oracle', 'qualify_pair_resources'})
+                         'storage_owner_command', 'held_pair_launcher', 'pinned_image_oracle', 'qualify_pair_resources', 'pair_failure_diagnostic'})
     return held
 
 
@@ -241,10 +241,14 @@ def validated_context(manifest, resources):
 def main():
     root, head, manifest, manifest_bytes, h, qualifier, runner = admit_and_load()
     context = validated_context(manifest, h)
+    import pair_failure_diagnostic as diagnostic
+    diagnostic.bind(head, context.run_id, context.attempt, hashlib.sha256(manifest_bytes).hexdigest(), 'pair')
+    diagnostic.stage('public-worker')
     # The callable owns independent oracle and pair finalizers. No dictionaries
     # are supplied as ownership/observation evidence by this wrapper.
     proof = qualifier.qualify_pair(context)
     require(not owners_retained())
+    diagnostic.stage('public-projection')
     validate_pair_projection(proof)
     require(proof['fileSource'] == manifest['fileSource'])
     proof.update(sourceHead=head, runId=context.run_id, runAttempt=context.attempt,
@@ -260,6 +264,9 @@ def main():
 def raw_git_main():
     root, head, manifest, manifest_bytes, h, qualifier, runner = admit_and_load()
     context = validated_context(manifest, h)
+    import pair_failure_diagnostic as diagnostic
+    diagnostic.bind(head, context.run_id, context.attempt, hashlib.sha256(manifest_bytes).hexdigest(), 'raw-git')
+    diagnostic.stage('raw-git')
     digest = observe_raw_git_version(runner, qualifier)
     # Dedicated fresh worker/receipt, never counted as a pair operation.
     proof = {'schemaVersion': 1, 'sourceHead': head, 'runId': context.run_id,
@@ -276,6 +283,21 @@ def raw_git_main():
     output.write_text(json.dumps(proof, sort_keys=True) + '\n', encoding='utf8')
 
 
+def write_failure_diagnostic(error):
+    # Best-effort public evidence cannot unwind or replace the critical living fence.
+    try:
+        diagnostic = sys.modules.get('pair_failure_diagnostic')
+        if diagnostic is None:
+            return
+        diagnostic.failure(error)
+        proof = diagnostic.projection()
+        output = Path.cwd() / 'TestResults/HostedSharedPair/first-failure.json'
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(proof, sort_keys=True) + '\n', encoding='utf8')
+    except BaseException:
+        return
+
+
 if __name__ == '__main__':
     try:
         if sys.argv[1:] == ['--raw-git']:
@@ -283,8 +305,9 @@ if __name__ == '__main__':
         else:
             require(sys.argv[1:] == [])
             main()
-    except BaseException:
+    except BaseException as failure:
         try:
+            write_failure_diagnostic(failure)
             print('Standalone pair qualification refused; private owners retained when unsettled', file=sys.stderr)
         except BaseException:
             pass

@@ -14,6 +14,8 @@ import stat
 import threading
 from functools import wraps
 
+import pair_failure_diagnostic as diagnostic
+
 from borrowed_scanner_bridge import BridgeRefused
 
 ORACLE = None
@@ -22,6 +24,7 @@ LIMIT = 64 * 1024 * 1024
 
 def require(ok, message):
     if not ok:
+        diagnostic.guard(message)
         raise BridgeRefused(message)
 
 
@@ -30,7 +33,8 @@ def oracle_operation(function):
     def guarded(self, *args, **kwargs):
         try:
             return function(self, *args, **kwargs)
-        except BaseException:
+        except BaseException as diagnostic_error:
+            diagnostic.failure(diagnostic_error)
             self.failure = True
             raise
     return guarded
@@ -119,8 +123,11 @@ class PinnedImageOracle:
         import scanner_docker_command as runner
         import resource
         try:
+            diagnostic.stage('oracle-pull')
             self.docker('pull', storage.IMAGE, timeout=120)
+            diagnostic.stage('oracle-image-metadata')
             self.layers = checked_image(self.inspect('image', storage.IMAGE), storage.IMAGE, storage.IMAGE_ID)
+            diagnostic.stage('oracle-private-file')
             base = Path(os.environ['RUNNER_TEMP']).resolve()
             require(base.is_absolute() and base.is_dir(), 'Owned runner temporary root required')
             self.directory = base / self.name
@@ -134,6 +141,7 @@ class PinnedImageOracle:
             self.file_identity = (initial.st_dev, initial.st_ino)
             self.issued = datetime.now(timezone.utc)
             self.create_attempted = True
+            diagnostic.stage('oracle-create')
             candidate = self.docker('create', '--name', self.name, '--network', 'none', '--read-only',
                 '--memory', '64m', '--cpus', '0.25', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true',
                 '--label', 'financial.oracle.lease=' + self.context.lease_id,
@@ -141,6 +149,7 @@ class PinnedImageOracle:
             require(re.fullmatch('[0-9a-f]{64}', candidate) is not None, 'Exact oracle container ID required')
             self.container_id = candidate
             observed = self.inspect('container', self.container_id)
+            diagnostic.stage('oracle-isolation')
             self.require_container(observed)
             self.created = observed['Created']
             require(threading.active_count() == 1, 'Exclusive file-size cap fence required')
@@ -152,6 +161,7 @@ class PinnedImageOracle:
             soft = LIMIT if prior[0] == resource.RLIM_INFINITY else min(prior[0], LIMIT)
             try:
                 resource.setrlimit(resource.RLIMIT_FSIZE, (soft, prior[1]))
+                diagnostic.stage('oracle-copy')
                 self.docker('cp', self.container_id + ':/bin/fake-gcs-server', str(self.path), timeout=30)
             finally:
                 resource.setrlimit(resource.RLIMIT_FSIZE, prior)
@@ -160,6 +170,7 @@ class PinnedImageOracle:
             ledger = runner.command_receipts()
             require(ledger and ledger[-1]['cleanupVerified'] is True and ledger[-1]['quarantined'] is False,
                     'Original copy helper must be settled before file observation')
+            diagnostic.stage('oracle-read')
             current, linked = os.fstat(self.fd), self.path.lstat()
             require(stat.S_ISREG(current.st_mode) and stat.S_ISREG(linked.st_mode)
                     and (current.st_dev, current.st_ino) == self.file_identity == (linked.st_dev, linked.st_ino)
@@ -177,10 +188,12 @@ class PinnedImageOracle:
             after = os.fstat(self.fd)
             require(count == current.st_size == after.st_size and after.st_mtime_ns == current.st_mtime_ns,
                     'Image file changed during bounded read')
+            diagnostic.stage('oracle-image-recheck')
             self.require_container(self.inspect('container', self.container_id))
             require(checked_image(self.inspect('image', storage.IMAGE_ID), storage.IMAGE, storage.IMAGE_ID) == self.layers,
                     'Immutable layer association changed')
             digest = result.hexdigest()
+            diagnostic.stage('oracle-release')
             self.close()
             require(self.finished, 'Oracle owner cleanup incomplete')
             return digest
@@ -191,6 +204,7 @@ class PinnedImageOracle:
     @oracle_operation
     def close(self):
         global ORACLE
+        diagnostic.stage('oracle-release')
         if self.finished:
             require(not self.failure, 'Original oracle failure remains sticky')
             return

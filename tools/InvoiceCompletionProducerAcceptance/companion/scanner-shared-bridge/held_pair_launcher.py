@@ -13,6 +13,8 @@ import os
 import re
 import sys
 
+import pair_failure_diagnostic as diagnostic
+
 from borrowed_scanner_bridge import BorrowedScannerBridge, BridgeRefused
 from storage_owner_command import storage_command
 
@@ -23,6 +25,7 @@ OWNER = None
 
 def require(ok, message):
     if not ok:
+        diagnostic.guard(message)
         raise BridgeRefused(message)
 
 
@@ -31,7 +34,8 @@ def owner_operation(function):
     def guarded(self, *args, **kwargs):
         try:
             return function(self, *args, **kwargs)
-        except BaseException:
+        except BaseException as diagnostic_error:
+            diagnostic.failure(diagnostic_error)
             self.failure = True
             if self.bridge is not None:
                 self.bridge._failure = True
@@ -118,10 +122,12 @@ class HeldPairLauncher:
                 'One clean pair start required')
         try:
             import owned_storage_backend as storage
+            diagnostic.stage('scanner-start')
             self.scanner.start()
             self.bridge = BorrowedScannerBridge(self.scanner, self.context)
             network = self.inspect('network', self.scanner.network_id)
             address = select_backend_ip(network)
+            diagnostic.stage('storage-image')
             self.scanner.docker('pull', storage.IMAGE, timeout=120)
             image = self.inspect('image', storage.IMAGE)
             require(image.get('Id') == storage.IMAGE_ID and storage.IMAGE in (image.get('RepoDigests') or [])
@@ -139,13 +145,16 @@ class HeldPairLauncher:
             args.extend([storage.IMAGE, *arguments])
             self.allocation_issued = datetime.now(timezone.utc)
             self.backend_create_attempted = True
+            diagnostic.stage('storage-create')
             created_id = self.scanner.docker(*args, timeout=10)
             require(re.fullmatch('[0-9a-f]{64}', created_id) is not None, 'Exact created backend ID required')
             self.backend_id = created_id
+            diagnostic.stage('storage-start')
             self.scanner.docker('start', self.backend_id, timeout=10)
             container = self.inspect('container', self.backend_id)
             self.require_backend_ownership(container)
             self.backend_started = container['State']['StartedAt']
+            diagnostic.stage('storage-process')
             stat = storage_command(['docker', 'exec', self.backend_id, 'cat', '/proc/1/stat']).decode('ascii')
             fields = stat[stat.rfind(')') + 1:].split()
             require(stat.startswith('1 (') and len(fields) >= 20 and fields[0] not in ('Z', 'X', 'x'),
@@ -155,6 +164,7 @@ class HeldPairLauncher:
                 c.run_id, str(c.attempt), c.file_sha, c.lease_id, c.issued_utc, c.expires_utc,
                 container['Created'], self.backend_started, network['Created'], address, port,
                 self.executable_sha256, int(fields[19]))
+            diagnostic.stage('bridge-borrow')
             self.bridge.borrow(self.lease)
             return self
         except BaseException:
@@ -167,6 +177,7 @@ class HeldPairLauncher:
                 and self.lease is not None, 'Clean current retained pair owner required')
         try:
             import owned_storage_backend as storage
+            diagnostic.stage('storage-observe')
             return storage.observe(self.lease, self.bridge, command_runner=storage_command)
         except BaseException:
             self.failure = True
@@ -181,6 +192,7 @@ class HeldPairLauncher:
         Any unresolved state retains OWNER; no clean exit or receipt is produced.
         """
         global OWNER
+        diagnostic.stage('pair-release')
         if self.finished:
             require(not self.failure, 'Original pair failure remains sticky')
             return

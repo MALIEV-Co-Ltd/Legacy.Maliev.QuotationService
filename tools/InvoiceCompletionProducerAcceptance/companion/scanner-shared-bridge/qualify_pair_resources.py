@@ -4,6 +4,8 @@ Outer immutable module/source preflight MUST happen before this import/execution
 Caller must hold this worker alive if ORACLE/OWNER remain; no parent-death proof.
 Public projection happens after independent cleanup, never before an owner fence.
 """
+import pair_failure_diagnostic as diagnostic
+
 from borrowed_scanner_bridge import BridgeRefused
 import held_pair_launcher as launcher
 import pinned_image_oracle as oracle_module
@@ -11,6 +13,7 @@ import pinned_image_oracle as oracle_module
 
 def require(ok, message):
     if not ok:
+        diagnostic.guard(message)
         raise BridgeRefused(message)
 
 
@@ -49,12 +52,14 @@ def qualify_pair(context):
     import owned_storage_backend as storage
     require(runner.command_receipts() == () and oracle_module.ORACLE is None and launcher.OWNER is None,
             'Fresh independently qualified worker required')
+    diagnostic.stage('oracle-acquire')
     image_owner = oracle_module.PinnedImageOracle(context)
     errors = []
     expected = None
     try:
         expected = image_owner.qualify()
     except BaseException as error:
+        diagnostic.failure(error)
         image_owner.failure = True
         errors.append(error)
     finally:
@@ -62,9 +67,11 @@ def qualify_pair(context):
             try:
                 image_owner.close()
             except BaseException as error:
+                diagnostic.failure(error)
                 errors.append(error)
     require(not errors and image_owner.finished and oracle_module.ORACLE is None,
             'Image qualification refused; retained oracle requires living owner')
+    diagnostic.stage('pair-acquire')
     owner = launcher.HeldPairLauncher(context, expected)
     private = None
     try:
@@ -72,15 +79,18 @@ def qualify_pair(context):
         private = owner.observe()
         require(private.get('privateBackendObserved') is True, 'Actual backend observation missing')
     except BaseException as error:
+        diagnostic.failure(error)
         owner.failure = True
         errors.append(error)
     finally:
         try:
             owner.close()
         except BaseException as error:
+            diagnostic.failure(error)
             errors.append(error)
     require(not errors and owner.finished and launcher.OWNER is None,
             'Pair qualification refused; retained resources require living owner')
+    diagnostic.stage('public-ledger')
     rows = runner.command_receipts()
     import hosted_companion_resources as h
     handled = h.handled_discovery_queries()

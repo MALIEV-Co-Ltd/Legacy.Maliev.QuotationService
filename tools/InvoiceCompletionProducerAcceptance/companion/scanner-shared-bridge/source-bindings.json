@@ -30,8 +30,8 @@
     {
       "name": "held_pair_launcher",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/held_pair_launcher.py",
-      "sha256": "10043a01f80d19bf20874b733841a25a5d0386f4656c24888e5d67b7e8bdfd4f",
-      "length": 13459
+      "sha256": "8a77702c9c03c8a3e1abc48a17448e45aced3ed6336fbe22249caa085c300349",
+      "length": 13976
     },
     {
       "name": "owned_storage_backend",
@@ -48,8 +48,8 @@
     {
       "name": "pinned_image_oracle",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pinned_image_oracle.py",
-      "sha256": "cdfe69c6b491c2940036557450d7600951fb90f43e94a8cff3c55e158f44f9a1",
-      "length": 14793
+      "sha256": "4f2bdf2078fc304221d1a576b09d62ad14f026f7a90819ed5871d9da8ef00898",
+      "length": 15422
     },
     {
       "name": "borrowed_scanner_bridge",
@@ -60,8 +60,14 @@
     {
       "name": "qualify_pair_resources",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/qualify_pair_resources.py",
-      "sha256": "7e757acd9ae824c434e6952f28b1104917c9fcb82f478246a6e72df6d5109d42",
-      "length": 5089
+      "sha256": "dcf8f20c020a69ba73a8d5ecd1acb9b15c180d37a69b1fb5f2c57db8076e999b",
+      "length": 5431
+    },
+    {
+      "name": "pair_failure_diagnostic",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
+      "sha256": "7645e91b9aca64af9370d7dfb95abb79bea69f168d35484f6ad46bbee15ecf49",
+      "length": 7009
     }
   ],
   "rawControls": {
@@ -114,5 +120,7 @@
     "whole coherent stagedgraph independent source review",
     "exact-head standard Ubuntu original helper controls/readiness/normal pair/raw Git receipts",
     "qualified original File/front lifetime/bootstrap/IAM graph before financial join"
-  ]
+  ],
+  "diagnosticSuccessorBase": "4c7b53c0cc8a60ff8daf3bfd389f3f24647b0f67",
+  "diagnosticOnly": true
 }

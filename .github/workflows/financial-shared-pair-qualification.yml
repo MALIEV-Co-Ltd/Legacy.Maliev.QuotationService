@@ -36,7 +36,7 @@ jobs:
           from pathlib import Path
           prefix = Path('tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge')
           held = {}
-          for name, expected in (('qualify_hosted_pair', '39e076e35c3df9c2eb38f63d425c7bf868275769157ee94ebf40e6d7e722afbf'), ('test_hosted_pair_source', 'bc5b9f2e15c92952e1de1da101a3cabbca0dc2a49bd87ab22acf58dc9219c42d')):
+          for name, expected in (('qualify_hosted_pair', '93f061d99b237c840606e5219de9af7395f9a9d51731196a3bc14cc0e772ff0f'), ('test_hosted_pair_source', '109b0dcbe77f5eaad9dffb591dc462eb1054a73c33c0cce210dde8bd55985ed9'), ('pair_failure_diagnostic', '7645e91b9aca64af9370d7dfb95abb79bea69f168d35484f6ad46bbee15ecf49'), ('pinned_image_oracle', '4f2bdf2078fc304221d1a576b09d62ad14f026f7a90819ed5871d9da8ef00898'), ('held_pair_launcher', '8a77702c9c03c8a3e1abc48a17448e45aced3ed6336fbe22249caa085c300349')):
               path = prefix / (name + '.py')
               fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
               try:
@@ -62,8 +62,10 @@ jobs:
               module.__file__ = '<held-bootstrap:' + name + '>'
               sys.modules[name] = module
               exec(compile(held[name], module.__file__, 'exec'), module.__dict__)
+          sys.modules['test_hosted_pair_source'].HELD_DIAGNOSTIC_SOURCE = held['pair_failure_diagnostic']
+          sys.modules['test_hosted_pair_source'].HELD_OWNER_SOURCES = {name: held[name] for name in ('pinned_image_oracle', 'held_pair_launcher')}
           result = unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromModule(sys.modules['test_hosted_pair_source']))
-          if result.testsRun != 9 or not result.wasSuccessful():
+          if result.testsRun != 13 or not result.wasSuccessful():
               raise SystemExit('Source controls refused')
           owner = sys.modules['qualify_hosted_pair']
           try:
@@ -73,8 +75,9 @@ jobs:
                   owner.main()
               else:
                   raise SystemExit('Qualified mode refused')
-          except BaseException:
+          except BaseException as failure:
               try:
+                  owner.write_failure_diagnostic(failure)
                   print('Standalone pair refused; unresolved original owners retained', file=sys.stderr)
               except BaseException:
                   pass
@@ -90,7 +93,7 @@ jobs:
           from pathlib import Path
           prefix = Path('tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge')
           held = {}
-          for name, expected in (('qualify_hosted_pair', '39e076e35c3df9c2eb38f63d425c7bf868275769157ee94ebf40e6d7e722afbf'), ('test_hosted_pair_source', 'bc5b9f2e15c92952e1de1da101a3cabbca0dc2a49bd87ab22acf58dc9219c42d')):
+          for name, expected in (('qualify_hosted_pair', '93f061d99b237c840606e5219de9af7395f9a9d51731196a3bc14cc0e772ff0f'), ('test_hosted_pair_source', '109b0dcbe77f5eaad9dffb591dc462eb1054a73c33c0cce210dde8bd55985ed9'), ('pair_failure_diagnostic', '7645e91b9aca64af9370d7dfb95abb79bea69f168d35484f6ad46bbee15ecf49'), ('pinned_image_oracle', '4f2bdf2078fc304221d1a576b09d62ad14f026f7a90819ed5871d9da8ef00898'), ('held_pair_launcher', '8a77702c9c03c8a3e1abc48a17448e45aced3ed6336fbe22249caa085c300349')):
               path = prefix / (name + '.py')
               fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
               try:
@@ -116,8 +119,10 @@ jobs:
               module.__file__ = '<held-bootstrap:' + name + '>'
               sys.modules[name] = module
               exec(compile(held[name], module.__file__, 'exec'), module.__dict__)
+          sys.modules['test_hosted_pair_source'].HELD_DIAGNOSTIC_SOURCE = held['pair_failure_diagnostic']
+          sys.modules['test_hosted_pair_source'].HELD_OWNER_SOURCES = {name: held[name] for name in ('pinned_image_oracle', 'held_pair_launcher')}
           result = unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromModule(sys.modules['test_hosted_pair_source']))
-          if result.testsRun != 9 or not result.wasSuccessful():
+          if result.testsRun != 13 or not result.wasSuccessful():
               raise SystemExit('Source controls refused')
           owner = sys.modules['qualify_hosted_pair']
           try:
@@ -127,8 +132,9 @@ jobs:
                   owner.main()
               else:
                   raise SystemExit('Qualified mode refused')
-          except BaseException:
+          except BaseException as failure:
               try:
+                  owner.write_failure_diagnostic(failure)
                   print('Standalone pair refused; unresolved original owners retained', file=sys.stderr)
               except BaseException:
                   pass
@@ -144,5 +150,6 @@ jobs:
           path: |
             TestResults/HostedSharedPair/standalone-pair.json
             TestResults/HostedSharedPair/raw-git.json
+            TestResults/HostedSharedPair/first-failure.json
           if-no-files-found: error
           retention-days: 7

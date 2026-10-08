@@ -6,7 +6,7 @@ from unittest.mock import patch
 import scanner_docker_command as owner
 import hosted_companion_resources as h
 
-QUALIFIER_CONTROL_SOURCE_SHA = '7e757acd9ae824c434e6952f28b1104917c9fcb82f478246a6e72df6d5109d42'
+QUALIFIER_CONTROL_SOURCE_SHA = 'dcf8f20c020a69ba73a8d5ecd1acb9b15c180d37a69b1fb5f2c57db8076e999b'
 HELD_QUALIFIER_SOURCE = None  # Supplied only by immutable source loader, never an observation receipt.
 
 
@@ -179,7 +179,7 @@ class DiscoveryAssociationControls(unittest.TestCase):
         self.assertIs(type(source), bytes)
         tree = ast.parse(source)
         functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in ('require', 'validate_original_command_ledger')]
-        namespace = {'BridgeRefused': h.AdmissionError}
+        namespace = {'BridgeRefused': h.AdmissionError, 'diagnostic': SimpleNamespace(guard=lambda message: None)}
         exec(compile(ast.Module(body=functions, type_ignores=[]), '<held-pure-qualifier>', 'exec'), namespace)
         validate = namespace['validate_original_command_ledger']
         rows = (self.row(True), self.row(False))
