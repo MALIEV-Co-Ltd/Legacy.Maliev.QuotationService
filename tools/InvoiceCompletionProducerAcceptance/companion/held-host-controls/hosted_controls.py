@@ -20,7 +20,7 @@ PINS = {
     'owned_front_host.py': '18e2626756b55f0e3921e4c5bd2d5f4d53844d01a2c22a181d981dcdd71e1699',
     'owned_normal_hosts.py': 'e5fee39ac7ced3b1304698c734abfd192660a29e94e7e1dcb366b34f15205988',
     'held_linux_exit.py': 'e7c809d0a1a9c8e8673ed5ef299dd530774d68a48196a739a90f0eaaf5e11515',
-    'hosted_companion_resources.py': '809a41aa28d5b11f45a60029c7590014c3f2b25dc225e53058cedfc26e953ee1',
+    'hosted_companion_resources.py': '58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f',
     'tls_listener_admission.py': 'f9c84ed4a8bf6e24614a725838adc36aa0870b997c648d30677608e429a8f5cf',
     'regular_owned_files.py': '3799a862fd53cd240bb4880af3444df1957a7293bd3c473419e7b2f28ced5029',
 }

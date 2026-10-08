@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "fileSource": "46a23ff86ac0590de42d889920f4a44a47654542",
+  "fileSourceRole": "provenance-label-only-no-File-runtime",
+  "modules": [
+    {
+      "name": "scanner_docker_command",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_docker_command.py",
+      "sha256": "89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6",
+      "length": 18024
+    },
+    {
+      "name": "hosted_companion_resources",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_companion_resources.py",
+      "sha256": "58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f",
+      "length": 51476
+    },
+    {
+      "name": "hosted_scanner_readiness",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py",
+      "sha256": "34f794ca4d05dcd8664fbb8a919975fd0864802bb0ecbd95edae9d67acbd63b6",
+      "length": 49622
+    },
+    {
+      "name": "scanner_loopback_relay",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_loopback_relay.py",
+      "sha256": "7a209ff9b1a5defbfb861075a6e211fb25b95840df19fe8534068959f8baae31",
+      "length": 26792
+    },
+    {
+      "name": "held_pair_launcher",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/held_pair_launcher.py",
+      "sha256": "985d7adefea26cc24fb40580c7336f20dc0e505fe64c0ca025e078f4bd033825",
+      "length": 14235
+    },
+    {
+      "name": "owned_storage_backend",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/owned_storage_backend.py",
+      "sha256": "0c3dd559961f61b51bd25afa7489d593822fd877816fd7514c75bd7dbc72cbbf",
+      "length": 37634
+    },
+    {
+      "name": "storage_owner_command",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/storage_owner_command.py",
+      "sha256": "5d063f59ad00c8071e962ebfe34651e343f5c1e2ae6add58cc9a72f837dc1d09",
+      "length": 2722
+    },
+    {
+      "name": "pinned_image_oracle",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pinned_image_oracle.py",
+      "sha256": "da82d89cf595e9e2350f9a15c5e08b61f87c300bc1521d9ed4542400b21f3c5f",
+      "length": 21001
+    },
+    {
+      "name": "borrowed_scanner_bridge",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/borrowed_scanner_bridge.py",
+      "sha256": "751963c8a55666577b7802ecb1ce67ab651cf1c6b05373e02a57a5d91367f6d5",
+      "length": 12919
+    },
+    {
+      "name": "qualify_pair_resources",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/qualify_pair_resources.py",
+      "sha256": "dcf8f20c020a69ba73a8d5ecd1acb9b15c180d37a69b1fb5f2c57db8076e999b",
+      "length": 5431
+    },
+    {
+      "name": "pair_failure_diagnostic",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
+      "sha256": "16c48ea293c7d50793c95fd03482039aa0f015555331ded76825011aab769444",
+      "length": 58573
+    }
+  ],
+  "rawControls": {
+    "path": "tools/InvoiceCompletionProducerAcceptance/companion/test_raw_owner_command.py",
+    "sha256": "ab863370700f6666182a649095427f020ecc613569691e5503d3f981bb52fcfa",
+    "length": 10293
+  },
+  "oracleControls": {
+    "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_pinned_image_oracle.py",
+    "sha256": "7864adc472556588ea5882fcbcf8ecdf23d5e9e4435f92fb6c9e398ffd577cce",
+    "length": 12885
+  },
+  "startupControls": {
+    "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_startup_ping_handoff.py",
+    "sha256": "72546f759534532fc7090e65ad1f6937675f01b32df16df07478a0abd27845eb",
+    "length": 56038
+  }
+}

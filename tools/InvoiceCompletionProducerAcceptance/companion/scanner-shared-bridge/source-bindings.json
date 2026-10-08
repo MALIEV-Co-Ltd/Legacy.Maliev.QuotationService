@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "sourceOnly": true,
+  "base": "438b8dad054778c8017e88cbcd092427378a4ccb",
+  "modules": [
+    {
+      "name": "scanner_docker_command",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_docker_command.py",
+      "sha256": "89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6",
+      "length": 18024
+    },
+    {
+      "name": "hosted_companion_resources",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_companion_resources.py",
+      "sha256": "58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f",
+      "length": 51476
+    },
+    {
+      "name": "hosted_scanner_readiness",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py",
+      "sha256": "34f794ca4d05dcd8664fbb8a919975fd0864802bb0ecbd95edae9d67acbd63b6",
+      "length": 49622
+    },
+    {
+      "name": "scanner_loopback_relay",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_loopback_relay.py",
+      "sha256": "7a209ff9b1a5defbfb861075a6e211fb25b95840df19fe8534068959f8baae31",
+      "length": 26792
+    },
+    {
+      "name": "held_pair_launcher",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/held_pair_launcher.py",
+      "sha256": "985d7adefea26cc24fb40580c7336f20dc0e505fe64c0ca025e078f4bd033825",
+      "length": 14235
+    },
+    {
+      "name": "owned_storage_backend",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/owned_storage_backend.py",
+      "sha256": "0c3dd559961f61b51bd25afa7489d593822fd877816fd7514c75bd7dbc72cbbf",
+      "length": 37634
+    },
+    {
+      "name": "storage_owner_command",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/storage_owner_command.py",
+      "sha256": "5d063f59ad00c8071e962ebfe34651e343f5c1e2ae6add58cc9a72f837dc1d09",
+      "length": 2722
+    },
+    {
+      "name": "pinned_image_oracle",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pinned_image_oracle.py",
+      "sha256": "da82d89cf595e9e2350f9a15c5e08b61f87c300bc1521d9ed4542400b21f3c5f",
+      "length": 21001
+    },
+    {
+      "name": "borrowed_scanner_bridge",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/borrowed_scanner_bridge.py",
+      "sha256": "751963c8a55666577b7802ecb1ce67ab651cf1c6b05373e02a57a5d91367f6d5",
+      "length": 12919
+    },
+    {
+      "name": "qualify_pair_resources",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/qualify_pair_resources.py",
+      "sha256": "dcf8f20c020a69ba73a8d5ecd1acb9b15c180d37a69b1fb5f2c57db8076e999b",
+      "length": 5431
+    },
+    {
+      "name": "pair_failure_diagnostic",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
+      "sha256": "16c48ea293c7d50793c95fd03482039aa0f015555331ded76825011aab769444",
+      "length": 58573
+    }
+  ],
+  "rawControls": {
+    "path": "tools/InvoiceCompletionProducerAcceptance/companion/test_raw_owner_command.py",
+    "sha256": "e00eb74dae59e205ddd8c02c0cc1c03a206a84e8aa68b09132389681eaf7e9fe",
+    "length": 10234
+  },
+  "origins": [
+    {
+      "packet": "scanner-shared-bridge-adapter-proposal",
+      "sealSha256": "7ace6e4b1d9af1069c3d1290c87f78c44a78c4a9dca5eda73d20f4248317f4fc",
+      "patchSha256": "b491f11bedf639a90dd8e309344f6ab438c282a3576baa5b121b0034d0969997",
+      "scope": "independent source-only clear, no runtime transfer"
+    },
+    {
+      "packet": "scanner-shared-bridge-launcher-proposal",
+      "sealSha256": "655a68432857f1a3079b92fde71e04deb5059453006b859ea8ce7e1c267db04d",
+      "patchSha256": "3174610de334e92ca044ed6a4be7f66cc471cae0e6afbd001435918a49ae0d9c",
+      "scope": "independent source-only clear, no runtime transfer"
+    },
+    {
+      "packet": "companion-docker-delegate-successor-proposal",
+      "sealSha256": "1e1484fa6ed06b87032bd09b1b7e248ede3215c1f386af179f2b2997c845c136",
+      "patchSha256": "cd0136880ceac8adf276243c74781bc212881684352cd8ea3d3c0f9dcb94d491",
+      "scope": "independent source-only clear, no runtime transfer"
+    },
+    {
+      "packet": "scanner-shared-bridge-hosted-successor-proposal",
+      "sealSha256": "655e5226aeeef26345586231b9890c8ffdb623758277eeb07e04a1f20b04b6d8",
+      "patchSha256": "65117199df182f6bc383c188066eb782c1e8b12f33c61f2d8dffe0a32d30f9ff",
+      "scope": "independent source-only clear, no runtime transfer"
+    }
+  ],
+  "qualifierCustody": {
+    "historicalRootPreimageSha256": "8abbefb10fd96e2e172b1215c2c38acf7a4ec47e84b057f1b2b5fe0d8be26d07",
+    "historicalScope": "unpublished root custody, not prior runtime proof",
+    "currentSourcePath": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/qualify_pair_resources.py",
+    "deltaFromReviewed1e": "owned CLI public key names normalized to originalCli",
+    "removedOwnedDuplicate": "held_pair_launcher.run_standalone_pair"
+  },
+  "fileSource": "46a23ff86ac0590de42d889920f4a44a47654542",
+  "fileSourceRole": "provenance-label-only-no-File-runtime",
+  "originalFileRuntimeMaterialization": "07f0b5b721e3df758a9ec742c6f167491f899e44 + separate owneroverlay (not launched)",
+  "runtimeAccepted": false,
+  "actualResourcesExecuted": 0,
+  "fileRuntimeAccepted": false,
+  "fileBoundaryAccepted": false,
+  "genuineEightHostFinancialAccepted": false,
+  "remainingGates": [
+    "whole coherent stagedgraph independent source review",
+    "exact-head standard Ubuntu original helper controls/readiness/normal pair/raw Git receipts",
+    "qualified original File/front lifetime/bootstrap/IAM graph before financial join"
+  ],
+  "diagnosticSuccessorBase": "4c7b53c0cc8a60ff8daf3bfd389f3f24647b0f67",
+  "diagnosticOnly": true,
+  "stagingSuccessorBase": "6cf5572b907a2bfef6a57c7da15e16269a25222f",
+  "codeSiteDiagnosticBase": "ef7706b2915d9cc39a595ede30a4ac4dea903dd9",
+  "ownerDiagnosticSourceSha256": "58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f",
+  "ownerDiagnosticSiteTableSha256": "c00aba56c681457c7dc4a52a7d17ae601d5a2dc34be8b847d96e1e9562dffdc2",
+  "bridgeDiagnosticSourceSha256": "751963c8a55666577b7802ecb1ce67ab651cf1c6b05373e02a57a5d91367f6d5",
+  "bridgeDiagnosticSiteTableSha256": "eb6811b7ab5fa34897ae1e0d11f81231977bdf9dce05da1fd3911aa34c10b548",
+  "relayConjunctDiagnosticBase": "56df81a0041e642952f90b4a4184f830799207d0",
+  "relayConjunctOriginalSourceSha256": "e7dccdfdfa498d6da439adc9fe2a7ac1f1e08a229529658839bb406366178b91",
+  "relayConjunctDiagnosticOnly": true,
+  "startupControls": {
+    "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_startup_ping_handoff.py",
+    "sha256": "72546f759534532fc7090e65ad1f6937675f01b32df16df07478a0abd27845eb",
+    "length": 56038
+  },
+  "startupHandoffSourceBase": "93dd69993414f99603a9d11610ca4aa07020b28d",
+  "startupHandoffScope": "Original owned startup PING ECONNREFUSED only; full history retained; no native acceptance",
+  "startupAdmissionDiagnosticBase": "74c87a5777310a06d5e3138d3ab70e87e4d4c402",
+  "startupAdmissionDiagnosticScope": "Finite original lock snapshot before quarantine; UNKNOWN unevaluated/unknown shape; no cap/deadline/retry or acceptance change",
+  "sameBudgetPacingBase": "e6e3ea1f6abb27ba79c87f60c0c14f7d2e509740",
+  "sameBudgetPacingScope": "Same max16/source settlement/per-call3s and absolute120/180 deadline; paced original attempts only; no cap/network/runner change",
+  "storageDiagnosticBase": "a6b5564a0fe73e6626bdb2583c329a8cccadd947",
+  "storageDiagnosticOnly": true,
+  "storageDiagnosticSourceAssociation": {
+    "launcher": "606616e55992cb739fb2fd7e7f00edce5bd7e8396d15c30a99270b8a526f3763",
+    "scanner": "aa6c9591d4df6b5feb7ecd7959be06b8e0743f8f83f717f392b6792d4d5a6eba",
+    "runner": "89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6"
+  },
+  "storageDiagnosticIdentityOnlyGlobalsRequired": true,
+  "historicalWithheldStorageDiagnosticSeal": "8aa75745ce029c0997c5df5088ad09da7137dd47ff6db8b43df2eb4fd9d0f073",
+  "storageGateDiagnosticBase": "c5f2e6f3c9986ac32b0c7e0d5fab61ba134a002b",
+  "storageGateDiagnosticClauses": [
+    "storage-denial-source-not-captured",
+    "storage-denial-error-type",
+    "storage-denial-trace-limit",
+    "storage-denial-trace-short",
+    "storage-denial-frame-code",
+    "storage-denial-frame-globals",
+    "storage-denial-frame-line",
+    "storage-denial-stderr-type",
+    "storage-denial-stderr-bound",
+    "storage-denial-stderr-grammar"
+  ],
+  "storageWrappedGrammarBase": "ff38417b376bd19a34a58f91f037e012d5e3369a",
+  "storageWrappedGrammarScope": "Exact complete source-referenced wrapper/no period, optional single terminalLF; installedEngine/cause unknown;14falsefields",
+  "storageCreateWrappedGrammarBase": "656b49a29d96f2fd08750666b627352f04f9be02",
+  "storageCreateWrappedGrammarScope": "Complete source-referenced create wrapper,64lowerhex format only,no ownership correlation,optional one terminalLF; installedEngine/cause unknown;14falsefields",
+  "configuredSubnetBase": "50a79fff79b0e0f597e732f58bb69c4d27cbcdb0",
+  "configuredSubnetScope": "Optin owned configured /28 from bounded read-only census; atomic singlecreate conflict authority; exact IPAM/generation observation beforecontainerbirth; independent exactownership cleanup; ordinarydefault unchanged",
+  "networkSourceDiagnosticBase": "3f6a1327fd20c3ffe153b06a58ebefafe171c240",
+  "networkSourceDiagnosticScope": "Fixed direct literal raise site only; exact builtin type/code/globals/finaltrace/line/literal; compoundsubpredicate and nativecause unknown;14falsefields",
+  "ipamGuardSplitBase": "b41e1abca2ab5541b47b08cfb679984c0fec077b",
+  "ipamGuardSplitScope": "Only observed IPAM shape guard split; same accepted forms/order/ValueError literal;49directsites;5distinctsubpredicate sites;14falseflags/no observedmetadata cause yet",
+  "builtinNullIpamBase": "7a81f533ec2b3159cee1968bcc51663d8c74b999",
+  "builtinNullIpamScope": "PRESENTNULL only exact builtin Driver/Name/Scope host/host/local or null/none/local;local normalized Config;raw inspect unmodified;all census checks retained;no observed driver/native acceptance",
+  "storageObserverDiagnosticBase": "d8a5a7999de099b92ccf801a26ddf4f0969d09db",
+  "storageObserverDiagnosticScope": "47fixed original sites;S43+command4;actual heldloader retained original class births/code/globals/nestedconstants captured beforeactors;storage-observe only;14falsefields;no policychange/no actualpredicate cause",
+  "storageListenerCardinalityBase": "b5d3bf97ae20acb7d848da5ce986bcc9160e989f",
+  "storageListenerCardinalityScope": "Only original IPv4 selected-port wildcard LISTEN cardinality partition zero vs nonzero!=1;sameexactoneaccepted/AdmissionError/literal/oneRequire/CLIorder;noTCP6admission/noactualzeroinference",
+  "storageZeroEvidenceBase": "882aa1bad5b7345accd25ce7884bbdb72a365a8b",
+  "storageZeroEvidenceScope": "Original zero FIRST retained;thirteen subordinate readonly calls/shared<=min30secLeaseRemaining;noIPv4admission/cleanup/HTTP/eighttransfer",
+  "storageOwnedIpv4BindingBase": "5008c2083881acb501835c2beb1e20857dbbd9bf",
+  "storageOwnedIpv4BindingScope": "Default legacy wildcard remains; standalone explicitly opts into restricting source-owned host argv to exactprivateleaseIP;kernelTCP4 exactLinuxlittleendianIP/port/oneinode/initFD/ticks+Engine fences unchanged;noTCP6admission/cap/deadlinechange",
+  "listenerReadinessBase": "f277fe97b7e1f1244196a90c1467ba83232e4505",
+  "listenerReadinessScope": "Two zero-only polls, <=32 original bounded owner commands, <=10s work excluding original mandatory cleanup, 30s lease reserve; definitive observer and all default APIs retained. Models are not native readiness or cleanup proof."
+}

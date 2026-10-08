@@ -6,6 +6,7 @@ on:
     paths:
       - tools/InvoiceCompletionProducerAcceptance/companion/held_host_lifetime.py
       - tools/InvoiceCompletionProducerAcceptance/companion/owned_front_host.py
+      - tools/InvoiceCompletionProducerAcceptance/companion/hosted_companion_resources.py
       - tools/InvoiceCompletionProducerAcceptance/companion/held-host-controls/**
       - .github/workflows/held-host-lifetime-qualification.yml
 
@@ -14,7 +15,7 @@ permissions:
 
 jobs:
   synthetic-held-lifetime:
-    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'codex/held-host-lifetime-native-20261008')
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && (github.event.pull_request.head.ref == 'codex/held-host-lifetime-native-20261008' || github.event.pull_request.head.ref == 'codex/scanner-shared-pair-20261008'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:

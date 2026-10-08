@@ -1,8 +1,9 @@
 # Proposed actual Ubuntu Scanner helper controls
 
 This additive harness is source-only and unexecuted on Linux. It consumes only
-the independently source-cleared scanner_docker_command.py ea5097db/17068-byte
-counterpart. A held regular nonblocking/no-follow file reader checks exact size,
+the new raw-entrypoint scanner_docker_command.py 89daed40/18024-byte
+counterpart, with the original _Lease implementation unchanged. Prior native
+Docker receipts are historical and cannot qualify this new exact source graph. A held regular nonblocking/no-follow file reader checks exact size,
 pre/post inode/metadata and SHA before compiling those held bytes. Workflow
 qualification must independently pin this harness/test plus scanner and helper
 before execution, bind the checked-out head/run/attempt, and retain typed failure
@@ -50,7 +51,7 @@ output, command arguments, URI/path or exception text. Failed receipts cannot
 be interpreted as successful cases. The30-second Linux alarm is a control
 guard, not proof of kernel CPU/memory caps or universal opaque-syscall deadlines.
 
-The unchanged source helper remains responsible for actual CLI leader lifetime;
+The source helper with unchanged _Lease remains responsible for actual CLI leader lifetime;
 the direct workflow process owns the witness and borrowed original objects. No
 nested Python actor is created. Docker CLI descendants/daemon jobs, parent
 termination and arbitrary asynchronous partial acquisitions remain outside this

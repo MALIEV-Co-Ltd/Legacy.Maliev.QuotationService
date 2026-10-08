@@ -17,8 +17,8 @@ import sys
 import time
 import types
 
-HELPER_SHA = "ea5097db7e52ca9138e22af276f59c95a12b827546edc53dfe29eaa6954544fc"
-HELPER_BYTES = 17068
+HELPER_SHA = "89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6"
+HELPER_BYTES = 18024
 CASES = ("natural", "selector-register", "post-signal", "post-waitid")
 STAGES = ("admission", "load", "control", "recovery", "receipt", "completed")
 CATEGORIES = ("None", "ControlRefused", "Timeout", "Lifecycle", "InjectedRegister", "InjectedPostSignal", "InjectedPostWaitid", "Other")

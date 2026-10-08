@@ -18,7 +18,7 @@ import time
 import uuid
 import selectors
 import ipaddress
-from scanner_loopback_relay import LoopbackRelay
+from scanner_loopback_relay import LoopbackRelay, StartupPingRefused
 from scanner_docker_command import run_docker
 from types import SimpleNamespace
 from datetime import datetime, timezone
@@ -95,13 +95,126 @@ def database_hashes(output):
     return sorted(rows, key=lambda row: row["path"])
 
 
+CONFIGURED_CENSUS_NETWORKS = 32
+CONFIGURED_CENSUS_ITEM_BYTES = 8192
+CONFIGURED_CENSUS_TOTAL_BYTES = 131072
+CONFIGURED_CENSUS_SECONDS = 15
+CONFIGURED_SUBNET_CANDIDATES = tuple(str(ipaddress.IPv4Network(
+    (int(ipaddress.IPv4Address('10.253.240.0')) + index * 16, 28)))
+    for index in range(16))
+
+
+def configured_network_census(docker):
+    """Read-only bounded Engine snapshot; atomic create remains conflict authority."""
+    deadline = time.monotonic() + CONFIGURED_CENSUS_SECONDS
+    aggregate = 0
+
+    def observed(*args):
+        nonlocal aggregate
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('Configured network census deadline expired')
+        value = docker(*args, timeout=min(3, remaining))
+        if time.monotonic() >= deadline:
+            raise TimeoutError('Configured network census deadline expired')
+        if type(value) is not str:
+            raise ValueError('Configured network census output type differs')
+        size = len(value.encode('utf-8', 'strict'))
+        aggregate += size
+        if size > CONFIGURED_CENSUS_ITEM_BYTES or aggregate > CONFIGURED_CENSUS_TOTAL_BYTES:
+            raise ValueError('Configured network census output bound exceeded')
+        return value
+
+    def listed():
+        value = observed('network', 'ls', '--no-trunc', '--format', '{{.ID}}')
+        rows = value.splitlines()
+        if (len(rows) > CONFIGURED_CENSUS_NETWORKS or len(set(rows)) != len(rows)
+                or any(re.fullmatch('[0-9a-f]{64}', row) is None for row in rows)):
+            raise ValueError('Configured network census identity differs')
+        return tuple(sorted(rows))
+
+    ids = listed()
+    subnets = []
+    for network_id in ids:
+        rows = json.loads(observed('network', 'inspect', network_id))
+        if type(rows) is not list or len(rows) != 1 or type(rows[0]) is not dict or rows[0].get('Id') != network_id:
+            raise ValueError('Configured network census inspect identity differs')
+        ipam = rows[0].get('IPAM')
+        if type(ipam) is not dict:
+            raise ValueError('Configured network census IPAM shape differs')
+        config = ipam.get('Config')
+        if type(config) is not list:
+            if 'Config' not in ipam:
+                raise ValueError('Configured network census IPAM shape differs')
+            if config is None:
+                builtin_driver = rows[0].get('Driver')
+                builtin_name = rows[0].get('Name')
+                builtin_scope = rows[0].get('Scope')
+                if (type(builtin_driver) is not str or type(builtin_name) is not str
+                        or type(builtin_scope) is not str or builtin_scope != 'local'
+                        or (builtin_driver, builtin_name) not in (('host', 'host'), ('null', 'none'))):
+                    raise ValueError('Configured network census IPAM shape differs')
+                config = []
+            else:
+                raise ValueError('Configured network census IPAM shape differs')
+        if len(config) > 8:
+            raise ValueError('Configured network census IPAM shape differs')
+        driver = rows[0].get('Driver')
+        if type(driver) is not str or re.fullmatch('[a-zA-Z0-9_.-]{1,64}', driver) is None:
+            raise ValueError('Configured network census driver differs')
+        if not config and driver not in ('host', 'null'):
+            raise ValueError('Configured network census unknown empty IPAM refused')
+        seen = set()
+        for row in config:
+            if type(row) is not dict or type(row.get('Subnet')) is not str:
+                raise ValueError('Configured network census subnet shape differs')
+            subnet = ipaddress.ip_network(row['Subnet'], strict=True)
+            if str(subnet) != row['Subnet'] or str(subnet) in seen:
+                raise ValueError('Configured network census subnet differs')
+            seen.add(str(subnet))
+            for name in ('Gateway', 'IPRange'):
+                value = row.get(name)
+                if value is not None and value != '':
+                    if type(value) is not str:
+                        raise ValueError('Configured network census IPAM value differs')
+                    if name == 'Gateway':
+                        address = ipaddress.ip_address(value)
+                        if str(address) != value or address.version != subnet.version or address not in subnet:
+                            raise ValueError('Configured network census gateway differs')
+                    else:
+                        address_range = ipaddress.ip_network(value, strict=True)
+                        if str(address_range) != value or address_range.version != subnet.version or not address_range.subnet_of(subnet):
+                            raise ValueError('Configured network census address range differs')
+            if subnet.version == 4:
+                subnets.append(subnet)
+    if listed() != ids:
+        raise ValueError('Configured network census changed before selection')
+    for value in CONFIGURED_SUBNET_CANDIDATES:
+        subnet = ipaddress.IPv4Network(value, strict=True)
+        if (str(subnet) != value or subnet.prefixlen != 28 or subnet.num_addresses != 16
+                or not any(subnet.subnet_of(ipaddress.IPv4Network(private))
+                           for private in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))):
+            raise ValueError('Configured network source candidate differs')
+        if not any(subnet.overlaps(existing) for existing in subnets):
+            return value, str(subnet.network_address + 1)
+    raise ValueError('Configured network finite candidates exhausted')
+
+
+
 class Scanner:
-    def __init__(self, run_id=None, deadline_seconds=180):
+    def __init__(self, run_id=None, deadline_seconds=180, configured_network=False):
         self.run_id = str(uuid.uuid4()) if run_id is None else run_id
         if not re.fullmatch(r"[a-zA-Z0-9-]{1,64}", self.run_id):
             raise ValueError("Invalid owned run identity")
         if not 1 <= deadline_seconds <= 300:
             raise ValueError("Readiness must have a finite deadline")
+        if type(configured_network) is not bool:
+            raise ValueError("Configured network option must be boolean")
+        self.configured_network = configured_network
+        self._configured_subnet = None
+        self._configured_network_created = None
+        self._configured_network_failed = False
+        self._configured_network_observed = False
         self.name = "financial-scanner-" + self.run_id
         self.deadline_seconds = deadline_seconds
         self.port = None
@@ -115,6 +228,47 @@ class Scanner:
         self.receipt = {"schemaVersion": 1, "runId": self.run_id, "imageReference": IMAGE,
                         "genuineEightHostFinancialAccepted": False, "resources": [],
                         "scannerReady": False, "cleanupVerified": False}
+
+    def validate_configured_network(self, network, *, empty=False, cleanup=False):
+        """Separate exact ownership from use-policy; cleanup never needs readiness."""
+        try:
+            if not self.configured_network or self._configured_subnet is None or type(network) is not dict:
+                raise ValueError('Original configured network plan required')
+            created = datetime.fromisoformat(network['Created'].replace('Z', '+00:00'))
+            issued = datetime.fromisoformat(self.receipt['network']['allocationIssuedUtc'])
+            if (network.get('Id') != self.network_id or network.get('Name') != self.name + '-network'
+                    or type(network.get('Labels')) is not dict
+                    or network['Labels'].get('financial.acceptance.run') != self.run_id
+                    or created.tzinfo is None or not issued <= created <= datetime.now(timezone.utc)):
+                raise ValueError('Configured network original ownership differs')
+            if self._configured_network_created is None:
+                self._configured_network_created = network['Created']
+            elif self._configured_network_created != network['Created']:
+                raise ValueError('Configured network generation changed')
+            if type(network.get('Containers')) is not dict or (empty and network['Containers'] != {}):
+                raise ValueError('Configured network exact census differs')
+            if cleanup:
+                return
+            if self._configured_network_failed:
+                raise ValueError('Configured network prior admission failed')
+            subnet, gateway = self._configured_subnet
+            ipam = network.get('IPAM')
+            if (network.get('Internal') is not True or network.get('Driver') != 'bridge'
+                    or network.get('Scope') != 'local' or network.get('EnableIPv6') is not False
+                    or network.get('Ingress') is not False or network.get('Attachable') is not False
+                    or type(ipam) is not dict or ipam.get('Driver') != 'default'
+                    or type(ipam.get('Config')) is not list or len(ipam['Config']) != 1
+                    or type(ipam['Config'][0]) is not dict
+                    or ipam['Config'][0].get('Subnet') != subnet
+                    or ipam['Config'][0].get('Gateway') != gateway
+                    or ipam['Config'][0].get('IPRange') not in (None, '')
+                    or ipam['Config'][0].get('AuxiliaryAddresses') not in (None, {})):
+                raise ValueError('Configured network actual IPAM or isolation differs')
+            self._configured_network_observed = True
+        except BaseException:
+            self._configured_network_failed = True
+            raise
+
 
     def docker(self, *args, timeout=30, capture_stderr=False):
         return run_docker(args, timeout=timeout, capture_stderr=capture_stderr)
@@ -207,13 +361,27 @@ class Scanner:
             raise ValueError("Derived image ownership differs")
         self.receipt["derivedImage"].update({"imageId": self.image_id, "baseImageId": image["Id"]})
         self.receipt["derivedImage"]["buildCompleted"] = True
+        if self.configured_network:
+            self._configured_subnet = configured_network_census(self.docker)
         self.receipt["network"] = {"name": self.name + "-network", "owned": True}
         self.receipt["network"]["allocationIssuedUtc"] = datetime.now(timezone.utc).isoformat()
-        self.network_id = self.docker("network", "create", "--internal", "--driver", "bridge", "--label",
-                                      "financial.acceptance.run=" + self.run_id, self.name + "-network")
+        if self.configured_network:
+            subnet, gateway = self._configured_subnet
+            self.network_id = self.docker("network", "create", "--internal", "--driver", "bridge",
+                "--subnet", subnet, "--gateway", gateway, "--label",
+                "financial.acceptance.run=" + self.run_id, self.name + "-network")
+        else:
+            self.network_id = self.docker("network", "create", "--internal", "--driver", "bridge", "--label",
+                                          "financial.acceptance.run=" + self.run_id, self.name + "-network")
         if not re.fullmatch(r"[0-9a-f]{64}", self.network_id):
             raise ValueError("Invalid owned network identity")
         self.receipt["network"]["networkId"] = self.network_id
+        if self.configured_network:
+            network_rows = json.loads(self.docker("network", "inspect", self.network_id, timeout=3))
+            if type(network_rows) is not list or len(network_rows) != 1:
+                self._configured_network_failed = True
+                raise ValueError("One original configured network observation required")
+            self.validate_configured_network(network_rows[0], empty=True)
         # Record ownership before allocation; cleanup still runs after partial start.
         self.receipt["resources"] = [{"kind": "container", "name": self.name, "owned": True}]
         self.receipt["allocationIssuedUtc"] = datetime.now(timezone.utc).isoformat()
@@ -237,7 +405,8 @@ class Scanner:
         self.receipt["containerGeneration"] = {"createdUtc": diagnostic["createdUtc"], "startedUtc": state["StartedAt"]}
         self.receipt["stage"] = "start-owned-loopback-relay"
         self.validate_backend_endpoint()
-        self.relay = LoopbackRelay(self.validate_backend_endpoint)
+        self.relay = object.__new__(LoopbackRelay)
+        LoopbackRelay.__init__(self.relay, self.validate_backend_endpoint, startup_tracking=True)
         self.port = self.relay.endpoint[1]
         self.receipt["loopbackRelay"] = {**self.relay.identity, "backend": self.backend_identity,
                                          "portIsolation": self.receipt["portIsolation"], "ownedInProcess": True}
@@ -257,16 +426,52 @@ class Scanner:
         self.receipt["stage"] = "measure-immutable-files"
         before = self.measure()
         self.receipt["stage"] = "await-actual-clamd-ping"
-        deadline = time.monotonic() + self.deadline_seconds
-        while time.monotonic() < deadline:
-            try:
-                if self.command(b"PING", timeout=min(3, max(0.001, deadline-time.monotonic()))) == "PONG":
+        readiness_started = time.monotonic()
+        deadline = readiness_started + self.deadline_seconds
+        final_slot_budget = min(3, self.deadline_seconds / 16)
+        slot_spacing = (self.deadline_seconds - final_slot_budget) / 15
+        attempt_index = 0
+        while attempt_index < 16 and time.monotonic() < deadline:
+            target = readiness_started + attempt_index * slot_spacing
+            while time.monotonic() < target and time.monotonic() < deadline:
+                pause = min(target, deadline) - time.monotonic()
+                if pause <= 0:
                     break
-            except (OSError, ValueError):
+                time.sleep(pause)
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Actual clamd readiness deadline expired")
+            attempt_index += 1
+            try:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("Actual clamd readiness deadline expired")
+                answer = self.relay.startup_ping(timeout=min(3, remaining))
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("Actual clamd readiness deadline expired")
+                if answer == "PONG":
+                    break
+                raise ValueError("Original startup PING result refused")
+            except StartupPingRefused:
                 pass
-            time.sleep(0.5)
+            except BaseException:
+                # Projection cannot replace the original refusal or cleanup path.
+                try:
+                    projection = self.relay.startup_admission_diagnostic()
+                    if projection is not None:
+                        self.receipt["startupAdmissionDiagnostic"] = projection
+                except BaseException:
+                    pass
+                raise
+            # Only the original settled/accounted StartupPingRefused reaches
+            # this next slot. A successful source return is exclusively PONG.
         else:
+            while time.monotonic() < deadline:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                time.sleep(remaining)
             raise TimeoutError("Actual clamd readiness deadline expired")
+        self.receipt["startupRelayHandoff"] = self.relay.seal_startup_readiness()
         version = self.command(b"VERSION")
         if not re.fullmatch(r"ClamAV [^/]+/[0-9]+/.+", version):
             raise ValueError("Engine/database readiness not observed")
@@ -313,6 +518,8 @@ class Scanner:
     def validate_backend_endpoint(self):
         container = json.loads(self.docker("inspect", self.container_id, timeout=3))[0]
         network = json.loads(self.docker("network", "inspect", self.network_id, timeout=3))[0]
+        if self.configured_network:
+            self.validate_configured_network(network)
         generation = self.receipt["containerGeneration"]
         state = container.get("State", {})
         if container.get("Id") != self.container_id or container.get("Image") != self.image_id or container.get("Created") != generation["createdUtc"] or state.get("StartedAt") != generation["startedUtc"] or state.get("Running") is not True or state.get("Paused") is not False or state.get("Restarting") is not False or container.get("Config", {}).get("Labels", {}).get("financial.acceptance.run") != self.run_id:
@@ -413,6 +620,8 @@ class Scanner:
 
     def close(self):
         errors = list(self.receipt.get("runtimeBoundaryFailures", []))
+        if self.configured_network and self._configured_network_failed:
+            errors.append("ConfiguredNetworkAdmissionRefused")
         if self.receipt["resources"]:
             owned = False
             removable = False
@@ -532,6 +741,8 @@ class Scanner:
                     self.receipt["network"]["networkId"] = self.network_id
                     self.receipt["network"]["reconciledAfterUncertainCreate"] = True
                 network = json.loads(self.docker("network", "inspect", self.network_id))[0]
+                if self.configured_network:
+                    self.validate_configured_network(network, empty=True, cleanup=True)
                 if network["Id"] != self.network_id or network["Labels"].get("financial.acceptance.run") != self.run_id or network.get("Containers"):
                     raise ValueError("Owned network cleanup refused")
                 self.docker("network", "rm", self.network_id)

@@ -1,16 +1,16 @@
 {
   "SchemaVersion": 1,
-  "SourceBase": "7be03d9149e74091566ccad44965d8a6f344d5f8",
+  "SourceBase": "438b8dad054778c8017e88cbcd092427378a4ccb",
   "Files": [
     {
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py",
-      "bytes": 37534,
-      "sha256": "e75cb62607c1471bd86db0cd1450f4389f51c1d18aff171b7896742cce98568a"
+      "bytes": 49622,
+      "sha256": "34f794ca4d05dcd8664fbb8a919975fd0864802bb0ecbd95edae9d67acbd63b6"
     },
     {
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_docker_command.py",
-      "bytes": 17068,
-      "sha256": "ea5097db7e52ca9138e22af276f59c95a12b827546edc53dfe29eaa6954544fc"
+      "bytes": 18024,
+      "sha256": "89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6"
     },
     {
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/test_scanner_docker_command.py",
@@ -19,13 +19,13 @@
     },
     {
       "path": "docs/scanner-helper-hosted-controls.md",
-      "bytes": 5029,
-      "sha256": "343d66950f5a7b6974a1b3ec70dfadcc58759a8f3eaa27afb9f7d4f10d18d84d"
+      "bytes": 5174,
+      "sha256": "bd495813a45bca718b022ad882d888bff9b38ca6a513d0b3602bd1140f985142"
     },
     {
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_helper_hosted_controls.py",
       "bytes": 19441,
-      "sha256": "24a7ff019f7fa58f2b0c48f71989195bc523a7c3eb4eab98b58b388b17122cb9"
+      "sha256": "c6ae7636eb1c6371f5c22c4cddffeb659e43b7f3e4cbb6df9a341f10bbdd4a69"
     },
     {
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/test_scanner_helper_hosted_source.py",
