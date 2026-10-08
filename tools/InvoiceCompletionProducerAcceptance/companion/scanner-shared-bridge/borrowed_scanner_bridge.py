@@ -102,7 +102,7 @@ class BorrowedScannerBridge:
         require(relay is not None, 'Held relay unavailable')
         require(not relay.stop.is_set(), 'Held relay unavailable')
         require(relay.acceptor.is_alive(), 'Held relay unavailable')
-        require(not relay.failures, 'Held relay unavailable')
+        require(relay.ready_history_valid(), 'Held relay unavailable')
         require(relay.listener.fileno() >= 0, 'Held relay unavailable')
         require(relay.listener.getsockname() == relay.endpoint, 'Held relay unavailable')
         require(relay.endpoint == ('127.0.0.1', self.scanner.port), 'Held relay unavailable')

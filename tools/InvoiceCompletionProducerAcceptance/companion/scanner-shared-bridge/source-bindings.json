@@ -18,14 +18,14 @@
     {
       "name": "hosted_scanner_readiness",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py",
-      "sha256": "e75cb62607c1471bd86db0cd1450f4389f51c1d18aff171b7896742cce98568a",
-      "length": 37534
+      "sha256": "91514191d18afaa649b066935f464b8aa8374d881add0798474ec46c2ec7fa2f",
+      "length": 37717
     },
     {
       "name": "scanner_loopback_relay",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_loopback_relay.py",
-      "sha256": "ceb81e998f916774a7b159f0b38498c1302c32729120ed945f523c0e6136cce5",
-      "length": 8023
+      "sha256": "4fa292c337b3ec57e1b1bf8447d755a25c779bffae682bdc30351277e9663cbe",
+      "length": 23122
     },
     {
       "name": "held_pair_launcher",
@@ -54,8 +54,8 @@
     {
       "name": "borrowed_scanner_bridge",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/borrowed_scanner_bridge.py",
-      "sha256": "efb2541f975df404a454061827f2aabf801c18b80f71309e5a9ee41739e68d53",
-      "length": 12910
+      "sha256": "751963c8a55666577b7802ecb1ce67ab651cf1c6b05373e02a57a5d91367f6d5",
+      "length": 12919
     },
     {
       "name": "qualify_pair_resources",
@@ -66,7 +66,7 @@
     {
       "name": "pair_failure_diagnostic",
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
-      "sha256": "f9494f43488770f07d514a8bfb42b7a5e3b8fa2297224b7980cf246f7af10cf6",
+      "sha256": "78fbd2cb63921da23f55b7c2c48ff7b101a002e15a219967e237ade53209a5c9",
       "length": 20125
     }
   ],
@@ -127,9 +127,16 @@
   "codeSiteDiagnosticBase": "ef7706b2915d9cc39a595ede30a4ac4dea903dd9",
   "ownerDiagnosticSourceSha256": "58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f",
   "ownerDiagnosticSiteTableSha256": "c00aba56c681457c7dc4a52a7d17ae601d5a2dc34be8b847d96e1e9562dffdc2",
-  "bridgeDiagnosticSourceSha256": "efb2541f975df404a454061827f2aabf801c18b80f71309e5a9ee41739e68d53",
-  "bridgeDiagnosticSiteTableSha256": "fc7c052fa2c0186e420626e3b117062e203bbff4a7022a07ec1200557d83f2b9",
+  "bridgeDiagnosticSourceSha256": "751963c8a55666577b7802ecb1ce67ab651cf1c6b05373e02a57a5d91367f6d5",
+  "bridgeDiagnosticSiteTableSha256": "eb6811b7ab5fa34897ae1e0d11f81231977bdf9dce05da1fd3911aa34c10b548",
   "relayConjunctDiagnosticBase": "56df81a0041e642952f90b4a4184f830799207d0",
   "relayConjunctOriginalSourceSha256": "e7dccdfdfa498d6da439adc9fe2a7ac1f1e08a229529658839bb406366178b91",
-  "relayConjunctDiagnosticOnly": true
+  "relayConjunctDiagnosticOnly": true,
+  "startupControls": {
+    "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_startup_ping_handoff.py",
+    "sha256": "495917d9790f893c1a73d931359dd118f007795d888f1458b78f994d0f76249e",
+    "length": 24412
+  },
+  "startupHandoffSourceBase": "93dd69993414f99603a9d11610ca4aa07020b28d",
+  "startupHandoffScope": "Original owned startup PING ECONNREFUSED only; full history retained; no native acceptance"
 }

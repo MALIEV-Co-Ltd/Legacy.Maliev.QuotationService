@@ -18,7 +18,7 @@ import time
 import uuid
 import selectors
 import ipaddress
-from scanner_loopback_relay import LoopbackRelay
+from scanner_loopback_relay import LoopbackRelay, StartupPingRefused
 from scanner_docker_command import run_docker
 from types import SimpleNamespace
 from datetime import datetime, timezone
@@ -237,7 +237,8 @@ class Scanner:
         self.receipt["containerGeneration"] = {"createdUtc": diagnostic["createdUtc"], "startedUtc": state["StartedAt"]}
         self.receipt["stage"] = "start-owned-loopback-relay"
         self.validate_backend_endpoint()
-        self.relay = LoopbackRelay(self.validate_backend_endpoint)
+        self.relay = object.__new__(LoopbackRelay)
+        LoopbackRelay.__init__(self.relay, self.validate_backend_endpoint, startup_tracking=True)
         self.port = self.relay.endpoint[1]
         self.receipt["loopbackRelay"] = {**self.relay.identity, "backend": self.backend_identity,
                                          "portIsolation": self.receipt["portIsolation"], "ownedInProcess": True}
@@ -260,13 +261,14 @@ class Scanner:
         deadline = time.monotonic() + self.deadline_seconds
         while time.monotonic() < deadline:
             try:
-                if self.command(b"PING", timeout=min(3, max(0.001, deadline-time.monotonic()))) == "PONG":
+                if self.relay.startup_ping(timeout=min(3, max(0.001, deadline-time.monotonic()))) == "PONG":
                     break
-            except (OSError, ValueError):
+            except StartupPingRefused:
                 pass
             time.sleep(0.5)
         else:
             raise TimeoutError("Actual clamd readiness deadline expired")
+        self.receipt["startupRelayHandoff"] = self.relay.seal_startup_readiness()
         version = self.command(b"VERSION")
         if not re.fullmatch(r"ClamAV [^/]+/[0-9]+/.+", version):
             raise ValueError("Engine/database readiness not observed")

@@ -11,7 +11,7 @@ HELD_DIAGNOSTIC_SOURCE = None
 HELD_OWNER_SOURCES = None
 HELD_H_SOURCE = None
 HELD_BRIDGE_SOURCE = None
-ORIGINAL_RELAY_PREFIX = "def _relay(self):\n    relay = self.scanner.relay\n    require(relay is not None and not relay.stop.is_set() and relay.acceptor.is_alive()\n            and not relay.failures and relay.listener.fileno() >= 0\n            and relay.listener.getsockname() == relay.endpoint\n            and relay.endpoint == ('127.0.0.1', self.scanner.port), 'Held relay unavailable')\n"
+ORIGINAL_RELAY_PREFIX = "def _relay(self):\n    relay = self.scanner.relay\n    require(relay is not None and not relay.stop.is_set() and relay.acceptor.is_alive()\n            and relay.ready_history_valid() and relay.listener.fileno() >= 0\n            and relay.listener.getsockname() == relay.endpoint\n            and relay.endpoint == ('127.0.0.1', self.scanner.port), 'Held relay unavailable')\n"
 
 
 class HostedPairSourceControls(unittest.TestCase):
@@ -232,7 +232,7 @@ class HostedPairSourceControls(unittest.TestCase):
                         'getsockname':method('getsockname',('127.0.0.1',8) if failed==5 else endpoint)})
         relay=Probe({'stop':Probe({'is_set':method('is_set',failed==1)}),
                      'acceptor':Probe({'is_alive':method('is_alive',failed!=2)}),
-                     'failures':['PRIVATE'] if failed==3 else [],'listener':listener,'endpoint':endpoint})
+                     'failures':['PRIVATE'] if failed==3 else [],'ready_history_valid':method('ready_history_valid',failed!=3),'listener':listener,'endpoint':endpoint})
         scanner=Probe({'relay':None if failed==0 else relay,'port':8 if failed==6 else 7})
         return types.SimpleNamespace(scanner=scanner),trace
 
@@ -251,7 +251,7 @@ class HostedPairSourceControls(unittest.TestCase):
     def test_conjunct_getter_and_method_errors_preserve_order_and_type(self):
         models,_=self.relay_prefix_models()
         for fault in ('relay','stop','is_set','is_set()','acceptor','is_alive','is_alive()',
-                      'failures','listener','fileno','fileno()','getsockname','getsockname()','endpoint','port'):
+                      'ready_history_valid','ready_history_valid()','listener','fileno','fileno()','getsockname','getsockname()','endpoint','port'):
             observations=[]
             for model in models:
                 owner,trace=self.relay_probe(error=fault)
@@ -273,6 +273,18 @@ class HostedPairSourceControls(unittest.TestCase):
         sites=[row[3] for row in d.B_SITES if row[0]=='BorrowedScannerBridge._relay' and row[4]=='require-call'][:7]
         self.assertEqual(emitted,sites);self.assertEqual(len(set(emitted)),7)
         self.assertTrue(all(value.startswith('bridge-guard-') for value in emitted))
+
+    def test_startup_control_source_is_held_and_tampering_refuses(self):
+        manifest,data=self.manifest()
+        with patch.object(harness,'bounded_read',return_value=data) as read:
+            self.assertEqual(harness.hold_startup_controls(Path.cwd(),manifest),data)
+            read.assert_called_once()
+        with patch.object(harness,'bounded_read',return_value=b'changed'):
+            with self.assertRaises(harness.Refused):harness.hold_startup_controls(Path.cwd(),manifest)
+        manifest['startupControls']['path']='foreign.py'
+        with patch.object(harness,'bounded_read') as read:
+            with self.assertRaises(harness.Refused):harness.hold_startup_controls(Path.cwd(),manifest)
+            read.assert_not_called()
 
     def test_invalid_metadata_refuses_before_either_actor_callback(self):
         from unittest.mock import Mock
@@ -326,6 +338,8 @@ class HostedPairSourceControls(unittest.TestCase):
                 'fileSourceRole': 'provenance-label-only-no-File-runtime',
                 'oracleControls': {'path': 'tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_pinned_image_oracle.py',
                                    'sha256': hashlib.sha256(data).hexdigest(), 'length': len(data)},
+                'startupControls': {'path': 'tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_startup_ping_handoff.py',
+                                    'sha256': hashlib.sha256(data).hexdigest(), 'length': len(data)},
                 'rawControls': {'path': 'tools/InvoiceCompletionProducerAcceptance/companion/test_raw_owner_command.py',
                                 'sha256': hashlib.sha256(data).hexdigest(), 'length': len(data)},
                 'modules': [{'name': name, 'path': 'tools/InvoiceCompletionProducerAcceptance/companion/' + name + '.py',

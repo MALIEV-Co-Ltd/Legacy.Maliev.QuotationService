@@ -20,7 +20,7 @@ import uuid
 
 
 LIMIT = 1048576
-MANIFEST_SHA256 = '106e972cc74d3c7282346c74a5418108bafe225fa29b8c85b4c5b0aabf5b2099'
+MANIFEST_SHA256 = '542b0d302d990485222f22ff150a3d70f473bc0993c52a821ca73c61095ed5d7'
 
 
 class Refused(ValueError):
@@ -80,7 +80,7 @@ def admit_event(environment, event, head):
 
 
 def hold_sources(root, manifest):
-    require(type(manifest) is dict and set(manifest) == {'schemaVersion', 'fileSource', 'fileSourceRole', 'modules', 'rawControls', 'oracleControls'}
+    require(type(manifest) is dict and set(manifest) == {'schemaVersion', 'fileSource', 'fileSourceRole', 'modules', 'rawControls', 'oracleControls', 'startupControls'}
             and type(manifest['schemaVersion']) is int and manifest['schemaVersion'] == 1
             and manifest['fileSourceRole'] == 'provenance-label-only-no-File-runtime'
             and re.fullmatch('[0-9a-f]{40}', manifest['fileSource']) is not None
@@ -127,6 +127,31 @@ def hold_oracle_controls(root, manifest):
     data = bounded_read(root / path, item['length'])
     require(len(data) == item['length'] and hashlib.sha256(data).hexdigest() == item['sha256'])
     return data
+
+
+def hold_startup_controls(root, manifest):
+    item = manifest['startupControls']
+    path = 'tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_startup_ping_handoff.py'
+    require(type(item) is dict and set(item) == {'path', 'sha256', 'length'}
+            and item['path'] == path and re.fullmatch('[0-9a-f]{64}', item['sha256']) is not None
+            and type(item['length']) is int and 0 < item['length'] <= LIMIT)
+    data = bounded_read(root / path, item['length'])
+    require(len(data) == item['length'] and hashlib.sha256(data).hexdigest() == item['sha256'])
+    return data
+
+
+def execute_startup_controls(data, relay_source):
+    name = 'held_startup_ping_controls'
+    require(name not in sys.modules)
+    module = types.ModuleType(name)
+    module.__file__ = '<private-held-source:' + name + '>'
+    sys.modules[name] = module
+    exec(compile(data, module.__file__, 'exec'), module.__dict__)
+    module.HELD_RELAY_SOURCE = relay_source
+    suite = unittest.defaultTestLoader.loadTestsFromModule(module)
+    require(suite.countTestCases() == 25)
+    result = unittest.TextTestRunner().run(suite)
+    require(result.wasSuccessful() and result.testsRun == 25)
 
 
 def execute_oracle_controls(data, oracle_source):
@@ -240,11 +265,13 @@ def admit_and_load():
     require(hashlib.sha256(manifest_bytes).hexdigest() == MANIFEST_SHA256)
     manifest = json.loads(manifest_bytes)
     held = hold_sources(root, manifest)
+    startup_controls = hold_startup_controls(root, manifest)
     raw_controls = hold_raw_controls(root, manifest)
     oracle_controls = hold_oracle_controls(root, manifest)
     require(not any(name in sys.modules for name in held))
     sys.meta_path.insert(0, HeldImports(held))
     execute_oracle_controls(oracle_controls, held['pinned_image_oracle'])
+    execute_startup_controls(startup_controls, held['scanner_loopback_relay'])
     execute_raw_controls(raw_controls, held['qualify_pair_resources'])
     import hosted_companion_resources as h
     import qualify_pair_resources as qualifier
