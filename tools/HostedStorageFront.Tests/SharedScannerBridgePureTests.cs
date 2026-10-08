@@ -214,8 +214,15 @@ public sealed class SharedScannerBridgePureTests
 
     private static JsonObject Network() => new()
     {
-        ["Id"] = Backend().NetworkId, ["Created"] = Backend().NetworkCreated, ["Name"] = Scanner().NetworkName,
-        ["Driver"] = "bridge", ["Internal"] = true, ["EnableIPv6"] = false, ["Scope"] = "local", ["Ingress"] = false, ["Attachable"] = false,
+        ["Id"] = Backend().NetworkId,
+        ["Created"] = Backend().NetworkCreated,
+        ["Name"] = Scanner().NetworkName,
+        ["Driver"] = "bridge",
+        ["Internal"] = true,
+        ["EnableIPv6"] = false,
+        ["Scope"] = "local",
+        ["Ingress"] = false,
+        ["Attachable"] = false,
         ["Labels"] = new JsonObject { ["financial.acceptance.run"] = Backend().LeaseId[5..] },
         ["Containers"] = new JsonObject { [Backend().ContainerId] = new JsonObject(), [Scanner().ScannerContainerId] = new JsonObject() },
         ["IPAM"] = new JsonObject { ["Driver"] = "default", ["Options"] = new JsonObject(), ["Config"] = new JsonArray(new JsonObject { ["Subnet"] = Scanner().Subnet, ["Gateway"] = Scanner().Gateway }) },
@@ -223,7 +230,10 @@ public sealed class SharedScannerBridgePureTests
 
     private static JsonObject Container() => new()
     {
-        ["Id"] = Scanner().ScannerContainerId, ["Created"] = Scanner().ScannerCreated, ["Image"] = Scanner().ScannerImageId, ["RestartCount"] = 0,
+        ["Id"] = Scanner().ScannerContainerId,
+        ["Created"] = Scanner().ScannerCreated,
+        ["Image"] = Scanner().ScannerImageId,
+        ["RestartCount"] = 0,
         ["State"] = new JsonObject { ["Running"] = true, ["Paused"] = false, ["Restarting"] = false, ["Pid"] = Scanner().ScannerPid, ["StartedAt"] = Scanner().ScannerStarted },
         ["Config"] = new JsonObject { ["Image"] = Scanner().ScannerImageId, ["Labels"] = new JsonObject { ["financial.acceptance.run"] = Backend().LeaseId[5..] }, ["Entrypoint"] = new JsonArray("/usr/sbin/clamd"), ["Cmd"] = new JsonArray("--foreground", "--config-file=/etc/clamav/acceptance.conf") },
         ["HostConfig"] = new JsonObject { ["NetworkMode"] = Backend().NetworkId, ["ReadonlyRootfs"] = true, ["Privileged"] = false, ["Memory"] = 1536L * 1024 * 1024, ["NanoCpus"] = 2000000000, ["CapDrop"] = new JsonArray("ALL"), ["Devices"] = new JsonArray(), ["PublishAllPorts"] = false, ["PidMode"] = "", ["IpcMode"] = "private", ["CgroupnsMode"] = "private", ["SecurityOpt"] = new JsonArray("no-new-privileges"), ["RestartPolicy"] = new JsonObject { ["Name"] = "no" }, ["AutoRemove"] = false, ["Tmpfs"] = new JsonObject { ["/tmp"] = "rw,nosuid,nodev,size=32m", ["/run"] = "rw,nosuid,nodev,size=4m" } },

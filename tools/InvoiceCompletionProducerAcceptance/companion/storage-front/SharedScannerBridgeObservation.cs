@@ -127,7 +127,10 @@ internal sealed class SharedScannerBridgeObservation(StorageBackendLease backend
     private static string[] Strings(JsonElement value, string key) => value.GetProperty(key).ValueKind == JsonValueKind.Null ? [] : value.GetProperty(key).EnumerateArray().Select(x => x.GetString() ?? throw new InvalidDataException()).ToArray();
     private static bool Nonempty(JsonElement value, string key) => value.TryGetProperty(key, out var item) && (item.ValueKind switch
     {
-        JsonValueKind.Null => false, JsonValueKind.String => item.GetString() != "", JsonValueKind.Array => item.GetArrayLength() != 0,
-        JsonValueKind.Object => item.EnumerateObject().Any(), _ => true,
+        JsonValueKind.Null => false,
+        JsonValueKind.String => item.GetString() != "",
+        JsonValueKind.Array => item.GetArrayLength() != 0,
+        JsonValueKind.Object => item.EnumerateObject().Any(),
+        _ => true,
     });
 }

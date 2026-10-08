@@ -86,8 +86,8 @@
   "actualSdkExecutions": null,
   "strictTestInventory": {
     "path": "scripts/storage-front-inventory.json",
-    "sha256": "a3542238e96a56067a77b02e26e1cdd15445fce5dbd5f16959cabdb5c9c10b1a",
-    "gitBlob": "31d7e140562e3b3399020d6d40fe1b696af069cd",
+    "sha256": "56299820217dc72b0092db26b5875733361daf75323459e5b06c50fc0e819573",
+    "gitBlob": "ad2512dfd7a9d377a88bcead9e52b9d07ed7c255",
     "length": 30555
   },
   "qualificationIntegrationBase": "5312edd10acdc5b3fdebadce47c7b86f490a7a67",

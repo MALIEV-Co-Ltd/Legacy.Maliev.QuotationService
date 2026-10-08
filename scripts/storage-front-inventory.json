@@ -584,7 +584,7 @@
   },
   "InvoiceCompletionProducerAcceptance.Companion.SharedScannerBridgePureTests": {
     "source": "tools/HostedStorageFront.Tests/SharedScannerBridgePureTests.cs",
-    "normalizedSourceSha256": "91de0b83928318cd56cba4fd049fb0b183864b5df4f7c4defb3072ae8b2af932",
+    "normalizedSourceSha256": "b394b5554f66e4c91ae09a5b2fdc37457fafd19b6ae24c14bfb6ced2710f1fc8",
     "methods": {
       "OldLeaseDefaultAndWildcardListenerContractRemainUnchanged": {
         "parameters": [],

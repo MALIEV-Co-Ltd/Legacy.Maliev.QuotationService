@@ -10,9 +10,9 @@
     },
     {
       "path": "tools/HostedStorageFront.Tests/SharedScannerBridgePureTests.cs",
-      "sha256": "91de0b83928318cd56cba4fd049fb0b183864b5df4f7c4defb3072ae8b2af932",
-      "gitBlob": "21c05b7291d6b8a6049d07243422863dbe7cc006",
-      "length": 13990
+      "sha256": "b394b5554f66e4c91ae09a5b2fdc37457fafd19b6ae24c14bfb6ced2710f1fc8",
+      "gitBlob": "0e84c0920b8abdb6e0aed159bab23fce0ade744e",
+      "length": 14070
     },
     {
       "path": "tools/HostedStorageFrontHost/Program.cs",
@@ -40,9 +40,9 @@
     },
     {
       "path": "tools/InvoiceCompletionProducerAcceptance/companion/storage-front/SharedScannerBridgeObservation.cs",
-      "sha256": "3c3509fd5223b5edff8e841b1dabb51ee94a02bf4a0480ccf562288b8e8b7d02",
-      "gitBlob": "a9a840d807bcd23e72723b8b3d7e7d7840dfe624",
-      "length": 11154
+      "sha256": "16ef8f00bcbec4e594389db376f7095cbf8e052494751fbacb80fa566b29f340",
+      "gitBlob": "e0c00e73c467934de26203c7ffa909ca5628cb7c",
+      "length": 11178
     },
     {
       "path": "tools/HostedStorageCommand.NativeControls/Program.cs",
@@ -147,8 +147,8 @@
   ],
   "strictTestInventory": {
     "path": "scripts/storage-front-inventory.json",
-    "sha256": "a3542238e96a56067a77b02e26e1cdd15445fce5dbd5f16959cabdb5c9c10b1a",
-    "gitBlob": "31d7e140562e3b3399020d6d40fe1b696af069cd",
+    "sha256": "56299820217dc72b0092db26b5875733361daf75323459e5b06c50fc0e819573",
+    "gitBlob": "ad2512dfd7a9d377a88bcead9e52b9d07ed7c255",
     "length": 30555
   },
   "actualSdkDiscovery": null,
