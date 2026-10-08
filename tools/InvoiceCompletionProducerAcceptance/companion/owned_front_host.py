@@ -142,6 +142,10 @@ class OwnedFrontHost:
         self.cleanup_failure = None
         self.profile = None
 
+    def acquire_child(self, arguments, **options):
+        """Explicit acquisition seam; the original default retains its existing child."""
+        return subprocess.Popen(arguments, **options)
+
     def start(self):
         h.require(h.sys.platform == "linux" and self.process is None and not self.pipe.sealed
                   and not self.pipe.closed, "Single hosted front launch required")
@@ -182,7 +186,7 @@ class OwnedFrontHost:
         self.actual_environment = environment
         previous = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGALRM})
         try:
-            self.process = subprocess.Popen([self.spec.dotnet_executable, self.spec.executable_dll, self.spec.profile_path],
+            self.process = self.acquire_child([self.spec.dotnet_executable, self.spec.executable_dll, self.spec.profile_path],
                 cwd=str(Path(self.spec.executable_dll).parent), env=environment, stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True,
                 pass_fds=(self.pipe.read_fd,), start_new_session=False)
