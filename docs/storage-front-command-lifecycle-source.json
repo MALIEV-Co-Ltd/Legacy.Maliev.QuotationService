@@ -1,0 +1,114 @@
+{
+  "schema": "storage-front-command-lifecycle-source-v1",
+  "baseSourceHead": "3df0c619502c894913368838be03c96e34dea756",
+  "baseTree": "f6aca3e27b4a7b46a83d5d72a1a45cb2fc69f33a",
+  "files": [
+    {
+      "path": "docs/storage-front-command-lifecycle.md",
+      "bytes": 7763,
+      "sha256": "76b84bed691c6b640d4596a066e10fb05a1698f785b3d52c38b778d885865f6a",
+      "gitBlob": "794792ca2e51d44511b9d6a94753d200aaa2ba7a"
+    },
+    {
+      "path": "tools/HostedStorageFront.Tests/BoundedOwnedCommandLifecycleTests.cs",
+      "bytes": 6893,
+      "sha256": "b080a8b58ef1dc4da47f9ec8eee38170ca39ba6408ae565ce40d63af7b6c9597",
+      "gitBlob": "561d21d3ad7ff4f37247b7767e0d1b069e820526"
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/storage-front/BoundedOwnedCommand.cs",
+      "bytes": 22801,
+      "sha256": "8ee8d3ba7b127f827c16f52ab735aa8d6ba7f4bb852b57b06e8274a7b248e2b4",
+      "gitBlob": "1ac224b5a67e591c811ed7325aed8394588c3872"
+    },
+    {
+      "path": "tools/HostedStorageCommand.NativeControls/Program.cs",
+      "sha256": "323278cf293336d909a6cfd343dc22d0169146426ec6916a4bd1f87d1090650e",
+      "gitBlob": "4c0725e2c20a928448c88397d08ec9bb03e22490",
+      "bytes": 10360
+    },
+    {
+      "path": "tools/HostedStorageCommand.NativeControls/StorageCommandNative.csproj",
+      "sha256": "75f8275c263bbd08634ed7ae2727f3992698b181e93a548331b4c2e6f0f70ca0",
+      "gitBlob": "6b68722cea737c4a5ae5fcbf9604fb66053c10d4",
+      "bytes": 567
+    },
+    {
+      "path": "scripts/check_storage_command_receipt.py",
+      "sha256": "53ae1c90a3ba77275b1f1e455ea92d663e4dfee816a33f31f152b47cfee6c8fa",
+      "gitBlob": "fc571416a127456ad051494f89d7435708848fd6",
+      "bytes": 10016
+    },
+    {
+      "path": "scripts/test_storage_command_receipt.py",
+      "sha256": "ac71ebb47b86426c4de7268e81bb4af87e32b9575fec3c0da07206927de6476f",
+      "gitBlob": "f05bf7166c2dd52fbe1c271ba1c18316d16abc0d",
+      "bytes": 10620
+    }
+  ],
+  "runApiPreserved": true,
+  "workSeconds": 5,
+  "cleanupSecondsPerAttempt": 5,
+  "cleanupAttemptsMaximum": 2,
+  "cleanupAwaitBudgetAggregateSeconds": 10,
+  "CSharpDeclaredMethods": 13,
+  "CSharpDeclaredCases": 20,
+  "CSharpControlsExecuted": 0,
+  "nativeExecuted": false,
+  "managedIsClosedOnly": true,
+  "kernelAllFdCensusObserved": false,
+  "FileFrontNativeActivationAccepted": false,
+  "historicalPacketSourceBase": "f277fe97b7e1f1244196a90c1467ba83232e4505",
+  "historicalPacketBaseTree": "8771dc58503cdfa2f7409c9b5deb51c88a2fdccc",
+  "historicalSourcePackets": [
+    {
+      "name": "profile",
+      "packet": "storage-front-optin-api-compatible-proposal",
+      "sealSha256": "f42650ab93514874a546cede598a84119f5ccb1738bcb8b83ecf4625e2bd78af",
+      "patchSha256": "29e51a66ed80f55dfdbef14f081f41bb1e6c08b99478f99484917ac7f4c739fb",
+      "baseHead": "f277fe97b7e1f1244196a90c1467ba83232e4505",
+      "sourceReviewedOnly": true
+    },
+    {
+      "name": "command",
+      "packet": "storage-front-command-lifecycle-natural-exit-successor-proposal",
+      "sealSha256": "66dce1dd2eadf6e8e3ec2519d01bbd3eba5940bb57467073b68202dde269e252",
+      "patchSha256": "85ab79230ff59d1669d487273ae6d9b80d4f814b0fc8aa8119617890550530d3",
+      "baseHead": "f277fe97b7e1f1244196a90c1467ba83232e4505",
+      "sourceReviewedOnly": true
+    }
+  ],
+  "historicalPacketExistingWorkflowAndInventoryResealed": false,
+  "strictSourceInventoryReconciled": true,
+  "workflowPoliciesChanged": false,
+  "workflowExecutionQualified": false,
+  "actualSdkDiscovery": null,
+  "actualSdkExecutions": null,
+  "strictTestInventory": {
+    "path": "scripts/storage-front-inventory.json",
+    "sha256": "a3542238e96a56067a77b02e26e1cdd15445fce5dbd5f16959cabdb5c9c10b1a",
+    "gitBlob": "31d7e140562e3b3399020d6d40fe1b696af069cd",
+    "length": 30555
+  },
+  "qualificationIntegrationBase": "5312edd10acdc5b3fdebadce47c7b86f490a7a67",
+  "frozenNativeDependencySeal": "dcd1397b2913dc1aef7c7260a15f5af87b1fe723a464b909e61dbeb3e337d7e7",
+  "frozenValidatorDependencySeal": "cbfc165f26fb50dd9b64592c46deff10c97c614f257a0edb8e8071d130f1d8f3",
+  "qualificationReadOnlyInputs": [
+    {
+      "path": "scripts/check_quotation_candidate_native.py",
+      "sourceHead": "5312edd10acdc5b3fdebadce47c7b86f490a7a67",
+      "sha256": "5f8fe2d6ecc60627bf814e5f9a4660131aed44134e56c10e6c4556754ff88ba6",
+      "gitBlob": "e865c074a983197ade5971d30de3512ead480212",
+      "length": 17538
+    }
+  ],
+  "currentMainRebaseAssociation": {
+    "priorReviewedAuditBase": "d5e4a14a84066baeb4c68e89cb0d0f639693c702",
+    "priorReviewedAuditSealSha256": "b4eaf8880f809c9552ed64b9f68f7d045d833b98e031f928a7b77585b1394c83",
+    "currentProtectedMainHead": "5312edd10acdc5b3fdebadce47c7b86f490a7a67",
+    "qualifiedSharedWorkflowSourceHead": "53892c362a30130f582c40da7525e44f11474e8e",
+    "PR143TwoPathsPreservedExactly": true,
+    "NativeSourceAndValidatorBytesUnchanged": true,
+    "ActualCurrentHeadSdkOrNativeExecutionAccepted": false
+  }
+}

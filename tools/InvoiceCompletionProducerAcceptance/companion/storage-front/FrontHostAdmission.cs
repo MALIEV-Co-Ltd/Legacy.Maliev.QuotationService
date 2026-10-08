@@ -10,7 +10,11 @@ namespace InvoiceCompletionProducerAcceptance.Companion;
 public sealed record FrontHostProfile(string RunId, DateTimeOffset ExpiresUtc, Uri FrontOrigin,
     StorageBackendLease Backend, string Repository, string SourceSha, string ExecutableDll, string ExecutableSha256,
     int ParentPid, long ParentKernelStartTicks, string ParentExecutablePath, string ParentExecutableSha256,
-    string ParentScriptPath, string ParentScriptSha256, string BootstrapPipeHandle, string BootstrapPipeInode);
+    string ParentScriptPath, string ParentScriptSha256, string BootstrapPipeHandle, string BootstrapPipeInode)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public SharedScannerBridgeLease? SharedScannerBridge { get; init; }
+}
 
 /// <summary>Read-only finite startup and owner-pipe checks; declarations never establish process ownership alone.</summary>
 public static class FrontHostAdmission
@@ -65,7 +69,7 @@ public static class FrontHostAdmission
             || !ExactFile(profile.ParentScriptPath, profile.Repository, profile.ParentScriptSha256)
             || !Path.IsPathFullyQualified(profile.ParentExecutablePath) || !HashShape(profile.ParentExecutableSha256))
             throw new InvalidDataException("Current exact hosted front startup identity required.");
-        new ObservedStorageBackend(profile.Backend).Validate(now);
+        new ObservedStorageBackend(profile.Backend, profile.SharedScannerBridge).Validate(now);
     }
 
     /// <summary>Re-observes actual source, executable, immediate parent generation and both ends of the inherited pipe.</summary>

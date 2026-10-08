@@ -581,5 +581,260 @@
         ]
       }
     }
+  },
+  "InvoiceCompletionProducerAcceptance.Companion.SharedScannerBridgePureTests": {
+    "source": "tools/HostedStorageFront.Tests/SharedScannerBridgePureTests.cs",
+    "normalizedSourceSha256": "91de0b83928318cd56cba4fd049fb0b183864b5df4f7c4defb3072ae8b2af932",
+    "methods": {
+      "OldLeaseDefaultAndWildcardListenerContractRemainUnchanged": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ExactPrivateListenerUsesLinuxLittleEndianAndRejectsWildcard": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ForeignLoopbackOrWrongByteOrderCannotSatisfyPrivateBinding": {
+        "parameters": [
+          {
+            "type": "string",
+            "name": "address"
+          }
+        ],
+        "cases": [
+          "f74226b0da1873c5aa9af122732e400b649754946fb8c2c026016eeb3a5d871d",
+          "a893741ca8d986a70ff84f1f9834c349c383213b5ef018dd98e295bbd97f34ec",
+          "4ba0dce6cda312c44136fb40bcd4dda725f63ea12d80e3be9e39082a24def45a"
+        ]
+      },
+      "TwoExactPrivateListenersRemainRefused": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ExactTwoMemberConfiguredBridgeAndScannerSnapshotsSatisfyPureChecks": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "BridgeIdentityCensusOrIpamMutationIsRejected": {
+        "parameters": [
+          {
+            "type": "string",
+            "name": "mutation"
+          }
+        ],
+        "cases": [
+          "fc949a4dac6b077d1c847c8706688fbbd098682139e19ff26a436691c96c89f1",
+          "a06df929a42bd4dbee61da9e26d8d2494f37dd8619149a443c97c6c15889c4cf",
+          "1c429aa3f7749956917a7a20d9cdb4d0d7f4d9f1a8cd86db1248731238332c44",
+          "b5fc3efab88190f954f69edd514e8d2b4799d6accf825d6e733e7e0db6bc9b74",
+          "66da55b831bbebc1ab39825616fe8edcb5f01f1cc0ed91cb5fd447c119c8d372",
+          "53f244a25fd6e7eea4f0526aa053d02d6686f1d8e5a0eeaa55079e7e2d9e93fd",
+          "bdb7daeb24061745d47deeb8c7021b231d78fd827acc42b3d67f4df2c75a1cc6",
+          "60c79732c3b6c49a41b2dadf1f57d8d854ca59dd6f2bb5d5b2918713737e86cd",
+          "191c856794640dc4590cead9b535648674e4a1a996be8e1df776e4894f0e08a8",
+          "82d7057e6af7f27dcf9a3d6ce6749809823c13ecc597285281243ca961690be4",
+          "94ed38bb417a953196c3a37d1578c66b0204c14aaba1e9019612b635efc80006"
+        ]
+      },
+      "ScannerGenerationImageCapsEndpointOrPublicationMismatchIsRejected": {
+        "parameters": [
+          {
+            "type": "string",
+            "name": "mutation"
+          }
+        ],
+        "cases": [
+          "02d0b4a8e7b731c029af7a68ab811dd3f36ea3dc226649416747b3869ba249c7",
+          "8e79b7dd85a286cfaddb27aa4478164bb57630a417092935ff4fcd84025de0b5",
+          "a06df929a42bd4dbee61da9e26d8d2494f37dd8619149a443c97c6c15889c4cf",
+          "b5fc3efab88190f954f69edd514e8d2b4799d6accf825d6e733e7e0db6bc9b74",
+          "5a7ac5a67b16697bde5754fb16591bce16ef47d4dc3f67bd5748930d92ca09b3",
+          "36d6a00306033d30129f0875c4bb79e2c6ea9f2d131d9ad459de4644828eea0f",
+          "9b21f5249f47250070514dd7a6b336da19edc337878e4c3990635e16f9d52726",
+          "c43425cfd8702373321de72e3a53bb906db460a500ae2bc402865e85590cc47a"
+        ]
+      },
+      "DeclarationDoesNotPromoteUnknownOrLegacyIdentityToSharedMode": {
+        "parameters": [
+          {
+            "type": "string",
+            "name": "mutation"
+          }
+        ],
+        "cases": [
+          "927a4adcdf9767b2ac64b125beee668422aad99b6e7e4e8608a9251616a88201",
+          "fab0145944060b3e3b0716b41cc8e086d6420bca60f9dca99a45a2933ac69918",
+          "dee801fdaa3fbaa1944f81242ab73310a822f882397fbb4289a53d22fd539594",
+          "bdb7daeb24061745d47deeb8c7021b231d78fd827acc42b3d67f4df2c75a1cc6",
+          "83566a97eafe1d9d268104f45bfdd7be6444256985298adcf0a1fe1a5f43ebf1"
+        ]
+      },
+      "ExistingRecordConstructorAndDeconstructShapesRemainUnchanged": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "LegacyJsonWithoutOptionalFieldsAndExplicitSharedProfileRoundTrip": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "MalformedSharedProfileCannotCreateAnObserverContract": {
+        "parameters": [
+          {
+            "type": "string",
+            "name": "mutation"
+          }
+        ],
+        "cases": [
+          "a69f50eee46e418afc253e05b3768b9e53f8c2beb44287e16aea3f2de18b700f",
+          "f11f685827d1c39ee22caa74f2afed0774bdc0d74be5740264ba05eaa39a146a",
+          "f8a3bbe0eaf654a1242835ffc1e878c766a3643ce7a91ff43ea8940ecaa1c06d",
+          "bd6327dadb8fc98282aac61177ea60d2a9f807df3ca5b93a5ad0f22d0ae56614"
+        ]
+      },
+      "ActualImageSnapshotsRequirePinnedBaseAndOneOwnedDerivedLayer": {
+        "parameters": [
+          {
+            "type": "string",
+            "name": "mutation"
+          }
+        ],
+        "cases": [
+          "b951559115082610c22e116dfee6c87be5fd98a72a66431fa42608dc3b9727ca",
+          "c86220a6a83dfac0833fef95abb73b609c55338c6bda0e2aec108c799a7286e8",
+          "b04d12ce2802beeff03b82cb68846af69f0a4ac201f62dd5b2d2ccf69fa258c8",
+          "77d01ea99d59bb7165fad5a5e636b5c8a1adedcd254fb8cc7e26516c17913198",
+          "114d7f4f4a12e1822e23f58ea13d85cdadcbae395fa0694607c9f705d12cc318"
+        ]
+      }
+    }
+  },
+  "InvoiceCompletionProducerAcceptance.Companion.BoundedOwnedCommandLifecycleTests": {
+    "source": "tools/HostedStorageFront.Tests/BoundedOwnedCommandLifecycleTests.cs",
+    "normalizedSourceSha256": "b080a8b58ef1dc4da47f9ec8eee38170ca39ba6408ae565ce40d63af7b6c9597",
+    "methods": {
+      "SignalFailureDoesNotSkipOriginalWaitOrEitherReader": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "IndependentCloseFailuresPreserveBothActualFailureObjects": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "UncertainClosureNeverRetriesTheOriginalRawClose": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "SuccessfulClosureIsNotRepeatedOnRecovery": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "ReturnFromCloseWithoutClosedObservationDoesNotAuthorizeRetry": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "CanceledFiniteObservationRetainsAnUnsettledOriginalTask": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "CompletedReaderFaultIsObservedButCannotSubstituteForEof": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "EachMissingPhysicalBarrierRefusesRelease": {
+        "parameters": [
+          {
+            "type": "bool",
+            "name": "exited"
+          },
+          {
+            "type": "bool",
+            "name": "outputEof"
+          },
+          {
+            "type": "bool",
+            "name": "errorEof"
+          },
+          {
+            "type": "bool",
+            "name": "handles"
+          }
+        ],
+        "cases": [
+          "1cb808987e96468b7205b5bda9c6071341b4da76db600c4fb23044f4990d51a6",
+          "c7f452489bcd5968058d64b72e705df727578be7508f4ec571c9ae53cc667d54",
+          "f91eec4d6e0daa7f43e4fecca9db15e42165349b8ccbb4f4b81aeaab643940ba",
+          "cbabd242d8f49e511af70fd6f8592000af8898e43c2cdba1a8e8893e654a86ea"
+        ]
+      },
+      "SettledSemanticFailureDoesNotBecomeCleanupUncertainty": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "InitialCleanupAndOneFreshRecoveryNeverAdmitAThirdAttempt": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "KernelGenerationUsesOriginalPidParentAndField22": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "OverlongAndMalformedKernelMetadataAreRefusedBeforeAssociation": {
+        "parameters": [],
+        "cases": [
+          "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        ]
+      },
+      "DescriptorPidMustBeUniqueAndMatchTheOriginal": {
+        "parameters": [
+          {
+            "type": "string",
+            "name": "source"
+          },
+          {
+            "type": "bool",
+            "name": "expected"
+          }
+        ],
+        "cases": [
+          "6192e43c17beaf561cf70632d1d71e9189f105bffc497237fa8a8da446df6994",
+          "0f4b130ec19a481f7c52abae467b70044af5922b286ac0196c257d2893ad0e54",
+          "98d8e8a7183409bc17429033031516acf9cfe807867558acb441a86b2126819c",
+          "7de249f7d6f89db3119b0a10e94b4ada9a52d51ea06f6e1a27bc425f5dc4168c",
+          "96294f9e4ea8330335116af85d1bc0b28f37f3d7c7266220e36d9df0f734c444"
+        ]
+      }
+    }
   }
 }

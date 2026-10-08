@@ -1,0 +1,177 @@
+name: Storage front CSharp command qualification
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'tools/HostedStorageCommand.NativeControls/**'
+      - 'tools/HostedStorageFront.Tests/**'
+      - 'tools/HostedStorageFrontHost/**'
+      - 'tools/InvoiceCompletionProducerAcceptance/companion/storage-front/**'
+      - 'scripts/*storage*command*'
+      - 'scripts/storage-front-inventory.json'
+      - 'docs/storage-front*'
+      - '.github/workflows/storage-front-command-qualification.yml'
+permissions:
+  contents: read
+concurrency:
+  group: storage-front-command-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+jobs:
+  original-command-controls:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.ref == 'codex/file-front-csharp-join-20261008'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [natural, nonzero-next-read, cancel, stdout-cap, stderr-cap]
+    env:
+      REVIEWED_SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+      STORAGE_CASE: ${{ matrix.case }}
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_CLI_UI_LANGUAGE: en
+      DOTNET_CLI_USE_MSBUILD_SERVER: '0'
+      MSBUILDDISABLENODEREUSE: '1'
+    steps:
+      - name: Checkout exact provider source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Admit held source and strict actor-free controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$REVIEWED_SOURCE_HEAD"
+          python3 -B - <<'PY'
+          import hashlib, os, stat, sys, types, unittest
+          expected = {'tools/InvoiceCompletionProducerAcceptance/companion/storage-front/BoundedOwnedCommand.cs': (22801, '8ee8d3ba7b127f827c16f52ab735aa8d6ba7f4bb852b57b06e8274a7b248e2b4'), 'tools/HostedStorageCommand.NativeControls/Program.cs': (10360, '323278cf293336d909a6cfd343dc22d0169146426ec6916a4bd1f87d1090650e'), 'tools/HostedStorageCommand.NativeControls/StorageCommandNative.csproj': (567, '75f8275c263bbd08634ed7ae2727f3992698b181e93a548331b4c2e6f0f70ca0'), 'scripts/check_storage_command_receipt.py': (10016, '53ae1c90a3ba77275b1f1e455ea92d663e4dfee816a33f31f152b47cfee6c8fa'), 'scripts/test_storage_command_receipt.py': (10620, 'ac71ebb47b86426c4de7268e81bb4af87e32b9575fec3c0da07206927de6476f'), 'scripts/check_quotation_candidate_native.py': (17538, '5f8fe2d6ecc60627bf814e5f9a4660131aed44134e56c10e6c4556754ff88ba6')}
+          held = {}
+          for relative, (length, digest) in expected.items():
+              fd = os.open(relative, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+              try:
+                  before = os.fstat(fd)
+                  if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size != length: raise SystemExit('STORAGE_SOURCE_REFUSED')
+                  raw = bytearray()
+                  while len(raw) <= length:
+                      block = os.read(fd, length + 1 - len(raw))
+                      if not block: break
+                      raw.extend(block)
+                  after = os.fstat(fd)
+                  fields = ('st_dev','st_ino','st_size','st_mtime_ns','st_ctime_ns')
+                  if any(getattr(before,k) != getattr(after,k) for k in fields) or len(raw) != length or hashlib.sha256(raw).hexdigest() != digest: raise SystemExit('STORAGE_SOURCE_REFUSED')
+                  held[relative] = bytes(raw)
+              finally:
+                  os.close(fd)
+          checker = types.ModuleType('check_storage_command_receipt')
+          sys.modules[checker.__name__] = checker
+          exec(compile(held['scripts/check_storage_command_receipt.py'], '<held-validator>', 'exec', dont_inherit=True), checker.__dict__)
+          tests = types.ModuleType('held_storage_command_tests')
+          exec(compile(held['scripts/test_storage_command_receipt.py'], '<held-tests>', 'exec', dont_inherit=True), tests.__dict__)
+          result = unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromModule(tests))
+          if result.testsRun != 17 or not result.wasSuccessful(): raise SystemExit('STORAGE_MODELS_REFUSED')
+          checker.verify_sources('.')
+          PY
+      - name: Setup original runtime prerequisite
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore audit format and build exact native project
+        shell: bash
+        run: |
+          set -euo pipefail
+          project=tools/HostedStorageCommand.NativeControls/StorageCommandNative.csproj
+          dotnet restore "$project" -p:NuGetAudit=true -p:NuGetAuditMode=all -p:NuGetAuditLevel=low -p:TreatWarningsAsErrors=true
+          mkdir -p "$RUNNER_TEMP/StorageCommandAudit"
+          dotnet list "$project" package --include-transitive --no-restore --format json --output-version 1 > "$RUNNER_TEMP/StorageCommandAudit/package-graph.json" 2> "$RUNNER_TEMP/StorageCommandAudit/package-graph.stderr.log"
+          dotnet list "$project" package --vulnerable --include-transitive --no-restore --format json --output-version 1 > "$RUNNER_TEMP/StorageCommandAudit/package-audit.json" 2> "$RUNNER_TEMP/StorageCommandAudit/package-audit.stderr.log"
+          python3 -B - <<'PY'
+          import hashlib, os, stat, sys, types, unittest
+          expected = {'tools/InvoiceCompletionProducerAcceptance/companion/storage-front/BoundedOwnedCommand.cs': (22801, '8ee8d3ba7b127f827c16f52ab735aa8d6ba7f4bb852b57b06e8274a7b248e2b4'), 'tools/HostedStorageCommand.NativeControls/Program.cs': (10360, '323278cf293336d909a6cfd343dc22d0169146426ec6916a4bd1f87d1090650e'), 'tools/HostedStorageCommand.NativeControls/StorageCommandNative.csproj': (567, '75f8275c263bbd08634ed7ae2727f3992698b181e93a548331b4c2e6f0f70ca0'), 'scripts/check_storage_command_receipt.py': (10016, '53ae1c90a3ba77275b1f1e455ea92d663e4dfee816a33f31f152b47cfee6c8fa'), 'scripts/test_storage_command_receipt.py': (10620, 'ac71ebb47b86426c4de7268e81bb4af87e32b9575fec3c0da07206927de6476f'), 'scripts/check_quotation_candidate_native.py': (17538, '5f8fe2d6ecc60627bf814e5f9a4660131aed44134e56c10e6c4556754ff88ba6')}
+          held = {}
+          for relative, (length, digest) in expected.items():
+              fd = os.open(relative, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+              try:
+                  before = os.fstat(fd)
+                  if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size != length: raise SystemExit('STORAGE_SOURCE_REFUSED')
+                  raw = bytearray()
+                  while len(raw) <= length:
+                      block = os.read(fd, length + 1 - len(raw))
+                      if not block: break
+                      raw.extend(block)
+                  after = os.fstat(fd)
+                  fields = ('st_dev','st_ino','st_size','st_mtime_ns','st_ctime_ns')
+                  if any(getattr(before,k) != getattr(after,k) for k in fields) or len(raw) != length or hashlib.sha256(raw).hexdigest() != digest: raise SystemExit('STORAGE_SOURCE_REFUSED')
+                  held[relative] = bytes(raw)
+              finally:
+                  os.close(fd)
+          checker = types.ModuleType('check_storage_command_receipt')
+          sys.modules[checker.__name__] = checker
+          exec(compile(held['scripts/check_storage_command_receipt.py'], '<held-validator>', 'exec', dont_inherit=True), checker.__dict__)
+          checker.verify_sources('.')
+          audit = types.ModuleType('held_original_package_audit')
+          exec(compile(held['scripts/check_quotation_candidate_native.py'], '<held-original-audit>', 'exec', dont_inherit=True), audit.__dict__)
+          project = audit.Path('tools/HostedStorageCommand.NativeControls/StorageCommandNative.csproj').resolve()
+          directory = audit.Path(os.environ['RUNNER_TEMP']) / 'StorageCommandAudit'
+          for name in ('package-graph.stderr.log', 'package-audit.stderr.log'):
+              audit.validate_empty_stderr(directory / name)
+          assets = audit.json.loads(checker.held_bytes(str(project.parent / 'obj/project.assets.json'), 65536))
+          audit.validate_restore_sources(assets, {'https://api.nuget.org/v3/index.json'})
+          graph = audit.json.loads(checker.held_bytes(str(directory / 'package-graph.json'), 65536))
+          report = audit.json.loads(checker.held_bytes(str(directory / 'package-audit.json'), 65536))
+          audit.validate_resolved_graph(graph, [project])
+          audit.validate_audit(report, [project], {'https://api.nuget.org/v3/index.json'}, graph)
+          print('STORAGE_COMMAND_PACKAGE_AUDIT_ACCEPTED')
+          PY
+          dotnet format "$project" --verify-no-changes --no-restore
+          dotnet build "$project" --configuration Release --no-restore
+      - name: Execute actual original command case
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          dotnet tools/HostedStorageCommand.NativeControls/bin/Release/net10.0/StorageCommandNative.dll "$STORAGE_CASE"
+      - name: Strict exact case receipt admission
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B - <<'PY'
+          import hashlib, os, stat, sys, types, unittest
+          expected = {'tools/InvoiceCompletionProducerAcceptance/companion/storage-front/BoundedOwnedCommand.cs': (22801, '8ee8d3ba7b127f827c16f52ab735aa8d6ba7f4bb852b57b06e8274a7b248e2b4'), 'tools/HostedStorageCommand.NativeControls/Program.cs': (10360, '323278cf293336d909a6cfd343dc22d0169146426ec6916a4bd1f87d1090650e'), 'tools/HostedStorageCommand.NativeControls/StorageCommandNative.csproj': (567, '75f8275c263bbd08634ed7ae2727f3992698b181e93a548331b4c2e6f0f70ca0'), 'scripts/check_storage_command_receipt.py': (10016, '53ae1c90a3ba77275b1f1e455ea92d663e4dfee816a33f31f152b47cfee6c8fa'), 'scripts/test_storage_command_receipt.py': (10620, 'ac71ebb47b86426c4de7268e81bb4af87e32b9575fec3c0da07206927de6476f'), 'scripts/check_quotation_candidate_native.py': (17538, '5f8fe2d6ecc60627bf814e5f9a4660131aed44134e56c10e6c4556754ff88ba6')}
+          held = {}
+          for relative, (length, digest) in expected.items():
+              fd = os.open(relative, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+              try:
+                  before = os.fstat(fd)
+                  if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size != length: raise SystemExit('STORAGE_SOURCE_REFUSED')
+                  raw = bytearray()
+                  while len(raw) <= length:
+                      block = os.read(fd, length + 1 - len(raw))
+                      if not block: break
+                      raw.extend(block)
+                  after = os.fstat(fd)
+                  fields = ('st_dev','st_ino','st_size','st_mtime_ns','st_ctime_ns')
+                  if any(getattr(before,k) != getattr(after,k) for k in fields) or len(raw) != length or hashlib.sha256(raw).hexdigest() != digest: raise SystemExit('STORAGE_SOURCE_REFUSED')
+                  held[relative] = bytes(raw)
+              finally:
+                  os.close(fd)
+          checker = types.ModuleType('check_storage_command_receipt')
+          sys.modules[checker.__name__] = checker
+          exec(compile(held['scripts/check_storage_command_receipt.py'], '<held-validator>', 'exec', dont_inherit=True), checker.__dict__)
+          checker.verify_sources('.')
+          sys.argv = ['held-validator', 'TestResults/StorageCommandNative/'+os.environ['STORAGE_CASE']+'.json', os.environ['REVIEWED_SOURCE_HEAD'], os.environ['GITHUB_RUN_ID'], os.environ['GITHUB_RUN_ATTEMPT'], os.environ['STORAGE_CASE']]
+          raise SystemExit(checker.main())
+          PY
+      - name: Always retain only named original command receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: storage-front-command-${{ matrix.case }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: TestResults/StorageCommandNative/${{ matrix.case }}.json
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 7

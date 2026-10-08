@@ -12,11 +12,27 @@ public sealed record StorageBackendLease(string ContainerId, string NetworkId, s
     string ExecutablePath, string ExecutableSha256, string[] Entrypoint, string[] Command,
     string RunId, string LeaseId, string GithubRunId, string GithubAttempt, DateTimeOffset ExpiresUtc,
     long MemoryLimitBytes, long NanoCpus, long KernelStartTicks,
-    string FileSourceSha, string ExpiresText, string NetworkCreated, DateTimeOffset IssuedUtc);
+    string FileSourceSha, string ExpiresText, string NetworkCreated, DateTimeOffset IssuedUtc)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool BindOwnedIpv4 { get; init; }
+}
 
 /// <summary>Re-observes a private immutable backend without starting, stopping or altering resources.</summary>
-public sealed class ObservedStorageBackend(StorageBackendLease lease)
+public sealed class ObservedStorageBackend
 {
+    private readonly StorageBackendLease lease;
+    private readonly SharedScannerBridgeLease? sharedScanner;
+    private readonly SharedScannerBridgeObservation? shared;
+
+    public ObservedStorageBackend(StorageBackendLease lease) : this(lease, null) { }
+
+    public ObservedStorageBackend(StorageBackendLease lease, SharedScannerBridgeLease? sharedScanner)
+    {
+        this.lease = lease;
+        this.sharedScanner = sharedScanner;
+        shared = sharedScanner is null ? null : new(lease, sharedScanner);
+    }
     internal const string PinnedImage = "fsouza/fake-gcs-server@sha256:9e6924ee1b609d9913c3ea836cb4d4a9bc0419cd036ddcd136695720b5713baf";
     internal const string PinnedConfig = "sha256:d79ded7272ddc99187d94f61959f37041792e1a79cb3e6d26c9dfb5b845aca21";
     /// <summary>Actual endpoint only; it is never a provider/cloud destination.</summary>
@@ -45,6 +61,7 @@ public sealed class ObservedStorageBackend(StorageBackendLease lease)
             || lease.ImageReference != PinnedImage || lease.ImageId != PinnedConfig
             || !Hex(lease.ExecutableSha256, 64) || lease.ExecutablePath != "/bin/fake-gcs-server"
             || !IPAddress.TryParse(lease.BridgeIp, out var ip) || !PrivateBridge(ip)
+            || lease.BindOwnedIpv4 && ip.ToString() != lease.BridgeIp
             || lease.Port is < 1024 or > 65535 || lease.KernelStartTicks <= 0
             || lease.ExpiresUtc.Offset != TimeSpan.Zero || lease.ExpiresUtc <= now || lease.ExpiresUtc > now.AddMinutes(30)
             || lease.MemoryLimitBytes is < 67108864 or > 1073741824 || lease.NanoCpus is <= 0 or > 2000000000
@@ -59,9 +76,10 @@ public sealed class ObservedStorageBackend(StorageBackendLease lease)
             || !Guid.TryParseExact(lease.RunId[5..], "D", out var run) || run == Guid.Empty
             || lease.RunId != "c821-" + run.ToString("D")
             || lease.Entrypoint.Length != 1 || lease.Entrypoint[0] != lease.ExecutablePath
-            || !lease.Command.SequenceEqual(["-scheme", "http", "-host", "0.0.0.0", "-port", lease.Port.ToString(CultureInfo.InvariantCulture),
+            || !lease.Command.SequenceEqual(["-scheme", "http", "-host", lease.BindOwnedIpv4 ? lease.BridgeIp : "0.0.0.0", "-port", lease.Port.ToString(CultureInfo.InvariantCulture),
                 "-backend", "memory", "-external-url", Origin.GetLeftPart(UriPartial.Authority), "-public-host", Origin.Authority], StringComparer.Ordinal))
             throw new InvalidDataException("Current exact immutable private backend declaration required.");
+        shared?.ValidateDeclaration();
     }
 
     /// <summary>Verifies Docker generation, image, private network, limits and real init executable/socket owner.</summary>
@@ -72,6 +90,7 @@ public sealed class ObservedStorageBackend(StorageBackendLease lease)
         VerifyContainer(container.RootElement);
         using var network = await InspectAsync("network", lease.NetworkId, cancellationToken);
         VerifyNetwork(network.RootElement);
+        if (shared is not null) await ObserveSharedScannerAsync(cancellationToken);
         using var image = await InspectAsync("image", lease.ImageId, cancellationToken);
         var actualImage = One(image.RootElement);
         if (Text(actualImage, "Id") != lease.ImageId
@@ -88,7 +107,7 @@ public sealed class ObservedStorageBackend(StorageBackendLease lease)
         if (executable != lease.ExecutablePath || digest != lease.ExecutableSha256)
             throw new InvalidDataException("Actual backend executable differs.");
         var tcp = Encoding.ASCII.GetString(await ExecAsync(["cat", "/proc/1/net/tcp"], 1048576, cancellationToken));
-        string inode = ListeningInode(tcp, lease.Port);
+        string inode = lease.BindOwnedIpv4 ? ListeningInode(tcp, lease.Port, lease.BridgeIp) : ListeningInode(tcp, lease.Port);
         var descriptors = Encoding.ASCII.GetString(await ExecAsync(["ls", "-l", "/proc/1/fd"], 262144, cancellationToken));
         if (!descriptors.Split('\n').Any(value => value.TrimEnd().EndsWith("-> socket:[" + inode + "]", StringComparison.Ordinal)))
             throw new InvalidDataException("Actual backend listener is not owned by its immutable init process.");
@@ -96,6 +115,15 @@ public sealed class ObservedStorageBackend(StorageBackendLease lease)
             throw new InvalidDataException("Backend process generation changed.");
         using var final = await InspectAsync("container", lease.ContainerId, cancellationToken);
         VerifyContainer(final.RootElement);
+        if (shared is not null)
+        {
+            if (One(final.RootElement).GetProperty("State").GetProperty("Pid").GetInt32()
+                != One(container.RootElement).GetProperty("State").GetProperty("Pid").GetInt32())
+                throw new InvalidDataException("Shared backend Engine process generation changed.");
+            using var finalNetwork = await InspectAsync("network", lease.NetworkId, cancellationToken);
+            VerifyNetwork(finalNetwork.RootElement);
+            await ObserveSharedScannerAsync(cancellationToken);
+        }
         if (DateTimeOffset.UtcNow >= lease.ExpiresUtc) throw new InvalidDataException("Backend lease expired during observation.");
     }
 
@@ -134,6 +162,7 @@ public sealed class ObservedStorageBackend(StorageBackendLease lease)
 
     internal void VerifyNetwork(JsonElement value)
     {
+        if (shared is not null) { shared.VerifyNetwork(value); return; }
         var item = One(value);
         RequireLabels(item.GetProperty("Labels"), true);
         if (Text(item, "Id") != lease.NetworkId || Text(item, "Driver") != "bridge" || !item.GetProperty("Internal").GetBoolean()
@@ -161,6 +190,16 @@ public sealed class ObservedStorageBackend(StorageBackendLease lease)
         if (!network && Text(labels, "com.maliev.c821.role") != "storage") throw new InvalidDataException("Actual storage role differs.");
     }
 
+    private async Task ObserveSharedScannerAsync(CancellationToken token)
+    {
+        if (shared is null || sharedScanner is null) throw new InvalidDataException("Original shared declaration absent.");
+        using var scanner = await InspectAsync("container", sharedScanner.ScannerContainerId, token);
+        shared.VerifyScanner(scanner.RootElement);
+        using var original = await InspectAsync("image", SharedScannerBridgeObservation.BaseImage, token);
+        using var derived = await InspectAsync("image", sharedScanner.ScannerImageId, token);
+        shared.VerifyImageChain(original.RootElement, derived.RootElement);
+    }
+
     private async Task<JsonDocument> InspectAsync(string kind, string id, CancellationToken token) =>
         JsonDocument.Parse(await BoundedOwnedCommand.RunAsync("docker", [kind, "inspect", id], 2097152, token));
 
@@ -180,7 +219,18 @@ public sealed class ObservedStorageBackend(StorageBackendLease lease)
         return ticks;
     }
 
-    internal static string ListeningInode(string table, int port)
+    internal static string ListeningInode(string table, int port) => ListeningInodeAddress(table, port, "00000000");
+
+    internal static string ListeningInode(string table, int port, string bridgeIp)
+    {
+        if (!IPAddress.TryParse(bridgeIp, out var ip) || !PrivateBridge(ip) || ip.ToString() != bridgeIp)
+            throw new InvalidDataException("Exact canonical private IPv4 listener required.");
+        byte[] bytes = ip.GetAddressBytes();
+        System.Array.Reverse(bytes);
+        return ListeningInodeAddress(table, port, Convert.ToHexString(bytes));
+    }
+
+    private static string ListeningInodeAddress(string table, int port, string address)
     {
         var rows = table.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         if (rows.Length == 0 || !rows[0].Contains("local_address", StringComparison.Ordinal)) throw new InvalidDataException();
@@ -189,7 +239,7 @@ public sealed class ObservedStorageBackend(StorageBackendLease lease)
         {
             var fields = row.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             if (fields.Length < 10) throw new InvalidDataException();
-            if (fields[3] == "0A" && fields[1] == "00000000:" + port.ToString("X4", CultureInfo.InvariantCulture))
+            if (fields[3] == "0A" && fields[1] == address + ":" + port.ToString("X4", CultureInfo.InvariantCulture))
             {
                 if (!ulong.TryParse(fields[9], NumberStyles.None, CultureInfo.InvariantCulture, out var inode) || inode == 0)
                     throw new InvalidDataException();
