@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text;
 using Legacy.Maliev.QuotationService.Domain;
 using Microsoft.Extensions.Options;
@@ -8,7 +7,7 @@ namespace Legacy.Maliev.QuotationService.Api.Analytics;
 public sealed class GoogleAnalyticsDeliveryProcessor(
     HttpClient httpClient, IGoogleAnalyticsOutboxStore store,
     IOptions<GoogleAnalyticsMeasurementProtocolOptions> configuration,
-    TimeProvider clock, ILogger<GoogleAnalyticsDeliveryProcessor> logger)
+    TimeProvider clock, ILogger<GoogleAnalyticsDeliveryProcessor> logger, Func<double>? jitter = null)
 {
     private readonly GoogleAnalyticsMeasurementProtocolOptions options = configuration.Value;
 
@@ -38,8 +37,7 @@ public sealed class GoogleAnalyticsDeliveryProcessor(
                 await store.MarkSentAsync(row.Id, token, Now(), cancellationToken);
                 return;
             }
-            var transient = response.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests
-                || (int)response.StatusCode >= 500;
+            var transient = GoogleAnalyticsDeliveryPolicy.IsTransient(response.StatusCode);
             await FailAsync(row, token, transient, $"HTTP {(int)response.StatusCode}", (int)response.StatusCode, null, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
@@ -56,8 +54,8 @@ public sealed class GoogleAnalyticsDeliveryProcessor(
         var now = Now();
         if (transient && row.AttemptCount < options.MaxAttempts)
         {
-            var seconds = Math.Min(900, Math.Pow(2, Math.Clamp(row.AttemptCount, 1, 9)) * (1 + Random.Shared.NextDouble()));
-            await store.MarkRetryAsync(row.Id, token, now.AddSeconds(seconds), diagnostic, cancellationToken);
+            var delay = GoogleAnalyticsDeliveryPolicy.CalculateRetryDelay(row.AttemptCount, (jitter ?? Random.Shared.NextDouble)());
+            await store.MarkRetryAsync(row.Id, token, now.Add(delay), diagnostic, cancellationToken);
             return;
         }
         await store.MarkFailedAsync(row.Id, token, now, diagnostic, cancellationToken);
