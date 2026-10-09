@@ -305,4 +305,133 @@ class MetadataThrottling(unittest.TestCase):
   errors,calls,waits,invoke=self.scenario([200],remaining=1)
   with self.assertRaises(TimeoutError):invoke()
   self.assertFalse(calls)
+class DockerDiagnostics(unittest.TestCase):
+ def setUp(self):self.image=json.loads((R/'image-pins.json').read_bytes())[0]['mirror']
+ def test_known_category_and_explicit_status(self):
+  payload=b'HTTP 429: toomanyrequests';error=p.command_failure(['docker','pull',self.image],1,payload,len(payload))
+  self.assertEqual(error.diagnostic['category'],'registry-rate-limit');self.assertEqual(error.diagnostic['explicitHttpStatus'],429)
+ def test_unknown_secret_canary_never_disclosed(self):
+  secret=b'CANARY-DO-NOT-DISCLOSE password=secret https://host/path?token=secret'
+  error=p.command_failure(['docker','pull','foreign?token=secret'],1,secret,len(secret))
+  encoded=json.dumps(error.diagnostic)+str(error)
+  self.assertNotIn('CANARY',encoded);self.assertNotIn('password',encoded);self.assertNotIn('token=',encoded)
+  self.assertEqual(error.diagnostic['category'],'unknown');self.assertIsNone(error.diagnostic['imageReference'])
+ def test_prefix_hash_and_truncation_are_explicit(self):
+  import hashlib
+  prefix=b'x'*4096;error=p.command_failure(['docker','pull',self.image],1,prefix,9000)
+  self.assertTrue(error.diagnostic['truncated']);self.assertEqual(error.diagnostic['capturedBytes'],4096)
+  self.assertEqual(error.diagnostic['stderrBytes'],9000);self.assertEqual(error.diagnostic['hashScope'],'captured-prefix')
+  self.assertEqual(error.diagnostic['sha256'],hashlib.sha256(prefix).hexdigest())
+  with self.assertRaises(ValueError):p.command_failure(['docker','pull',self.image],1,b'x'*4097,4097)
+ def test_mutation_preserves_diagnostic_primary_and_unsettled_intent(self):
+  row=json.loads((R/'image-pins.json').read_bytes())[0];error=p.command_failure(['docker','pull',self.image],1,b'pull access denied',18)
+  receipt={'createdTags':[],'write':lambda:None}
+  def run(args,required=True):
+   if args[1]=='pull':raise error
+   return None
+  with self.assertRaises(p.DockerCommandFailure) as caught:p.mutate(['docker','pull',self.image],self.image,row,run,receipt)
+  self.assertIs(caught.exception,error);entry=receipt['createdTags'][0]
+  self.assertEqual(entry['failureDiagnostic'],error.diagnostic);self.assertFalse(entry['commandSettled']);self.assertEqual(entry['state'],'absence-unsettled')
+ def test_actual_main_bounds_diagnostic_prefix(self):self.main_boundary(False)
+ def test_actual_main_timeout_preserves_primary(self):self.main_boundary(True)
+ def main_boundary(self,timeout):
+  import tempfile,os,subprocess
+  from unittest.mock import patch
+  handles=[];row=json.loads((R/'image-pins.json').read_bytes())[0];primary=subprocess.TimeoutExpired(['docker','pull',self.image],1)
+  def invoke(rows,run,network,receipt):p.mutate(['docker','pull',self.image],self.image,row,run,receipt)
+  def command(args,timeout,hard_deadline=None):
+   if args[1]=='pull':
+    if failure_timeout:raise primary
+    return subprocess.CompletedProcess(args,1,b'',b'x'*4096),9032
+   return subprocess.CompletedProcess(args,1,b'',b'No such image'),13
+  failure_timeout=timeout
+  with tempfile.TemporaryDirectory() as root:
+   with patch.dict(os.environ,{'RUNNER_TEMP':root,'TESTCONTAINERS_RYUK_CONTAINER_IMAGE':p.RYUK}),patch.object(p,'preload',side_effect=invoke),patch.object(p,'run_docker_cli',side_effect=command),patch('sys.argv',['preload_images.py']):
+    with self.assertRaises(subprocess.TimeoutExpired if timeout else p.DockerCommandFailure) as caught:p.main()
+   if timeout:self.assertIs(caught.exception,primary)
+   entry=json.loads((Path(root)/'quotation-registry-preload.json').read_bytes())['createdTags'][0]
+   self.assertFalse(entry['commandSettled']);self.assertEqual(entry['state'],'absence-unsettled')
+   self.assertNotIn('CANARY',(Path(root)/'quotation-registry-preload.json').read_text())
+   if not timeout:
+    self.assertEqual(entry['failureDiagnostic']['capturedBytes'],4096);self.assertTrue(entry['failureDiagnostic']['truncated'])
+class LiveCaptureControls(unittest.TestCase):
+ def test_stderr_storage_is_bounded_while_counting_stream(self):
+  c=p.DockerCapture()
+  for _ in range(1000):c.feed('stderr',b'x'*4096)
+  self.assertEqual(len(c.stderr),4096);self.assertEqual(c.stderr_bytes,4096000)
+ def test_stdout_pressure_fails_before_growing_past_cap(self):
+  c=p.DockerCapture()
+  for _ in range(256):c.feed('stdout',b'x'*4096)
+  with self.assertRaisesRegex(RuntimeError,'limit'):c.feed('stdout',b'x')
+  self.assertEqual(len(c.stdout),1048576)
+ def test_capture_and_chunk_faults_preserve_process_primary(self):self.adapter_fault('capture')
+ def test_deadline_plus_all_close_faults_preserves_timeout(self):self.adapter_fault('deadline',close_faults=True)
+ def test_registration_failure_closes_both_unregistered_pipes(self):self.adapter_fault('register')
+ def test_ignored_graceful_stop_uses_exact_handle_kill_and_wait(self):self.adapter_fault('grace-timeout')
+ def test_kill_failure_preserves_primary_and_closes_independent_handles(self):self.adapter_fault('kill-failure')
+ def test_exhausted_recovery_does_not_renew_budget_or_erase_child(self):self.adapter_fault('budget-expiry')
+ def adapter_fault(self,mode,close_faults=False):
+  import subprocess,types,selectors
+  from unittest.mock import patch
+  primary=OSError('actual capture/register failure');closed=[];events=[];settled=[]
+  class Pipe:
+   def __init__(self,name):self.name=name
+   def fileno(self):return 11 if self.name=='stdout' else 12
+   def close(self):
+    closed.append(self.name)
+    if close_faults:raise OSError('close')
+  class Process:
+   stdout=Pipe('stdout');stderr=Pipe('stderr')
+   returncode=None
+   def poll(self):return self.returncode
+   def terminate(self):
+    events.append('terminate')
+    if mode not in ('grace-timeout','kill-failure'):self.returncode=0
+   def kill(self):
+    events.append('kill')
+    if mode=='kill-failure':raise OSError('kill')
+    self.returncode=-9
+   def wait(self,timeout):
+    settled.append(timeout)
+    if self.returncode is None:raise subprocess.TimeoutExpired(['docker'],timeout)
+    return self.returncode
+  class Selector:
+   def register(self,*args):
+    if mode=='register':raise primary
+   def get_map(self):return {'owned':True}
+   def select(self,timeout):return [(types.SimpleNamespace(fd=11,data='stdout',fileobj=None),1)]
+   def close(self):
+    closed.append('selector')
+    if close_faults:raise OSError('close')
+  clocks=[0]+[3]*20 if mode=='deadline' else [0,0]+[6]*20 if mode=='budget-expiry' else [0]*20
+  with patch('os.name','posix'),patch.object(p.subprocess,'Popen',return_value=Process()),patch.object(selectors,'DefaultSelector',return_value=Selector()),patch('os.set_blocking'),patch('os.read',side_effect=primary),patch.object(p.time,'monotonic',side_effect=clocks):
+   with self.assertRaises(subprocess.TimeoutExpired if mode=='deadline' else OSError) as caught:p.run_docker_cli(['docker','pull',p.RYUK],5)
+  if mode!='deadline':self.assertIs(caught.exception,primary)
+  else:self.assertTrue(caught.exception.__notes__)
+  self.assertEqual(closed,['selector','stdout','stderr']);self.assertEqual(events,[] if mode=='budget-expiry' else ['terminate','kill'] if mode in ('grace-timeout','kill-failure') else ['terminate'])
+  if mode=='budget-expiry':
+   self.assertFalse(settled);self.assertFalse(caught.exception.owned_cli_resource['exitConfirmed']);self.assertTrue(caught.exception.__notes__)
+  else:self.assertTrue(settled)
+  if mode=='kill-failure':self.assertTrue(caught.exception.__notes__)
+ @unittest.skipUnless(__import__('os').name=='posix','Actual selector pipe proof requires Linux hosted runner')
+ def test_real_both_pipe_streams_and_stdout_limit(self):
+  import subprocess,sys
+  from unittest.mock import patch
+  original=p.subprocess.Popen;children=[]
+  def launch(args,**kwargs):
+   child=original([sys.executable,'-c',"import sys;sys.stderr.buffer.write(b'x'*20000);sys.stdout.buffer.write(b'ok')"],**kwargs);children.append(child);return child
+  with patch.object(p.subprocess,'Popen',side_effect=launch):
+   result,total=p.run_docker_cli(['docker','pull',p.RYUK],6)
+  self.assertEqual(result.stdout,b'ok');self.assertEqual(len(result.stderr),4096);self.assertEqual(total,20000)
+  self.assertTrue(all(child.poll() is not None and child.stdout.closed and child.stderr.closed for child in children))
+ def test_reserve_required_before_birth(self):
+  from unittest.mock import patch
+  with patch('os.name','posix'),patch.object(p.time,'monotonic',return_value=0),patch.object(p.subprocess,'Popen') as launch:
+   with self.assertRaisesRegex(TimeoutError,'before process birth'):p.run_docker_cli(['docker'],3)
+   launch.assert_not_called()
+ def test_original_parent_hard_deadline_is_not_extended(self):
+  from unittest.mock import patch
+  with patch('os.name','posix'),patch.object(p.time,'monotonic',return_value=10),patch.object(p.subprocess,'Popen') as launch:
+   with self.assertRaises(TimeoutError):p.run_docker_cli(['docker'],90,hard_deadline=12)
+   launch.assert_not_called()
 if __name__=='__main__':unittest.main()
