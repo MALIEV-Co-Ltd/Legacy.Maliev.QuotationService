@@ -1,0 +1,17 @@
+{
+  "acceptedBase": "d928d2bad1231c05ec9aba7ba99f51195d48fb2e",
+  "qualificationScope": "analytics-terminal-lease-red",
+  "sourcePins": {
+    "Legacy.Maliev.ServiceDefaults": "f72be151917cb3962380971418c187e3df563f8d",
+    "Legacy.Maliev.CompatibilityContracts": "78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7",
+    "Legacy.Maliev.AccountingService": "ae0826156b06c34476e95de8c53dfccfcf5a5972"
+  },
+  "sourceFiles": [
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Analytics/QuotationTerminalLoggingPipelineTests.cs",
+      "bytes": 22346,
+      "sha256": "1ca9e9f5503fcd1527998614a38b88a48eb8720e4dfcad94f08692280b00d88d"
+    }
+  ],
+  "manifestSha256": "3b077b2cd495268b7403929d9d525088caf85e31433e928caf3f2eb4c571b293"
+}

@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Dedicated analytics scope; historical wire runners and policies remain unchanged.
-policy=scripts/quotation-analytics-policy.json
+profile=${1:-analytics-retry}
+case "$profile" in
+  analytics-retry) policy=scripts/quotation-analytics-policy.json ;;
+  analytics-terminal-lease-red|analytics-terminal-lease-green) policy="scripts/quotation-$profile-policy.json" ;;
+  *) echo 'Unknown analytics profile.' >&2; exit 1 ;;
+esac
 transport="$GITHUB_WORKSPACE"
 python3 -B "$transport/scripts/materialize_quotation_candidate.py" --policy "$transport/$policy" --candidate "$PWD" --verify-only
 available_kib=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
@@ -19,9 +24,26 @@ timeout --signal=TERM --kill-after=20s 300s dotnet restore "$solution" --disable
 timeout --signal=TERM --kill-after=20s 300s dotnet build "$solution" -c Release --no-restore --disable-build-servers -m:1 -p:UseSharedCompilation=false -p:ShouldUnsetParentConfigurationAndPlatform=false -warnaserror 2>&1 | tee TestResults/CandidateNative/build.log
 project=Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj
 filter=FullyQualifiedName~Legacy.Maliev.QuotationService.Tests.Analytics.QuotationAnalyticsRetryContractTests
+if [[ "$profile" != 'analytics-retry' ]]; then
+  filter=FullyQualifiedName~Legacy.Maliev.QuotationService.Tests.Analytics.QuotationTerminalLoggingPipelineTests.Program_ReclaimedLease_OnlyCurrentOwnerEmitsDurableTerminalFailure
+fi
 timeout --signal=TERM --kill-after=20s 180s dotnet test "$project" -c Release --no-build --no-restore --filter "$filter" --list-tests 2>&1 | tee TestResults/CandidateNative/Analytics/discovery.log
-timeout --signal=TERM --kill-after=20s 180s dotnet test "$project" -c Release --no-build --no-restore --filter "$filter" --results-directory "$PWD/TestResults/CandidateNative/Analytics" --logger 'trx;LogFileName=analytics.trx' 2>&1 | tee TestResults/CandidateNative/Analytics/test.log
-python3 -B "$transport/scripts/check_quotation_analytics_results.py" --candidate "$PWD"
+if [[ "$profile" == 'analytics-terminal-lease-red' ]]; then
+  set +e
+  timeout --signal=TERM --kill-after=20s 180s dotnet test "$project" -c Release --no-build --no-restore --filter "$filter" --results-directory "$PWD/TestResults/CandidateNative/Analytics" --logger 'trx;LogFileName=analytics.trx' 2>&1 | tee TestResults/CandidateNative/Analytics/test.log
+  pipeline_status=("${PIPESTATUS[@]}")
+  set -e
+  if [[ "${pipeline_status[0]}" != 1 || "${pipeline_status[1]}" != 0 ]]; then
+    echo 'RED requires exactly the native test failure exit status, never timeout/setup success.' >&2; exit 1
+  fi
+else
+  timeout --signal=TERM --kill-after=20s 180s dotnet test "$project" -c Release --no-build --no-restore --filter "$filter" --results-directory "$PWD/TestResults/CandidateNative/Analytics" --logger 'trx;LogFileName=analytics.trx' 2>&1 | tee TestResults/CandidateNative/Analytics/test.log
+fi
+python3 -B "$transport/scripts/check_quotation_analytics_results.py" --candidate "$PWD" --profile "$profile"
+if [[ "$profile" == 'analytics-terminal-lease-red' ]]; then
+  python3 -B "$transport/scripts/materialize_quotation_candidate.py" --policy "$transport/$policy" --candidate "$PWD" --verify-only
+  exit 0
+fi
 projects=(
   Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj
   tools/HostedStorageFront.Tests/HostedStorageFront.Tests.csproj
@@ -42,7 +64,7 @@ timeout --signal=TERM --kill-after=20s 180s python3 -B -m unittest discover -s s
 timeout --signal=TERM --kill-after=20s 180s python3 -B -m unittest discover -s tools/InvoiceCompletionProducerAcceptance/companion -p 'test_*.py'
 project=Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj
 timeout --signal=TERM --kill-after=20s 900s dotnet test "$project" -c Release --no-build --no-restore --collect 'XPlat Code Coverage' --settings Legacy.Maliev.QuotationService.Tests/coverage.runsettings --results-directory "$PWD/TestResults/CandidateNative/Coverage" --logger 'trx;LogFileName=quotation.trx' 2>&1 | tee TestResults/CandidateNative/coverage.log
-python3 -B "$transport/scripts/check_quotation_analytics_results.py" --candidate "$PWD" --phase coverage
+python3 -B "$transport/scripts/check_quotation_analytics_results.py" --candidate "$PWD" --phase coverage --profile "$profile"
 mapfile -t reports < <(find TestResults/CandidateNative/Coverage -mindepth 2 -maxdepth 2 -type f -name coverage.cobertura.xml)
 if [[ "${#reports[@]}" -ne 1 ]]; then
   echo 'Exactly one original Cobertura report is required.' >&2; exit 1

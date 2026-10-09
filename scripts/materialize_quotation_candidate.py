@@ -146,6 +146,17 @@ def validate_capsule(manifest_bytes, capsule_bytes, policy):
             "Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsDeliveryPolicy.cs",
             "Legacy.Maliev.QuotationService.Tests/Analytics/QuotationAnalyticsRetryContractTests.cs",
         }
+    elif scope == "analytics-terminal-lease-red":
+        valid_inventory = set(expected) == {
+            "Legacy.Maliev.QuotationService.Tests/Analytics/QuotationTerminalLoggingPipelineTests.cs",
+        }
+    elif scope == "analytics-terminal-lease-green":
+        valid_inventory = set(expected) == {
+            "Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsDeliveryProcessor.cs",
+            "Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsOutboxStore.cs",
+            "Legacy.Maliev.QuotationService.Tests/Analytics/QuotationAnalyticsRetryContractTests.cs",
+            "Legacy.Maliev.QuotationService.Tests/Analytics/QuotationTerminalLoggingPipelineTests.cs",
+        }
     else:
         raise ValueError("unknown qualification scope")
     if not valid_inventory or sum(row["bytes"] for row in expected.values()) > MAX_EXPANDED_BYTES:
