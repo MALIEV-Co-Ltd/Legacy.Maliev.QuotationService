@@ -11,6 +11,8 @@ jobs:
     name: qualification-authority-joined
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      TESTCONTAINERS_RYUK_CONTAINER_IMAGE: ghcr.io/testcontainers/ryuk@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0
     steps:
       - name: Check out QuotationService
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -55,14 +57,42 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           dotnet-version: 10.0.x
+      - name: Compile and test registry prerequisite controls
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          python3 -B -c "from pathlib import Path; [compile(p.read_bytes(),str(p),'exec') for p in (Path('scripts/registry_preload/preload_images.py'),Path('scripts/tests/test_registry_preload.py'))]"
+          python3 -B -m unittest discover -s scripts/tests -p test_registry_preload.py
+          python3 -B -O -m unittest discover -s scripts/tests -p test_registry_preload.py
+      - name: Prepare exact official fixture images
+        timeout-minutes: 5
+        shell: bash
+        run: python3 -B scripts/registry_preload/preload_images.py
       - name: Prove real joined qualification authority
         shell: pwsh
         run: ./scripts/run_qualification_authority_joined.ps1 -RepositoryPath $env:GITHUB_WORKSPACE
 
+      - name: Release exact owned image references
+        if: always()
+        timeout-minutes: 2
+        shell: bash
+        run: python3 -B scripts/registry_preload/preload_images.py cleanup
+      - name: Retain registry custody evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: quotation-registry-custody-${{ github.job }}-${{ github.sha }}
+          path: ${{ runner.temp }}/quotation-registry-preload.json
+          if-no-files-found: ignore
+          retention-days: 7
+          overwrite: false
+
   validate:
     name: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
+      TESTCONTAINERS_RYUK_CONTAINER_IMAGE: ghcr.io/testcontainers/ryuk@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0
       MalievWorkspaceRoot: ${{ github.workspace }}/.dependencies
     steps:
       - name: Check out QuotationService
@@ -90,6 +120,17 @@ jobs:
           ref: ae0826156b06c34476e95de8c53dfccfcf5a5972
           path: .dependencies/Legacy.Maliev.AccountingService
           persist-credentials: false
+      - name: Compile and test registry prerequisite controls
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          python3 -B -c "from pathlib import Path; [compile(p.read_bytes(),str(p),'exec') for p in (Path('scripts/registry_preload/preload_images.py'),Path('scripts/tests/test_registry_preload.py'))]"
+          python3 -B -m unittest discover -s scripts/tests -p test_registry_preload.py
+          python3 -B -O -m unittest discover -s scripts/tests -p test_registry_preload.py
+      - name: Prepare exact official fixture images
+        timeout-minutes: 5
+        shell: bash
+        run: python3 -B scripts/registry_preload/preload_images.py
       - name: Validate .NET solution
         uses: MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@53892c362a30130f582c40da7525e44f11474e8e
         with:
@@ -191,4 +232,19 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           include-hidden-files: false
+          overwrite: false
+
+      - name: Release exact owned image references
+        if: always()
+        timeout-minutes: 2
+        shell: bash
+        run: python3 -B scripts/registry_preload/preload_images.py cleanup
+      - name: Retain registry custody evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: quotation-registry-custody-${{ github.job }}-${{ github.sha }}
+          path: ${{ runner.temp }}/quotation-registry-preload.json
+          if-no-files-found: ignore
+          retention-days: 7
           overwrite: false

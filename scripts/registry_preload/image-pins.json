@@ -1,0 +1,119 @@
+[
+  {
+    "tag": "postgres:18-alpine",
+    "indexDigest": "sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873",
+    "manifestDigest": "sha256:d8703cd7fba306b9fec9268ecedfa8a966846c053036a60e3635791957eb2f66",
+    "configDigest": "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59",
+    "layers": [
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:e2de96513ba9eb53b431787ec8a65cdde380ac4772a3e4c4b714dcfde2a102b5",
+        "size": 3849738
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:976cd45ecd0f5afcb47e7ee68e70f2f8632a1e621e465632cf38a6bd06563aad",
+        "size": 968
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:d8f47ca787e9d08adaacc8d2a9d91e78e65e37706ef159ee52daae848c58bdd9",
+        "size": 901406
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:30b4807a96db4dc1287cec075f24db70aad9e7b1307dcbc52a20e26a98e12cfe",
+        "size": 116
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:23ebd67725253ed5be1425c468541541ba6034ec0acce3fc3c388df36c503d70",
+        "size": 115260137
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:e5545be08ab6c7da866f9eb293b5583146b729e72ec499e3bae843b808aa8636",
+        "size": 19008
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:a7fe9499841704ecc44978c38c723c55ed198cef686e90cdee890e5609a9c6de",
+        "size": 128
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:176ab66edd3909a2f90886b538b88fabfc9751709dd6bf335c9374448c6f77e5",
+        "size": 6109
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:5ef7ae0adbc8a98b2be3aa5546451f12ccb858a38079d10be3c4a0717ae6dfc5",
+        "size": 183
+      }
+    ],
+    "mirror": "public.ecr.aws/docker/library/postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873"
+  },
+  {
+    "tag": "redis:7-alpine",
+    "indexDigest": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+    "manifestDigest": "sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2",
+    "configDigest": "sha256:f84b0c4678011602b9b98c227a4dcd5468bf8b088b02fdd4165cb7758bad8058",
+    "layers": [
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:16333ee0c00fc65e025a2a4f839703ad37a74728832977fbdf080984de1b8e5a",
+        "size": 3626020
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:83234986c7428324e1e59b68434e13718be4a88a96ea34aa898664c741020695",
+        "size": 949
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:7eb50503c2b0d42823b050116cb96d2cab5491de22b60c75f01da7ee27c8a488",
+        "size": 198636
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:1522f9c6f45325f36a5c2f1babe090b85387ff0282d9a2b0920d3e75df5f8334",
+        "size": 12415977
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:9928009b15c88bb90632d7cc3f357e303936dc83e12c2a059fbb5789faa49b24",
+        "size": 100
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1",
+        "size": 32
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+        "digest": "sha256:4eb14bae0e1d3e171076b7dd031bf56aacff57258c41436e3dcecfe5f2243b1a",
+        "size": 599
+      }
+    ],
+    "mirror": "public.ecr.aws/docker/library/redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499"
+  },
+  {
+    "tag": "ghcr.io/testcontainers/ryuk@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0",
+    "indexDigest": "sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0",
+    "manifestDigest": "sha256:f0456560ea5b4acdbed0da0efc33b5f9dd6bc1e59f2337106826dcb5b0b0e981",
+    "configDigest": "sha256:9a5f93e8f9300530b91866bcf41c0b8a5d72f0e5a7b4365167a48df9816cd36e",
+    "layers": [
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar",
+        "digest": "sha256:cd33c313a23a2c33e58a5b30256b2699cb5d298a1669f0c92432964de5d55ff2",
+        "size": 216064
+      },
+      {
+        "mediaType": "application/vnd.oci.image.layer.v1.tar",
+        "digest": "sha256:602112db62eb01f08dc57da55d61da97fdc847fa8d146e5437f1bdb1b8efe0d5",
+        "size": 2186752
+      }
+    ],
+    "mirror": "ghcr.io/testcontainers/ryuk@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0"
+  }
+]
