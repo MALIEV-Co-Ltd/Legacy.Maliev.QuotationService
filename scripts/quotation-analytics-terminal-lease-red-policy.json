@@ -9,9 +9,9 @@
   "sourceFiles": [
     {
       "path": "Legacy.Maliev.QuotationService.Tests/Analytics/QuotationTerminalLoggingPipelineTests.cs",
-      "bytes": 22346,
-      "sha256": "1ca9e9f5503fcd1527998614a38b88a48eb8720e4dfcad94f08692280b00d88d"
+      "bytes": 22643,
+      "sha256": "835bfab1f56fb13363360ad13063ec33c77038b288629b60cdfa96c59f874c61"
     }
   ],
-  "manifestSha256": "3b077b2cd495268b7403929d9d525088caf85e31433e928caf3f2eb4c571b293"
+  "manifestSha256": "3327e4b1745e1b079b36a3dc1cd70045c6f250433fb15f5e458be4b4b3fb463c"
 }
