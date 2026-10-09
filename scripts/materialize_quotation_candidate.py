@@ -140,6 +140,12 @@ def validate_capsule(manifest_bytes, capsule_bytes, policy):
             "scripts/c821-focused-inventory.json",
             "Legacy.Maliev.QuotationService.Tests/Controllers/QualificationOutcomeWireSourceTests.cs",
         }
+    elif scope == "analytics-retry":
+        valid_inventory = set(expected) == {
+            "Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsDeliveryProcessor.cs",
+            "Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsDeliveryPolicy.cs",
+            "Legacy.Maliev.QuotationService.Tests/Analytics/QuotationAnalyticsRetryContractTests.cs",
+        }
     else:
         raise ValueError("unknown qualification scope")
     if not valid_inventory or sum(row["bytes"] for row in expected.values()) > MAX_EXPANDED_BYTES:

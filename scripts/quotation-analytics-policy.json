@@ -1,0 +1,27 @@
+{
+  "acceptedBase": "4dc6d4982ad90bdd6c10fbf42c6acd5e60d0859b",
+  "qualificationScope": "analytics-retry",
+  "sourcePins": {
+    "Legacy.Maliev.ServiceDefaults": "f72be151917cb3962380971418c187e3df563f8d",
+    "Legacy.Maliev.CompatibilityContracts": "78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7",
+    "Legacy.Maliev.AccountingService": "ae0826156b06c34476e95de8c53dfccfcf5a5972"
+  },
+  "sourceFiles": [
+    {
+      "path": "Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsDeliveryProcessor.cs",
+      "bytes": 3774,
+      "sha256": "75ce1d7a55f470b19d315aee93c8cb1645e400ed9a578319b05ecee9e03b2fc0"
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsDeliveryPolicy.cs",
+      "bytes": 722,
+      "sha256": "98501ad47bd04fdcf7c223c4a7242996e2758e0f1a0ab38436259e257a3f2ae9"
+    },
+    {
+      "path": "Legacy.Maliev.QuotationService.Tests/Analytics/QuotationAnalyticsRetryContractTests.cs",
+      "bytes": 9991,
+      "sha256": "107d1e6486b626ab1b01be27bb62b641e35f43906483752f248f8f6e365f3821"
+    }
+  ],
+  "manifestSha256": "059dc0f5d238af8672b2590a3251853f9e6c4fef676bf7aff9cf94973075cf95"
+}

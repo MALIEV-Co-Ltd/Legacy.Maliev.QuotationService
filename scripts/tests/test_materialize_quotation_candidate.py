@@ -39,6 +39,12 @@ def packet(mutate=None, scope=None):
         )}
     if scope == "admission-race-wire":
         files["Legacy.Maliev.QuotationService.Tests/Controllers/QualificationOutcomeWireSourceTests.cs"] = b"raw\r\n"
+    if scope == "analytics-retry":
+        files = {path: b"raw\r\n" for path in (
+            "Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsDeliveryProcessor.cs",
+            "Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsDeliveryPolicy.cs",
+            "Legacy.Maliev.QuotationService.Tests/Analytics/QuotationAnalyticsRetryContractTests.cs",
+        )}
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as archive:
         for path, data in files.items():
@@ -63,6 +69,31 @@ def packet(mutate=None, scope=None):
 
 
 class TransportTests(unittest.TestCase):
+    def test_analytics_scope_accepts_exact_three_raw_files(self):
+        raw, capsule, policy, files = packet(scope="analytics-retry")
+        _, actual = gate.validate_capsule(raw, capsule, policy)
+        self.assertEqual(files, actual)
+
+    def test_analytics_scope_refuses_missing_extra_and_substituted_files(self):
+        for mutation in ("drop", "extra", "substitute"):
+            raw, capsule, policy, _ = packet(scope="analytics-retry")
+            manifest = json.loads(raw)
+            if mutation == "drop": manifest["sourceFiles"].pop()
+            elif mutation == "extra": manifest["sourceFiles"].append({"path": "extra.cs", "bytes": 1, "sha256": "a" * 64})
+            else: manifest["sourceFiles"][0]["path"] = "other.cs"
+            policy["sourceFiles"] = copy.deepcopy(manifest["sourceFiles"])
+            changed = json.dumps(manifest).encode(); policy["manifestSha256"] = gate.sha256(changed)
+            with self.subTest(mutation=mutation), self.assertRaisesRegex(ValueError, "expanded inventory"):
+                gate.validate_capsule(changed, capsule, policy)
+
+    def test_historical_scopes_cannot_consume_analytics_inventory(self):
+        for scope in ("full-candidate", "fixture-residual-wire", "admission-race-wire"):
+            raw, capsule, policy, _ = packet(scope="analytics-retry")
+            manifest = json.loads(raw); manifest["qualificationScope"] = policy["qualificationScope"] = scope
+            changed = json.dumps(manifest).encode(); policy["manifestSha256"] = gate.sha256(changed)
+            with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, "expanded inventory"):
+                gate.validate_capsule(changed, capsule, policy)
+
     def test_residual_wire_scope_requires_79_and_all_explicit_boundaries(self):
         raw, capsule, policy, files = packet(scope="fixture-residual-wire")
         _, actual = gate.validate_capsule(raw, capsule, policy)
