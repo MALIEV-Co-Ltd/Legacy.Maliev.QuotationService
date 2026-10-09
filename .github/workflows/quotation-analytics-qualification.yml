@@ -99,7 +99,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: MALIEV-Co-Ltd/Legacy.Maliev.Workflows
-          ref: 53892c362a30130f582c40da7525e44f11474e8e
+          ref: e5732037fe94b7ed6e5be2cd4c23dbf6ef5e2617
           path: trusted-scanners
           persist-credentials: false
       - name: Verify exact dependency sources and resource admission
@@ -128,7 +128,7 @@ jobs:
             Legacy.Maliev.QuotationService.Tests/Analytics/QuotationAnalyticsRetryContractTests.cs
       - name: Install pinned ordinary Gitleaks
         env:
-          GOTOOLCHAIN: go1.26.8
+          GOTOOLCHAIN: go1.26.9
         run: |
           timeout --signal=TERM --kill-after=20s 300s go install github.com/zricethezav/gitleaks/v8@6eaad039603a4de39fddd1cf5f727391efe9974e
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
