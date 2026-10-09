@@ -4,14 +4,12 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import signal
-import subprocess
-import uuid
 import time
 from types import SimpleNamespace
 
 import hosted_companion_resources as h
 import owned_normal_hosts as normal
+import sdk_observer_command as sdk_observer
 from regular_owned_files import regular_hash, verify_source
 
 
@@ -47,77 +45,28 @@ def observe_start(owner, process, ticks, spec, actual_environment, context, laun
     directory = root / "TestResults/C821ProducerProfiles"
     h.require(directory.resolve() == directory and directory.is_dir()
               and all(not item.is_symlink() for item in (directory, *directory.parents)), "Owned private observer root required")
-    private_path = directory / ("start-" + uuid.uuid4().hex + ".json")
-    helper = None
-    helper_ticks = None
-    descriptor = None
-    created = False
+    budget = min(7.0, (h.instant(context.expires_utc) - datetime.now(timezone.utc)).total_seconds())
+    h.require(budget > 0, "Actual start observation lease expired")
     try:
-        descriptor = os.open(private_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-        created = True
-        with os.fdopen(descriptor, "wb") as stream:
-            descriptor = None
-            stream.write(json.dumps(request, separators=(",", ":")).encode("utf-8"))
-        budget = min(7.0, (h.instant(context.expires_utc) - datetime.now(timezone.utc)).total_seconds())
-        h.require(budget > 0, "Actual start observation lease expired")
-        previous = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGALRM})
-        try:
-            helper = subprocess.Popen([spec.dotnet_executable, observer_dll, str(private_path)],
-                env=launcher_environment, cwd=str(path.parent), stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, close_fds=True)
-        finally:
-            signal.pthread_sigmask(signal.SIG_SETMASK, previous)
-        helper_ticks = h.process_start_ticks(h.bounded_file(f"/proc/{helper.pid}/stat", 4096), helper.pid)
-        output, _ = helper.communicate(timeout=budget)
-        h.require(helper.returncode == 0 and len(output) <= 16384, "Actual native start observer failed")
-        result = json.loads(output)
-        expected = {"Owner", "Pid", "StartedUtc", "KernelStartTicks", "Executable", "ExecutableSha256", "ExecutableDll", "DllSha256"}
-        h.require(type(result) is dict and set(result) == expected and result["Owner"] == owner
-                  and result["Pid"] == process.pid and result["KernelStartTicks"] == ticks
-                  and result["Executable"] == spec.dotnet_executable
-                  and result["ExecutableSha256"] == spec.dotnet_sha256.upper()
-                  and result["ExecutableDll"] == spec.executable_dll and result["DllSha256"] == spec.executable_sha256.upper(),
-                  "Native observation differs from held child")
-        # Parse only for bounds. Return the exact seven-digit native timestamp unchanged.
-        started = h.instant(result["StartedUtc"])
-        h.require(started <= datetime.now(timezone.utc) < h.instant(context.expires_utc)
-                  and process.poll() is None
-                  and h.process_start_ticks(h.bounded_file(f"/proc/{process.pid}/stat", 4096), process.pid) == ticks,
-                  "Observed child or lease changed")
-        return result
-    finally:
-        try:
-            if helper is not None and helper.poll() is None:
-                current = h.process_start_ticks(h.bounded_file(f"/proc/{helper.pid}/stat", 4096), helper.pid)
-                h.require(helper_ticks is None or current == helper_ticks, "Observer generation uncertain; preserve exact handle")
-                helper_ticks = current
-                helper.terminate()
-                try:
-                    helper.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    h.require(h.process_start_ticks(h.bounded_file(f"/proc/{helper.pid}/stat", 4096), helper.pid)
-                              == helper_ticks, "Observer generation changed before force")
-                    helper.kill()
-                    helper.wait(timeout=5)
-        except BaseException as error:
-            # Public identity only; caller can retain exact ownership/expiry on uncertainty.
-            failure = h.AdmissionError("Exact observer cleanup failed")
-            failure.resource = {"owner": "FrontStartObserver", "pid": helper.pid,
-                                "kernelStartTicks": helper_ticks, "expiresUtc": context.expires_utc,
-                                "errorType": type(error).__name__}
-            raise failure from None
-        finally:
-            try:
-                if descriptor is not None:
-                    os.close(descriptor)
-            finally:
-                try:
-                    if helper is not None and helper.stdout is not None:
-                        helper.stdout.close()
-                finally:
-                    # Delete only the exact request created by this invocation.
-                    if created:
-                        private_path.unlink(missing_ok=True)
+        output = sdk_observer.observe(request, directory, spec.dotnet_executable, spec.dotnet_sha256,
+            observer_dll, observer_sha256, launcher_environment, budget)
+    except sdk_observer.ObserverLifecycleError:
+        raise h.AdmissionError("Exact observer original lifecycle refused") from None
+    result = json.loads(output)
+    expected = {"Owner", "Pid", "StartedUtc", "KernelStartTicks", "Executable", "ExecutableSha256", "ExecutableDll", "DllSha256"}
+    h.require(type(result) is dict and set(result) == expected and result["Owner"] == owner
+              and result["Pid"] == process.pid and result["KernelStartTicks"] == ticks
+              and result["Executable"] == spec.dotnet_executable
+              and result["ExecutableSha256"] == spec.dotnet_sha256.upper()
+              and result["ExecutableDll"] == spec.executable_dll and result["DllSha256"] == spec.executable_sha256.upper(),
+              "Native observation differs from held child")
+    # Parse only for bounds. Return the exact seven-digit native timestamp unchanged.
+    started = h.instant(result["StartedUtc"])
+    h.require(started <= datetime.now(timezone.utc) < h.instant(context.expires_utc)
+              and process.poll() is None
+              and h.process_start_ticks(h.bounded_file(f"/proc/{process.pid}/stat", 4096), process.pid) == ticks,
+              "Observed child or lease changed")
+    return result
 
 
 def observe_normal_starts(normal_owner, parent_profile, observer_dll, observer_sha256, owners=None):
