@@ -1,0 +1,170 @@
+name: Quotation analytics uncommitted candidate qualification
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/quotation-analytics-qualification.yml
+      - scripts/materialize_quotation_candidate.py
+      - scripts/tests/test_materialize_quotation_candidate.py
+      - scripts/check_quotation_analytics_results.py
+      - scripts/tests/test_quotation_analytics_results.py
+      - scripts/quotation-analytics-policy.json
+      - scripts/run_quotation_analytics_native.sh
+  workflow_dispatch:
+    inputs:
+      manifest_blob:
+        description: Same-repository Git blob of the reviewed analytics manifest
+        required: true
+        type: string
+      capsule_blob:
+        description: Same-repository Git blob of the exact three-file raw source ZIP
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quotation-analytics-qualification-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  transport-controls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify transport and original native evidence rejection controls
+        run: |
+          python3 -B -m unittest discover -s scripts/tests -p 'test_materialize_quotation_candidate.py'
+          python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_candidate_native.py'
+          python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_analytics_results.py'
+          bash -n scripts/run_quotation_analytics_native.sh
+
+  analytics-native:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: transport-controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      MSBUILDDISABLENODEREUSE: '1'
+      NUGET_PACKAGES: ${{ github.workspace }}/.analytics-nuget/packages
+    steps:
+      - name: Check out protected transport
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check out exact clean candidate base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 4dc6d4982ad90bdd6c10fbf42c6acd5e60d0859b
+          path: candidate
+          persist-credentials: false
+      - name: Verify and materialize reviewed analytics raw source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANIFEST_BLOB: ${{ inputs.manifest_blob }}
+          CAPSULE_BLOB: ${{ inputs.capsule_blob }}
+        run: |
+          python3 -B scripts/materialize_quotation_candidate.py \
+            --policy scripts/quotation-analytics-policy.json --candidate candidate \
+            --manifest-blob "$MANIFEST_BLOB" --capsule-blob "$CAPSULE_BLOB" \
+            --receipt evidence/source-materialization.json
+      - name: Check out exact ordinary Defaults
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults
+          ref: f72be151917cb3962380971418c187e3df563f8d
+          path: candidate/.dependencies/Legacy.Maliev.ServiceDefaults
+          persist-credentials: false
+      - name: Check out exact ordinary Contracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.CompatibilityContracts
+          ref: 78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7
+          path: candidate/.dependencies/Legacy.Maliev.CompatibilityContracts
+          persist-credentials: false
+      - name: Check out exact compile-time Accounting test dependency
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.AccountingService
+          ref: ae0826156b06c34476e95de8c53dfccfcf5a5972
+          path: candidate/.dependencies/Legacy.Maliev.AccountingService
+          persist-credentials: false
+      - name: Check out trusted ordinary security scanners
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.Workflows
+          ref: 53892c362a30130f582c40da7525e44f11474e8e
+          path: trusted-scanners
+          persist-credentials: false
+      - name: Verify exact dependency sources and resource admission
+        run: |
+          python3 -B - <<'PY'
+          import json, pathlib, subprocess
+          policy = json.loads(pathlib.Path('scripts/quotation-analytics-policy.json').read_bytes())
+          for name, expected in policy['sourcePins'].items():
+              root = pathlib.Path('candidate/.dependencies') / name
+              actual = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
+              dirty = subprocess.check_output(['git', '-C', str(root), 'status', '--porcelain'])
+              if actual != expected or dirty:
+                  raise ValueError('Dependency source identity differs: ' + name)
+          PY
+          available_kib=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
+          if [[ ! "$available_kib" =~ ^[0-9]+$ ]] || (( available_kib < 4194304 )); then
+            echo '4096 MiB resource admission guard failed before native allocation.' >&2; exit 1
+          fi
+          if pgrep -f '(^|/)(dotnet|testhost|VBCSCompiler)( |$)' >/dev/null || [[ -e "$NUGET_PACKAGES" ]]; then
+            echo 'Existing SDK worker or package cache blocks fresh allocation.' >&2; exit 1
+          fi
+          # Expose only the two new reviewed source paths to the ordinary tracked-tree scanners.
+          # Intent-to-add changes no source bytes and creates no application commit.
+          git -C candidate add --intent-to-add -- \
+            Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsDeliveryPolicy.cs \
+            Legacy.Maliev.QuotationService.Tests/Analytics/QuotationAnalyticsRetryContractTests.cs
+      - name: Install pinned ordinary Gitleaks
+        env:
+          GOTOOLCHAIN: go1.26.8
+        run: |
+          timeout --signal=TERM --kill-after=20s 300s go install github.com/zricethezav/gitleaks/v8@6eaad039603a4de39fddd1cf5f727391efe9974e
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Scan candidate history and all current raw files
+        working-directory: candidate
+        run: |
+          timeout --signal=TERM --kill-after=20s 180s gitleaks git --redact --exit-code 1
+          timeout --signal=TERM --kill-after=20s 180s gitleaks dir . --redact --exit-code 1
+      - name: Run trusted JWT-resource and current-tree credential gates
+        shell: pwsh
+        run: |
+          & ./trusted-scanners/scripts/Invoke-JwtSigningResourceScan.ps1 -RepositoryPath "$env:GITHUB_WORKSPACE/candidate"
+          if ($LASTEXITCODE -ne 0) { throw 'JWT resource security gate failed.' }
+          & ./trusted-scanners/scripts/Invoke-CurrentTreeCredentialScan.ps1 -RepositoryPath "$env:GITHUB_WORKSPACE/candidate"
+          if ($LASTEXITCODE -ne 0) { throw 'Current tree credential security gate failed.' }
+      - name: Set up ordinary .NET version
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.x
+      - name: Build first, qualify analytics and complete ordinary validation
+        working-directory: candidate
+        run: timeout --signal=TERM --kill-after=20s 2400s bash ../scripts/run_quotation_analytics_native.sh
+      - name: Reverify source after native execution
+        if: always()
+        run: |
+          python3 -B scripts/materialize_quotation_candidate.py \
+            --policy scripts/quotation-analytics-policy.json --candidate candidate --verify-only
+      - name: Retain original native and materialization evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: quotation-analytics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            evidence/
+            candidate/TestResults/
+          if-no-files-found: error
+          retention-days: 7
+          include-hidden-files: false
+          overwrite: false
