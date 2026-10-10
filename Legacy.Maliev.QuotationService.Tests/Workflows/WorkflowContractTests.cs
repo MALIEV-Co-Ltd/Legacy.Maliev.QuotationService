@@ -244,6 +244,84 @@ public sealed class WorkflowContractTests
         Assert.Equal("false", configuration.Element("SkipAutoProps")?.Value);
     }
 
+
+    [Theory]
+    [InlineData("validate", "remove")]
+    [InlineData("validate", "reorder")]
+    [InlineData("validate", "duplicate")]
+    [InlineData("validate", "command")]
+    [InlineData("validate", "timeout")]
+    [InlineData("validate", "step-env")]
+    [InlineData("validate", "job-env")]
+    [InlineData("validate", "ryuk-digest")]
+    [InlineData("validate", "ryuk-registry")]
+    [InlineData("validate", "original-pin")]
+    [InlineData("validate", "original-action")]
+    [InlineData("validate", "secret")]
+    [InlineData("validate", "cleanup-if")]
+    [InlineData("validate", "upload-action")]
+    [InlineData("qualification-authority-joined", "remove")]
+    [InlineData("qualification-authority-joined", "reorder")]
+    [InlineData("qualification-authority-joined", "duplicate")]
+    [InlineData("qualification-authority-joined", "command")]
+    [InlineData("qualification-authority-joined", "timeout")]
+    [InlineData("qualification-authority-joined", "step-env")]
+    [InlineData("qualification-authority-joined", "job-env")]
+    [InlineData("qualification-authority-joined", "ryuk-digest")]
+    [InlineData("qualification-authority-joined", "ryuk-registry")]
+    [InlineData("qualification-authority-joined", "original-pin")]
+    [InlineData("qualification-authority-joined", "original-action")]
+    [InlineData("qualification-authority-joined", "secret")]
+    [InlineData("qualification-authority-joined", "cleanup-if")]
+    [InlineData("qualification-authority-joined", "upload-action")]
+    public void BuildAndTest_RejectsRegistryPrerequisiteBypass(string jobName, string mutant)
+    {
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(Workflow));
+        var root = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
+        var jobs = Assert.IsType<YamlMappingNode>(ReadNode(root, "jobs"));
+        var job = Assert.IsType<YamlMappingNode>(ReadNode(jobs, jobName));
+        var steps = Assert.IsType<YamlSequenceNode>(ReadNode(job, "steps"));
+        var controlsIndex = jobName == "validate" ? 4 : 7;
+        var preloadIndex = controlsIndex + 1;
+        var cleanupIndex = jobName == "validate" ? 13 : 10;
+        var uploadIndex = cleanupIndex + 1;
+        var preload = Assert.IsType<YamlMappingNode>(steps.Children[preloadIndex]);
+        var environment = Assert.IsType<YamlMappingNode>(ReadNode(job, "env"));
+        switch (mutant)
+        {
+            case "remove": steps.Children.RemoveAt(preloadIndex); break;
+            case "reorder":
+                steps.Children.RemoveAt(preloadIndex);
+                steps.Children.Insert(controlsIndex, preload);
+                break;
+            case "duplicate": steps.Children.Insert(preloadIndex, preload); break;
+            case "command": preload.Children[new YamlScalarNode("run")] = new YamlScalarNode("echo skipped"); break;
+            case "timeout": preload.Children[new YamlScalarNode("timeout-minutes")] = new YamlScalarNode("60"); break;
+            case "step-env":
+                var unexpectedEnvironment = new YamlMappingNode();
+                unexpectedEnvironment.Add(new YamlScalarNode("UNREVIEWED"), new YamlScalarNode("true"));
+                preload.Children.Add(new YamlScalarNode("env"), unexpectedEnvironment);
+                break;
+            case "job-env": environment.Children.Add(new YamlScalarNode("UNREVIEWED"), new YamlScalarNode("true")); break;
+            case "ryuk-digest": environment.Children[new YamlScalarNode("TESTCONTAINERS_RYUK_CONTAINER_IMAGE")] = new YamlScalarNode("ghcr.io/testcontainers/ryuk@sha256:" + new string('0', 64)); break;
+            case "ryuk-registry": environment.Children[new YamlScalarNode("TESTCONTAINERS_RYUK_CONTAINER_IMAGE")] = new YamlScalarNode("foreign.invalid/testcontainers/ryuk@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0"); break;
+            case "original-pin":
+                var checkout = Assert.IsType<YamlMappingNode>(steps.Children[1]);
+                Assert.IsType<YamlMappingNode>(ReadNode(checkout, "with")).Children[new YamlScalarNode("ref")] = new YamlScalarNode("main");
+                break;
+            case "original-action": Assert.IsType<YamlMappingNode>(steps.Children[0]).Children[new YamlScalarNode("uses")] = new YamlScalarNode("actions/checkout@main"); break;
+            case "secret": environment.Children[new YamlScalarNode("TESTCONTAINERS_RYUK_CONTAINER_IMAGE")] = new YamlScalarNode("${{ secrets.X }}"); break;
+            case "cleanup-if": Assert.IsType<YamlMappingNode>(steps.Children[cleanupIndex]).Children[new YamlScalarNode("if")] = new YamlScalarNode("success()"); break;
+            case "upload-action": Assert.IsType<YamlMappingNode>(steps.Children[uploadIndex]).Children[new YamlScalarNode("uses")] = new YamlScalarNode("actions/upload-artifact@main"); break;
+            default: throw new InvalidOperationException("Unexpected mutation.");
+        }
+
+        using var serialized = new StringWriter();
+        yaml.Save(serialized, assignAnchors: false);
+        Assert.Throws<InvalidOperationException>(() => WorkflowContractValidator.Validate(serialized.ToString()));
+    }
+
     private static void AssertMutationRejected(string original, string replacement)
     {
         Assert.Contains(original, Workflow, StringComparison.Ordinal);
@@ -284,6 +362,54 @@ public sealed class WorkflowContractTests
 
 internal static partial class WorkflowContractValidator
 {
+
+    private const string RyukImage = "ghcr.io/testcontainers/ryuk@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0";
+    private const string RegistryControls = """
+        python3 -B -c "from pathlib import Path; [compile(p.read_bytes(),str(p),'exec') for p in (Path('scripts/registry_preload/preload_images.py'),Path('scripts/tests/test_registry_preload.py'))]"
+        python3 -B -m unittest discover -s scripts/tests -p test_registry_preload.py
+        python3 -B -O -m unittest discover -s scripts/tests -p test_registry_preload.py
+        """;
+
+    private static void ValidateRegistryEnvironment(YamlMappingNode job, bool workspace)
+    {
+        var environment = RequireMapping(job, "env");
+        if (environment.Children.Count != (workspace ? 2 : 1))
+            throw new InvalidOperationException("Job environment must contain only its exact reviewed registry/workspace settings.");
+        RequireScalarValue(environment, "TESTCONTAINERS_RYUK_CONTAINER_IMAGE", RyukImage);
+        if (workspace) RequireScalarValue(environment, "MalievWorkspaceRoot", "${{ github.workspace }}/.dependencies");
+    }
+
+    private static void ValidateRegistrySteps(YamlSequenceNode steps, int controls, int preload, int cleanup, int upload)
+    {
+        ValidateScriptStep(steps.Children[controls], "Compile and test registry prerequisite controls",
+            RegistryControls, expectedTimeout: "2");
+        ValidateScriptStep(steps.Children[preload], "Prepare exact official fixture images",
+            "python3 -B scripts/registry_preload/preload_images.py", expectedTimeout: "5");
+        var release = RequireMapping(steps.Children[cleanup], "registry cleanup");
+        if (!release.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal)
+            .SetEquals(["name", "if", "timeout-minutes", "shell", "run"]))
+            throw new InvalidOperationException("Registry cleanup must have only exact reviewed keys.");
+        RequireScalarValue(release, "name", "Release exact owned image references");
+        RequireScalarValue(release, "if", "always()");
+        RequireScalarValue(release, "timeout-minutes", "2");
+        RequireScalarValue(release, "shell", "bash");
+        RequireScalarValue(release, "run", "python3 -B scripts/registry_preload/preload_images.py cleanup");
+        var evidence = RequireMapping(steps.Children[upload], "registry custody evidence");
+        if (!evidence.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal)
+            .SetEquals(["name", "if", "uses", "with"]))
+            throw new InvalidOperationException("Registry custody upload must have only exact reviewed keys.");
+        RequireScalarValue(evidence, "name", "Retain registry custody evidence");
+        RequireScalarValue(evidence, "if", "always()");
+        RequireScalarValue(evidence, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+        var inputs = RequireMapping(evidence, "with");
+        if (inputs.Children.Count != 5) throw new InvalidOperationException("Registry custody upload requires exactly five inputs.");
+        RequireScalarValue(inputs, "name", "quotation-registry-custody-${{ github.job }}-${{ github.sha }}");
+        RequireScalarValue(inputs, "path", "${{ runner.temp }}/quotation-registry-preload.json");
+        RequireScalarValue(inputs, "if-no-files-found", "ignore");
+        RequireScalarValue(inputs, "retention-days", "7");
+        RequireScalarValue(inputs, "overwrite", "false");
+    }
+
     private const string CheckoutAction = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
     private const string SharedValidationAction = "MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@53892c362a30130f582c40da7525e44f11474e8e";
     private const string CoverageProof = """
@@ -383,13 +509,20 @@ internal static partial class WorkflowContractValidator
             throw new InvalidOperationException("Validate job permissions must not differ from workflow permissions.");
         }
 
+        var validateKeys = new HashSet<string>(["name", "runs-on", "timeout-minutes", "env", "steps"], StringComparer.Ordinal);
+        if (jobPermissionsNode is not null) validateKeys.Add("permissions");
+        if (!validateJob.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal).SetEquals(validateKeys))
+            throw new InvalidOperationException("Validate job must contain only exact reviewed settings.");
         RequireScalarValue(validateJob, "name", "validate");
+        RequireScalarValue(validateJob, "runs-on", "ubuntu-latest");
+        RequireScalarValue(validateJob, "timeout-minutes", "30");
+        ValidateRegistryEnvironment(validateJob, workspace: true);
         RejectDuplicatedValidationActionsAndCommands(jobs);
 
         var steps = RequireSequence(validateJob, "steps");
-        if (steps.Children.Count != 11)
+        if (steps.Children.Count != 15)
         {
-            throw new InvalidOperationException("Validate job must contain exactly eleven caller-owned steps.");
+            throw new InvalidOperationException("Validate job must contain exactly fifteen caller-owned steps.");
         }
 
         ValidateStep(
@@ -429,21 +562,22 @@ internal static partial class WorkflowContractValidator
                 ["path"] = ".dependencies/Legacy.Maliev.AccountingService",
                 ["persist-credentials"] = "false",
             });
+        ValidateRegistrySteps(steps, controls: 4, preload: 5, cleanup: 13, upload: 14);
         ValidateStep(
-            steps.Children[4],
+            steps.Children[6],
             SharedValidationAction,
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["solution"] = "Legacy.Maliev.QuotationService.slnx",
                 ["use-local-maliev-dependencies"] = "true",
             });
-        ValidateScriptStep(steps.Children[5], "Prove coverage gate failure and success behavior", CoverageProof);
-        ValidateScriptStep(steps.Children[6], "Prove actual qualification DTO and controller serializer wire",
+        ValidateScriptStep(steps.Children[7], "Prove coverage gate failure and success behavior", CoverageProof);
+        ValidateScriptStep(steps.Children[8], "Prove actual qualification DTO and controller serializer wire",
             QualificationWireCollection, expectedTimeout: "2");
-        ValidateScriptStep(steps.Children[7], "Collect QuotationService coverage", CoverageCollection);
-        ValidateScriptStep(steps.Children[8], "Enforce 80 percent owned handwritten line coverage", CoverageEnforcement);
-        ValidateCoverageEvidenceStep(steps.Children[9]);
-        ValidateWireEvidenceStep(steps.Children[10]);
+        ValidateScriptStep(steps.Children[9], "Collect QuotationService coverage", CoverageCollection);
+        ValidateScriptStep(steps.Children[10], "Enforce 80 percent owned handwritten line coverage", CoverageEnforcement);
+        ValidateCoverageEvidenceStep(steps.Children[11]);
+        ValidateWireEvidenceStep(steps.Children[12]);
     }
 
     private static void ValidateCoverageEvidenceStep(YamlNode node)
@@ -489,14 +623,15 @@ internal static partial class WorkflowContractValidator
     private static void ValidateJoinedAuthorityJob(YamlMappingNode job)
     {
         if (!job.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal)
-            .SetEquals(["name", "runs-on", "timeout-minutes", "steps"]))
+            .SetEquals(["name", "runs-on", "timeout-minutes", "env", "steps"]))
             throw new InvalidOperationException("Joined authority gate must be unconditional with no permission or failure overrides.");
         RequireScalarValue(job, "name", "qualification-authority-joined");
         RequireScalarValue(job, "runs-on", "ubuntu-latest");
         RequireScalarValue(job, "timeout-minutes", "20");
+        ValidateRegistryEnvironment(job, workspace: false);
         var steps = RequireSequence(job, "steps");
-        if (steps.Children.Count != 8)
-            throw new InvalidOperationException("Joined authority gate requires all eight reviewed steps.");
+        if (steps.Children.Count != 12)
+            throw new InvalidOperationException("Joined authority gate requires all original eight steps and four exact registry prerequisite steps.");
         ValidateStep(steps.Children[0], CheckoutAction,
             new Dictionary<string, string>(StringComparer.Ordinal) { ["persist-credentials"] = "false" });
         const string authorityProducerRevision = "8cdb634b3b0abdf18b9b826a0948dbfd98c66ea0";
@@ -522,7 +657,8 @@ internal static partial class WorkflowContractValidator
         }
         ValidateStep(steps.Children[6], "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
             new Dictionary<string, string>(StringComparer.Ordinal) { ["dotnet-version"] = "10.0.x" });
-        ValidateScriptStep(steps.Children[7], "Prove real joined qualification authority",
+        ValidateRegistrySteps(steps, controls: 7, preload: 8, cleanup: 10, upload: 11);
+        ValidateScriptStep(steps.Children[9], "Prove real joined qualification authority",
             "./scripts/run_qualification_authority_joined.ps1 -RepositoryPath $env:GITHUB_WORKSPACE", "pwsh");
     }
 
@@ -609,7 +745,7 @@ internal static partial class WorkflowContractValidator
     {
         foreach (var job in jobs.Children)
         {
-            // The separately isolated integration job has its own exact eight-step contract.
+            // The separately isolated integration job has its own exact twelve-step contract.
             if (RequireScalar(job.Key) == "qualification-authority-joined") continue;
             if (job.Value is not YamlMappingNode jobNode) continue;
             var stepsNode = GetOptional(jobNode, "steps");

@@ -45,6 +45,14 @@ def packet(mutate=None, scope=None):
             "Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsDeliveryPolicy.cs",
             "Legacy.Maliev.QuotationService.Tests/Analytics/QuotationAnalyticsRetryContractTests.cs",
         )}
+    if scope in ("analytics-terminal-lease-red", "analytics-terminal-lease-green"):
+        files = {"Legacy.Maliev.QuotationService.Tests/Analytics/QuotationTerminalLoggingPipelineTests.cs": b"raw\r\n"}
+        if scope == "analytics-terminal-lease-green":
+            files.update({path: b"raw\r\n" for path in (
+                "Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsDeliveryProcessor.cs",
+                "Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsOutboxStore.cs",
+                "Legacy.Maliev.QuotationService.Tests/Analytics/QuotationAnalyticsRetryContractTests.cs",
+            )})
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as archive:
         for path, data in files.items():
@@ -69,6 +77,27 @@ def packet(mutate=None, scope=None):
 
 
 class TransportTests(unittest.TestCase):
+    def test_terminal_lease_profiles_accept_only_exact_one_or_four_paths(self):
+        for scope, count in (("analytics-terminal-lease-red", 1), ("analytics-terminal-lease-green", 4)):
+            raw, capsule, policy, files = packet(scope=scope)
+            _, actual = gate.validate_capsule(raw, capsule, policy)
+            self.assertEqual(count, len(actual))
+            self.assertEqual(files, actual)
+
+    def test_terminal_lease_profiles_deny_missing_extra_substituted_and_foreign_inventory(self):
+        for scope in ("analytics-terminal-lease-red", "analytics-terminal-lease-green"):
+            for mutation in ("drop", "extra", "substitute", "foreign"):
+                raw, capsule, policy, _ = packet(scope=scope)
+                manifest = json.loads(raw)
+                if mutation == "drop": manifest["sourceFiles"].pop()
+                elif mutation == "extra": manifest["sourceFiles"].append({"path": "extra.cs", "bytes": 1, "sha256": "a" * 64})
+                elif mutation == "substitute": manifest["sourceFiles"][0]["path"] = "other.cs"
+                else: manifest["qualificationScope"] = policy["qualificationScope"] = "analytics-retry"
+                policy["sourceFiles"] = copy.deepcopy(manifest["sourceFiles"])
+                changed = json.dumps(manifest).encode(); policy["manifestSha256"] = gate.sha256(changed)
+                with self.subTest(scope=scope, mutation=mutation), self.assertRaisesRegex(ValueError, "expanded inventory"):
+                    gate.validate_capsule(changed, capsule, policy)
+
     def test_analytics_scope_accepts_exact_three_raw_files(self):
         raw, capsule, policy, files = packet(scope="analytics-retry")
         _, actual = gate.validate_capsule(raw, capsule, policy)

@@ -9,15 +9,26 @@ on:
       - scripts/check_quotation_analytics_results.py
       - scripts/tests/test_quotation_analytics_results.py
       - scripts/quotation-analytics-policy.json
+      - scripts/quotation-analytics-terminal-lease-red-policy.json
+      - scripts/quotation-analytics-terminal-lease-green-policy.json
       - scripts/run_quotation_analytics_native.sh
   workflow_dispatch:
     inputs:
+      profile:
+        description: Exact reviewed analytics candidate profile
+        type: choice
+        required: true
+        default: analytics-retry
+        options:
+          - analytics-retry
+          - analytics-terminal-lease-red
+          - analytics-terminal-lease-green
       manifest_blob:
         description: Same-repository Git blob of the reviewed analytics manifest
         required: true
         type: string
       capsule_blob:
-        description: Same-repository Git blob of the exact three-file raw source ZIP
+        description: Same-repository Git blob of the exact profile raw source ZIP
         required: true
         type: string
 
@@ -58,10 +69,26 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Select the exact reviewed profile
+        id: profile
+        env:
+          PROFILE: ${{ inputs.profile }}
+        run: |
+          case "$PROFILE" in
+            analytics-retry)
+              echo 'policy=scripts/quotation-analytics-policy.json' >> "$GITHUB_OUTPUT"
+              echo 'base=4dc6d4982ad90bdd6c10fbf42c6acd5e60d0859b' >> "$GITHUB_OUTPUT"
+              ;;
+            analytics-terminal-lease-red|analytics-terminal-lease-green)
+              echo "policy=scripts/quotation-$PROFILE-policy.json" >> "$GITHUB_OUTPUT"
+              echo 'base=d928d2bad1231c05ec9aba7ba99f51195d48fb2e' >> "$GITHUB_OUTPUT"
+              ;;
+            *) echo 'Unknown analytics profile.' >&2; exit 1 ;;
+          esac
       - name: Check out exact clean candidate base
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 4dc6d4982ad90bdd6c10fbf42c6acd5e60d0859b
+          ref: ${{ steps.profile.outputs.base }}
           path: candidate
           persist-credentials: false
       - name: Verify and materialize reviewed analytics raw source
@@ -69,9 +96,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MANIFEST_BLOB: ${{ inputs.manifest_blob }}
           CAPSULE_BLOB: ${{ inputs.capsule_blob }}
+          POLICY: ${{ steps.profile.outputs.policy }}
         run: |
           python3 -B scripts/materialize_quotation_candidate.py \
-            --policy scripts/quotation-analytics-policy.json --candidate candidate \
+            --policy "$POLICY" --candidate candidate \
             --manifest-blob "$MANIFEST_BLOB" --capsule-blob "$CAPSULE_BLOB" \
             --receipt evidence/source-materialization.json
       - name: Check out exact ordinary Defaults
@@ -103,10 +131,13 @@ jobs:
           path: trusted-scanners
           persist-credentials: false
       - name: Verify exact dependency sources and resource admission
+        env:
+          POLICY: ${{ steps.profile.outputs.policy }}
+          PROFILE: ${{ inputs.profile }}
         run: |
           python3 -B - <<'PY'
-          import json, pathlib, subprocess
-          policy = json.loads(pathlib.Path('scripts/quotation-analytics-policy.json').read_bytes())
+          import json, os, pathlib, subprocess
+          policy = json.loads(pathlib.Path(os.environ['POLICY']).read_bytes())
           for name, expected in policy['sourcePins'].items():
               root = pathlib.Path('candidate/.dependencies') / name
               actual = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
@@ -123,9 +154,11 @@ jobs:
           fi
           # Expose only the two new reviewed source paths to the ordinary tracked-tree scanners.
           # Intent-to-add changes no source bytes and creates no application commit.
-          git -C candidate add --intent-to-add -- \
-            Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsDeliveryPolicy.cs \
-            Legacy.Maliev.QuotationService.Tests/Analytics/QuotationAnalyticsRetryContractTests.cs
+          if [[ "$PROFILE" == 'analytics-retry' ]]; then
+            git -C candidate add --intent-to-add -- \
+              Legacy.Maliev.QuotationService.Api/Analytics/GoogleAnalyticsDeliveryPolicy.cs \
+              Legacy.Maliev.QuotationService.Tests/Analytics/QuotationAnalyticsRetryContractTests.cs
+          fi
       - name: Install pinned ordinary Gitleaks
         env:
           GOTOOLCHAIN: go1.26.9
@@ -150,12 +183,16 @@ jobs:
           dotnet-version: 10.0.x
       - name: Build first, qualify analytics and complete ordinary validation
         working-directory: candidate
-        run: timeout --signal=TERM --kill-after=20s 2400s bash ../scripts/run_quotation_analytics_native.sh
+        env:
+          PROFILE: ${{ inputs.profile }}
+        run: timeout --signal=TERM --kill-after=20s 2400s bash ../scripts/run_quotation_analytics_native.sh "$PROFILE"
       - name: Reverify source after native execution
         if: always()
+        env:
+          POLICY: ${{ steps.profile.outputs.policy }}
         run: |
           python3 -B scripts/materialize_quotation_candidate.py \
-            --policy scripts/quotation-analytics-policy.json --candidate candidate --verify-only
+            --policy "$POLICY" --candidate candidate --verify-only
       - name: Retain original native and materialization evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
