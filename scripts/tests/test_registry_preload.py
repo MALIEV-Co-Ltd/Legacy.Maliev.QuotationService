@@ -342,7 +342,9 @@ class DockerDiagnostics(unittest.TestCase):
   def command(args,timeout,hard_deadline=None):
    if args[1]=='pull':
     if failure_timeout:raise primary
-    return subprocess.CompletedProcess(args,1,b'',b'x'*4096),9032
+    result=subprocess.CompletedProcess(args,1,b'',b'x'*4096)
+    result.owned_cli_resource={'pid':41,'startTicks':123,'executable':'/usr/bin/docker','identityObserved':True,'exitConfirmed':True,'unresolvedCustody':False}
+    return result,9032
    return subprocess.CompletedProcess(args,1,b'',b'No such image'),13
   failure_timeout=timeout
   with tempfile.TemporaryDirectory() as root:
@@ -354,7 +356,25 @@ class DockerDiagnostics(unittest.TestCase):
    self.assertNotIn('CANARY',(Path(root)/'quotation-registry-preload.json').read_text())
    if not timeout:
     self.assertEqual(entry['failureDiagnostic']['capturedBytes'],4096);self.assertTrue(entry['failureDiagnostic']['truncated'])
+    self.assertEqual(entry['cliResource']['startTicks'],123);self.assertEqual(entry['cliResource']['executable'],'/usr/bin/docker')
 class LiveCaptureControls(unittest.TestCase):
+ def observe_identity(self,ticks=(123,123),executable='/usr/bin/docker',oversize=False):
+  import io,types
+  from unittest.mock import patch
+  payloads=[b'41 (docker worker) '+b' '.join([b'S']+[b'0']*18+[str(tick).encode()]) for tick in ticks]
+  if oversize:payloads=[b'x'*8193]
+  handles=[io.BytesIO(payload) for payload in payloads]
+  with patch.object(Path,'open',side_effect=handles),patch('os.readlink',return_value=executable),patch('os.path.isabs',return_value=executable.startswith('/')),patch('os.path.realpath',side_effect=lambda path:path):
+   try:return p.observe_cli_identity(types.SimpleNamespace(pid=41))
+   finally:self.assertTrue(all(handle.closed for handle in handles))
+ def test_identity_reads_kernel_birth_and_executable(self):
+  self.assertEqual(self.observe_identity(),{'pid':41,'startTicks':123,'executable':'/usr/bin/docker'})
+ def test_identity_rejects_birth_race(self):
+  with self.assertRaisesRegex(RuntimeError,'unstable'):self.observe_identity((123,124))
+ def test_identity_rejects_deleted_executable(self):
+  with self.assertRaisesRegex(RuntimeError,'unstable'):self.observe_identity(executable='/usr/bin/docker (deleted)')
+ def test_identity_caps_kernel_metadata(self):
+  with self.assertRaisesRegex(RuntimeError,'cap'):self.observe_identity(oversize=True)
  def test_stderr_storage_is_bounded_while_counting_stream(self):
   c=p.DockerCapture()
   for _ in range(1000):c.feed('stderr',b'x'*4096)
@@ -370,10 +390,39 @@ class LiveCaptureControls(unittest.TestCase):
  def test_ignored_graceful_stop_uses_exact_handle_kill_and_wait(self):self.adapter_fault('grace-timeout')
  def test_kill_failure_preserves_primary_and_closes_independent_handles(self):self.adapter_fault('kill-failure')
  def test_exhausted_recovery_does_not_renew_budget_or_erase_child(self):self.adapter_fault('budget-expiry')
+ def test_changed_child_birth_refuses_signals_and_preserves_primary(self):self.adapter_fault('birth-drift')
+ def test_changed_child_executable_refuses_signals_and_preserves_primary(self):self.adapter_fault('exe-drift')
+ def test_executable_change_before_kill_refuses_forced_signal(self):self.adapter_fault('kill-drift')
+ def test_partial_start_identity_failure_retains_unknown_child(self):self.adapter_fault('identity-fault')
+ def test_missing_live_identity_refuses_signals(self):self.adapter_fault('identity-missing')
+ def test_exit_during_identity_observation_retains_terminal_handle(self):
+  import subprocess,selectors
+  from unittest.mock import patch
+  class Pipe:
+   closed=False
+   def fileno(self):return 11
+   def close(self):self.closed=True
+  class Process:
+   pid=41;returncode=7;stdout=Pipe();stderr=Pipe()
+   def poll(self):return self.returncode
+   def wait(self,timeout):return self.returncode
+   def terminate(self):raise AssertionError('Terminal child must not be signalled')
+   kill=terminate
+  class Selector:
+   def register(self,*args):pass
+   def get_map(self):return {}
+   def close(self):pass
+  child=Process()
+  with patch('os.name','posix'),patch.object(p.subprocess,'Popen',return_value=child),patch.object(p,'observe_cli_identity',side_effect=FileNotFoundError('Exited executable')),patch.object(selectors,'DefaultSelector',return_value=Selector()),patch('os.set_blocking'):
+   result,total=p.run_docker_cli(['docker','inspect'],6)
+  self.assertEqual(result.returncode,7);self.assertEqual(total,0)
+  self.assertTrue(result.owned_cli_resource['exitConfirmed']);self.assertFalse(result.owned_cli_resource['unresolvedCustody'])
+  self.assertTrue(result.owned_cli_resource['identityUnavailableAfterExit']);self.assertIsNone(result.owned_cli_resource['startTicks'])
+  self.assertTrue(child.stdout.closed and child.stderr.closed)
  def adapter_fault(self,mode,close_faults=False):
   import subprocess,types,selectors
   from unittest.mock import patch
-  primary=OSError('actual capture/register failure');closed=[];events=[];settled=[]
+  primary=FileNotFoundError('Live identity missing') if mode=='identity-missing' else OSError('actual capture/register failure');closed=[];events=[];settled=[]
   class Pipe:
    def __init__(self,name):self.name=name
    def fileno(self):return 11 if self.name=='stdout' else 12
@@ -381,12 +430,13 @@ class LiveCaptureControls(unittest.TestCase):
     closed.append(self.name)
     if close_faults:raise OSError('close')
   class Process:
+   pid=41
    stdout=Pipe('stdout');stderr=Pipe('stderr')
    returncode=None
    def poll(self):return self.returncode
    def terminate(self):
     events.append('terminate')
-    if mode not in ('grace-timeout','kill-failure'):self.returncode=0
+    if mode not in ('grace-timeout','kill-failure','kill-drift'):self.returncode=0
    def kill(self):
     events.append('kill')
     if mode=='kill-failure':raise OSError('kill')
@@ -404,11 +454,26 @@ class LiveCaptureControls(unittest.TestCase):
     closed.append('selector')
     if close_faults:raise OSError('close')
   clocks=[0]+[3]*20 if mode=='deadline' else [0,0]+[6]*20 if mode=='budget-expiry' else [0]*20
-  with patch('os.name','posix'),patch.object(p.subprocess,'Popen',return_value=Process()),patch.object(selectors,'DefaultSelector',return_value=Selector()),patch('os.set_blocking'),patch('os.read',side_effect=primary),patch.object(p.time,'monotonic',side_effect=clocks):
+  observations=[]
+  def observe(process):
+   observations.append(process.pid)
+   if mode in ('identity-fault','identity-missing'):raise primary
+   identity={'pid':41,'startTicks':123,'executable':'/usr/bin/docker'}
+   if mode=='birth-drift' and len(observations)>1:identity['startTicks']=124
+   if mode=='exe-drift' and len(observations)>1 or mode=='kill-drift' and len(observations)>2:identity['executable']='/foreign/executable'
+   return identity
+  with patch('os.name','posix'),patch.object(p.subprocess,'Popen',return_value=Process()),patch.object(p,'observe_cli_identity',side_effect=observe,create=True),patch.object(selectors,'DefaultSelector',return_value=Selector()),patch('os.set_blocking'),patch('os.read',side_effect=primary),patch.object(p.time,'monotonic',side_effect=clocks):
    with self.assertRaises(subprocess.TimeoutExpired if mode=='deadline' else OSError) as caught:p.run_docker_cli(['docker','pull',p.RYUK],5)
   if mode!='deadline':self.assertIs(caught.exception,primary)
   else:self.assertTrue(caught.exception.__notes__)
-  self.assertEqual(closed,['selector','stdout','stderr']);self.assertEqual(events,[] if mode=='budget-expiry' else ['terminate','kill'] if mode in ('grace-timeout','kill-failure') else ['terminate'])
+  self.assertEqual(closed,['stdout','stderr'] if mode in ('identity-fault','identity-missing') else ['selector','stdout','stderr']);self.assertEqual(events,[] if mode in ('budget-expiry','birth-drift','exe-drift','identity-fault','identity-missing') else ['terminate','kill'] if mode in ('grace-timeout','kill-failure') else ['terminate'])
+  if mode in ('birth-drift','exe-drift','kill-drift','identity-fault','identity-missing'):
+   resource=caught.exception.owned_cli_resource
+   self.assertTrue(resource['unresolvedCustody']);self.assertFalse(resource['exitConfirmed'])
+   self.assertEqual(resource['identityObserved'],mode not in ('identity-fault','identity-missing'))
+   self.assertEqual(resource['startTicks'],None if mode in ('identity-fault','identity-missing') else 123)
+   self.assertEqual(resource['executable'],None if mode in ('identity-fault','identity-missing') else '/usr/bin/docker')
+   self.assertTrue(caught.exception.__notes__)
   if mode=='budget-expiry':
    self.assertFalse(settled);self.assertFalse(caught.exception.owned_cli_resource['exitConfirmed']);self.assertTrue(caught.exception.__notes__)
   else:self.assertTrue(settled)
@@ -423,6 +488,26 @@ class LiveCaptureControls(unittest.TestCase):
   with patch.object(p.subprocess,'Popen',side_effect=launch):
    result,total=p.run_docker_cli(['docker','pull',p.RYUK],6)
   self.assertEqual(result.stdout,b'ok');self.assertEqual(len(result.stderr),4096);self.assertEqual(total,20000)
+  self.assertTrue(all(child.poll() is not None and child.stdout.closed and child.stderr.closed for child in children))
+ @unittest.skipUnless(__import__('os').name=='posix','Actual short-lived child proof requires Linux hosted runner')
+ def test_real_immediate_exit_and_nonzero_output(self):
+  self.real_short_child(False,0);self.real_short_child(False,7)
+ @unittest.skipUnless(__import__('os').name=='posix','Actual exit-observation race proof requires Linux hosted runner')
+ def test_real_exit_during_identity_observation(self):self.real_short_child(True)
+ def real_short_child(self,force_race,code=7):
+  import sys
+  from unittest.mock import patch
+  original=p.subprocess.Popen;observe=p.observe_cli_identity;children=[]
+  def launch(args,**kwargs):
+   child=original([sys.executable,'-c',"import sys;sys.stdout.buffer.write(b'ok');sys.stderr.buffer.write(b'error');sys.exit("+str(code)+")"],**kwargs);children.append(child);return child
+  def observation(child):
+   if force_race:child.wait(timeout=1)
+   return observe(child)
+  with patch.object(p.subprocess,'Popen',side_effect=launch),patch.object(p,'observe_cli_identity',side_effect=observation):
+   result,total=p.run_docker_cli(['docker','inspect'],6)
+  self.assertEqual((result.returncode,result.stdout,result.stderr,total),(code,b'ok',b'error',5))
+  self.assertTrue(result.owned_cli_resource['exitConfirmed']);self.assertFalse(result.owned_cli_resource['unresolvedCustody'])
+  if force_race:self.assertTrue(result.owned_cli_resource['identityUnavailableAfterExit'])
   self.assertTrue(all(child.poll() is not None and child.stdout.closed and child.stderr.closed for child in children))
  def test_reserve_required_before_birth(self):
   from unittest.mock import patch

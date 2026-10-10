@@ -150,6 +150,22 @@ def command_failure(args,returncode,prefix,total_bytes):
  approved=set(SOURCES)|{source[2]+'/'+source[3]+'@sha256:'+source[4] for source in SOURCES.values()}
  reference=args[-1] if args and args[-1] in approved else None
  return DockerCommandFailure({'operation':operation,'imageReference':reference,'returnCode':returncode,'category':category,'explicitHttpStatus':int(status.group(1)) if status else None,'stderrBytes':total_bytes,'capturedBytes':len(prefix),'captureLimitBytes':4096,'truncated':total_bytes>len(prefix),'sha256':hashlib.sha256(prefix).hexdigest(),'hashScope':'captured-prefix','rawDisclosed':False})
+def observe_cli_identity(process):
+ import os
+ if type(process.pid) is not int or process.pid<=0:raise RuntimeError('Invalid retained CLI PID')
+ root=Path('/proc')/str(process.pid)
+ def birth():
+  with (root/'stat').open('rb') as handle:raw=handle.read(8193)
+  if len(raw)>8192:raise RuntimeError('CLI identity observation exceeded cap')
+  fields=raw.decode('ascii').rsplit(') ',1)[1].split()
+  ticks=int(fields[19])
+  if ticks<=0:raise RuntimeError('Invalid CLI birth observation')
+  return ticks
+ before=birth();executable=os.readlink(root/'exe');after=birth()
+ if before!=after or not os.path.isabs(executable) or executable.endswith(' (deleted)'):
+  raise RuntimeError('CLI identity unstable during observation')
+ return {'pid':process.pid,'startTicks':before,'executable':os.path.realpath(executable)}
+
 class DockerCapture:
  def __init__(self):
   self.stdout=bytearray();self.stderr=bytearray();self.stderr_bytes=0
@@ -169,8 +185,17 @@ def run_docker_cli(args,timeout,hard_deadline=None):
  deadline=min(hard_deadline if hard_deadline is not None else started+timeout,started+timeout)
  work_deadline=deadline-3
  if work_deadline<=started:raise TimeoutError('Owned CLI requires recovery reserve before process birth')
+ identity=None;identity_drift=False;identity_unavailable_after_exit=False
  def recover(action):
+  nonlocal identity_drift
   if deadline-time.monotonic()<=0:raise TimeoutError('Owned CLI recovery deadline expired; custody unresolved')
+  try:
+   if identity is None or observe_cli_identity(process)!=identity:
+    raise RuntimeError('Retained CLI birth/executable changed or unproved; signal refused')
+  except BaseException:
+   identity_drift=True
+   raise
+  if deadline-time.monotonic()<=0:raise TimeoutError('Owned CLI recovery deadline expired after identity observation')
   action()
  def recovery_wait(limit):
   remaining=deadline-time.monotonic()
@@ -179,6 +204,12 @@ def run_docker_cli(args,timeout,hard_deadline=None):
  process=None;selector=None;primary=None;cleanup_errors=[];result=None;capture=DockerCapture()
  try:
   process=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+  try:identity=observe_cli_identity(process)
+  except FileNotFoundError:
+   # A retained Popen terminal status proves this child exited even when its
+   # short-lived /proc executable is already gone. Never infer a live identity.
+   if process.poll() is None:raise
+   identity_unavailable_after_exit=True
   selector=selectors.DefaultSelector()
   for stream,name in ((process.stdout,'stdout'),(process.stderr,'stderr')):
    os.set_blocking(stream.fileno(),False);selector.register(stream,selectors.EVENT_READ,name)
@@ -224,12 +255,18 @@ def run_docker_cli(args,timeout,hard_deadline=None):
     if deadline-time.monotonic()<=0:cleanup_errors.append(TimeoutError('Owned FD settlement deadline exhausted; custody unresolved'))
     try:handle.close()
     except BaseException as error:cleanup_errors.append(error)
+ resource=None
+ if process is not None:
+  resource={'pid':getattr(process,'pid',None),'executable':identity['executable'] if identity else None,'startTicks':identity['startTicks'] if identity else None,'identityObserved':identity is not None,'identityUnavailableAfterExit':identity_unavailable_after_exit,'identityDrift':identity_drift,'admissionMonotonic':started,'hardDeadlineMonotonic':deadline,'workDeadlineMonotonic':work_deadline,'recoveryReserveSeconds':3,'exitConfirmed':not identity_drift and process.returncode is not None,'cleanupErrors':len(cleanup_errors),'expiryDoesNotProveExit':True,'unresolvedCustody':identity_drift or identity is None and not identity_unavailable_after_exit or bool(cleanup_errors) or process.returncode is None}
  if primary is not None:
-  if process is not None:
-   primary.owned_cli_resource={'pid':getattr(process,'pid',None),'executable':'docker','startObservedMonotonic':started,'hardDeadlineMonotonic':deadline,'workDeadlineMonotonic':work_deadline,'recoveryReserveSeconds':3,'exitConfirmed':process.returncode is not None,'cleanupErrors':len(cleanup_errors),'expiryDoesNotProveExit':True}
+  if resource is not None:primary.owned_cli_resource=resource
   for error in cleanup_errors:primary.add_note('Secondary owned CLI cleanup failure: '+type(error).__name__)
   raise primary.with_traceback(primary.__traceback__)
- if cleanup_errors:raise BaseExceptionGroup('Owned Docker CLI cleanup failures',cleanup_errors)
+ if cleanup_errors:
+  error=BaseExceptionGroup('Owned Docker CLI cleanup failures',cleanup_errors)
+  if resource is not None:error.owned_cli_resource=resource
+  raise error
+ if result is not None:result[0].owned_cli_resource=resource
  return result
 
 def main():
@@ -245,7 +282,9 @@ def main():
    if not required and args[:3]==['docker','image','inspect']:
     # Only absence permits creating a tag. Connection/permission errors are failures.
     if b'No such image' in prefix:return None
-   raise command_failure(args,result.returncode,prefix,total_bytes)
+   error=command_failure(args,result.returncode,prefix,total_bytes)
+   error.owned_cli_resource=result.owned_cli_resource
+   raise error
   return result.stdout
  if cleanup_mode:
   if not path.exists():return
