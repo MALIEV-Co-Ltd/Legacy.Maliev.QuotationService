@@ -185,6 +185,35 @@ class Controls(unittest.TestCase):
    return b''
   with self.assertRaises(ExceptionGroup):p.cleanup({'createdTags':entries},run,lambda:None)
   self.assertEqual(removed,['independent'])
+ def test_reaper_grace_waits_for_observed_exit(self):self.reaper_grace('settled')
+ def test_reaper_grace_preserves_persistent_active_container(self):self.reaper_grace('persistent')
+ def test_reaper_grace_preserves_replaced_reference(self):self.reaper_grace('replaced')
+ def test_reaper_grace_query_failure_does_not_remove_reference(self):self.reaper_grace('query-failure')
+ def test_reaper_grace_cannot_extend_parent_cleanup_deadline(self):self.reaper_grace('deadline')
+ def reaper_grace(self,mode):
+  from unittest.mock import patch
+  row=json.loads((R/'image-pins.json').read_bytes())[2]
+  entry={'tag':p.RYUK,'configDigest':row['configDigest'],'preExisting':False,'commandSettled':True,'state':'intent'}
+  clock=[0];queries=[];removed=[];sleeps=[]
+  def sleep(seconds):sleeps.append(seconds);clock[0]+=seconds
+  def run(args,required=True):
+   if args[1:3]==['image','inspect']:
+    if removed:return None
+    return json.dumps([{'Id':'foreign' if mode=='replaced' and sleeps else row['configDigest']}]).encode()
+   if args[1]=='ps':
+    queries.append(args)
+    if mode=='query-failure' and len(queries)>1:raise OSError('query unavailable')
+    return b'active' if mode!='settled' or len(queries)<3 else b''
+   if args[1:3]==['image','rm']:
+    self.assertEqual(mode,'settled');self.assertGreaterEqual(len(queries),3);removed.append(args[-1]);return b''
+   self.fail('Unexpected container mutation')
+  with patch.object(p.time,'monotonic',side_effect=lambda:clock[0]),patch.object(p.time,'sleep',side_effect=sleep):
+   if mode=='settled':p.cleanup({'createdTags':[entry]},run,lambda:None)
+   else:
+    with self.assertRaises(ExceptionGroup):p.cleanup({'createdTags':[entry]},run,lambda:None,deadline=2 if mode=='deadline' else 90)
+  if mode=='settled':self.assertEqual(removed,[p.RYUK]);self.assertEqual(entry['state'],'absent')
+  else:self.assertFalse(removed)
+  self.assertEqual(bool(sleeps),mode!='deadline');self.assertLessEqual(clock[0],15)
 class RegistryBindings(unittest.TestCase):
  def setUp(self):self.rows=json.loads((R/'image-pins.json').read_bytes())
  def test_closed_three_sources(self):

@@ -90,14 +90,29 @@ def mutate(args,tag,row,run,receipt):
   except BaseException as secondary:primary.add_note('Secondary receipt failure: '+type(secondary).__name__)
   raise
  receipt['write']()
-def cleanup(data,run,save):
+def await_inactive_reference(entry,run,deadline):
+ # Ryuk permits reconnection for ten seconds after its test process exits.
+ # Observe that grace; never stop a container or infer exit from elapsed time.
+ grace_deadline=min(deadline-3,time.monotonic()+15)
+ while run(['docker','ps','-q','--filter','ancestor='+entry['configDigest']]).strip():
+  if entry['tag']!=RYUK:raise ValueError('Preserve active image')
+  remaining=grace_deadline-time.monotonic()
+  if remaining<=0:raise ValueError('Preserve active reaper after bounded observation')
+  entry['reaperGraceObservations']=entry.get('reaperGraceObservations',0)+1
+  time.sleep(min(0.25,remaining))
+  reconcile(entry,run)
+  if entry['state'] in ('absent','absence-unsettled'):return
+ if entry['tag']==RYUK:entry['reaperGraceInactiveObserved']=True
+
+def cleanup(data,run,save,deadline=None):
+ if deadline is None:deadline=time.monotonic()+90
  errors=[]
  for entry in reversed(data['createdTags']):
   try:
    if entry.get('preExisting') is not False:raise ValueError('Unproven reference ownership')
    reconcile(entry,run)
    if entry['state'] not in ('absent','absence-unsettled'):
-    if run(['docker','ps','-q','--filter','ancestor='+entry['configDigest']]).strip():raise ValueError('Preserve active image')
+    await_inactive_reference(entry,run,deadline)
     reconcile(entry,run)
     if entry['state'] not in ('absent','absence-unsettled'):run(['docker','image','rm','--no-prune',entry['tag']])
     reconcile(entry,run)
@@ -289,7 +304,7 @@ def main():
  if cleanup_mode:
   if not path.exists():return
   data=json.loads(path.read_bytes())
-  cleanup(data,run,lambda:atomic_save(path,data))
+  cleanup(data,run,lambda:atomic_save(path,data),deadline=deadline)
   return
  if os.environ.get('TESTCONTAINERS_RYUK_CONTAINER_IMAGE')!=RYUK:raise ValueError('Exact pinned Ryuk framework locator required')
  if path.exists():raise ValueError('Fresh preload receipt required')
