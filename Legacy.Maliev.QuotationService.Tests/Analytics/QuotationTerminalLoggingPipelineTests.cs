@@ -184,13 +184,69 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
         AssertDependency(Assert.Single(audit.Entries), 500);
     }
 
+    [Theory]
+    [InlineData(400, 204)]
+    [InlineData(500, 204)]
+    [InlineData(400, 400)]
+    [InlineData(500, 500)]
+    public async Task Program_ReclaimedLease_OnlyCurrentOwnerEmitsDurableTerminalFailure(int staleStatus, int currentStatus)
+    {
+        var clock = new LeaseClock();
+        var transport = new LeaseRaceTransport(staleStatus, currentStatus);
+        var audit = Audit();
+        await using var app = App(transport, audit, clock, maxAttempts: 1);
+        using var bootstrap = app.CreateClient();
+        await Seed(clock);
+        using var staleScope = app.Services.CreateScope();
+        using var currentScope = app.Services.CreateScope();
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var staleDelivery = staleScope.ServiceProvider.GetRequiredService<GoogleAnalyticsDeliveryProcessor>()
+            .DeliverBatchAsync(cancellation.Token);
+        try
+        {
+            await transport.Entered.Task.WaitAsync(cancellation.Token);
+            var claimed = await Read();
+            Assert.Equal(1, claimed.AttemptCount);
+            Assert.NotNull(claimed.LeaseToken);
+            Assert.NotNull(claimed.LeaseUntilUtc);
+            Assert.Null(claimed.SentUtc);
+            Assert.Null(claimed.FailedUtc);
+
+            clock.Advance(TimeSpan.FromSeconds(61));
+            Assert.Equal(1, await currentScope.ServiceProvider.GetRequiredService<GoogleAnalyticsDeliveryProcessor>()
+                .DeliverBatchAsync(cancellation.Token));
+            transport.Release.TrySetResult(true);
+            Assert.Equal(1, await staleDelivery.WaitAsync(cancellation.Token));
+
+            Assert.Equal(2, transport.Calls);
+            Assert.Equal(2, transport.Ownership.Count);
+            Assert.All(transport.Ownership, Assert.True);
+            var completed = await Read();
+            Assert.Equal(2, completed.AttemptCount);
+            Assert.Equal(currentStatus == 204, completed.SentUtc is not null);
+            Assert.Equal(currentStatus != 204, completed.FailedUtc is not null);
+            Assert.Null(completed.LeaseToken);
+            Assert.Null(completed.LeaseUntilUtc);
+            Assert.Equal(currentStatus == 204 ? null : $"HTTP {currentStatus}", completed.LastError);
+            Assert.DoesNotContain(audit.Entries, entry => entry.Event.Id == 5101);
+            var terminal = audit.Entries.Where(entry => entry.Event.Id == 5201).ToArray();
+            if (currentStatus == 204) Assert.Empty(terminal);
+            else AssertTerminal(Assert.Single(terminal), currentStatus, 2);
+        }
+        finally
+        {
+            transport.Release.TrySetResult(true);
+            await staleDelivery.WaitAsync(TimeSpan.FromSeconds(15));
+        }
+    }
+
     private StructuredAudit Audit() => new(() =>
     {
         using var db = fixture.Context();
         return db.GoogleAnalyticsOutbox.AsNoTracking().Single().FailedUtc is not null;
     });
 
-    private WebApplicationFactory<Program> App(Transport transport, StructuredAudit audit, FakeTimeProvider clock,
+    private WebApplicationFactory<Program> App(HttpMessageHandler transport, StructuredAudit audit, TimeProvider clock,
         bool callerLogging = true, int maxAttempts = 10, bool nativeDeadline = false, FailedPersistence? fault = null) =>
         fixture.App(new()).WithWebHostBuilder(builder =>
         {
@@ -220,7 +276,7 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
             });
         });
 
-    private async Task Seed(FakeTimeProvider clock, int completedAttempts = 0)
+    private async Task Seed(TimeProvider clock, int completedAttempts = 0)
     {
         await using var db = fixture.Context();
         await db.GoogleAnalyticsOutbox.ExecuteDeleteAsync();
@@ -313,6 +369,38 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
             if (status == -3) caller!.Cancel();
             if (status is -3 or -4) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return new((HttpStatusCode)status) { Content = new StringContent(Protected) };
+        }
+    }
+
+    // Advance lease UTC without firing the actual HTTP resilience deadline timers.
+    private sealed class LeaseClock : TimeProvider
+    {
+        private DateTimeOffset utc = Start;
+        public override DateTimeOffset GetUtcNow() => utc;
+        public void Advance(TimeSpan elapsed) => utc += elapsed;
+    }
+
+    private sealed class LeaseRaceTransport(int staleStatus, int currentStatus) : HttpMessageHandler
+    {
+        public int Calls;
+        public ConcurrentQueue<bool> Ownership { get; } = new();
+        public TaskCompletionSource<bool> Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<bool> Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var call = Interlocked.Increment(ref Calls);
+            Assert.True(request.Options.TryGetValue(new HttpRequestOptionsKey<bool>("Maliev.DependencyFailureOwnedByCaller"), out var owned));
+            Ownership.Enqueue(owned);
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("www.google-analytics.com", request.RequestUri?.Host);
+            Assert.InRange(call, 1, 2);
+            if (call == 1)
+            {
+                Entered.TrySetResult(true);
+                await Release.Task.WaitAsync(cancellationToken);
+            }
+            return new((HttpStatusCode)(call == 1 ? staleStatus : currentStatus)) { Content = new StringContent(Protected) };
         }
     }
 
