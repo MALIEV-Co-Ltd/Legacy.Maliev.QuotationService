@@ -111,40 +111,29 @@ internal static class DisposableContainerStartup
 
     internal static async Task<string> LocalDockerEndpointAsync(CancellationToken token = default)
     {
+        token.ThrowIfCancellationRequested();
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOCKER_HOST"))
             || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOCKER_CONTEXT")))
             throw new InvalidOperationException("Ambient Docker host/context overrides are forbidden.");
         var start = new ProcessStartInfo("docker") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
         foreach (var argument in new[] { "context", "inspect", "--format", "{{json .Endpoints.docker.Host}}" }) start.ArgumentList.Add(argument);
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Docker context inspection could not start.");
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-        timeout.CancelAfter(TimeSpan.FromSeconds(15));
-        var stdout = ReadBoundedAsync(process.StandardOutput.BaseStream, timeout.Token);
-        var stderr = ReadBoundedAsync(process.StandardError.BaseStream, timeout.Token);
-        var exited = process.WaitForExitAsync(timeout.Token);
         try
         {
-            var pending = new List<Task> { stdout, stderr, exited };
-            while (pending.Count != 0)
-            {
-                var completed = await Task.WhenAny(pending);
-                await completed; // Observe overflow immediately, without waiting for the other pipe/process.
-                pending.Remove(completed);
-            }
+            return await DockerContextInspection.RunAsync(() => new ContextInspectionProcess(
+                Process.Start(start) ?? throw new InvalidOperationException("Docker context inspection could not start.")),
+                TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(5), token);
         }
-        catch
+        catch (Exception error)
         {
-            await timeout.CancelAsync();
-            if (!process.HasExited) process.Kill(entireProcessTree: true); // Only this owned inspection process.
-            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
-            try { await Task.WhenAll(stdout, stderr).WaitAsync(TimeSpan.FromSeconds(5)); }
-            catch { /* Pipe tasks settled or bounded; preserve the original fixed/redacted failure. */ }
+            if (error.Data[DockerContextInspection.RecoveryKey] is ContextInspectionRecovery recovery)
+            {
+                // This existing caller consumes one finite recovery attempt. If still unresolved,
+                // the original exception carries the exact handles/tasks and its attention lease.
+                try { await recovery.RecoverAsync(TimeSpan.FromSeconds(5)); }
+                catch (Exception cleanupError) { error.Data["DockerContextInspectionCallerRecoveryFailure"] = cleanupError; }
+            }
             throw;
         }
-        await Task.WhenAll(stdout, stderr).WaitAsync(TimeSpan.FromSeconds(5));
-        if (process.ExitCode != 0) throw new InvalidOperationException("Docker context inspection failed.");
-        return NormalizeLocalEndpoint(JsonSerializer.Deserialize<string>(await stdout)?.Trim()
-            ?? throw new InvalidOperationException("Docker context endpoint is absent."));
     }
 
     internal static async Task<string> ReadBoundedAsync(Stream stream, CancellationToken token = default)
