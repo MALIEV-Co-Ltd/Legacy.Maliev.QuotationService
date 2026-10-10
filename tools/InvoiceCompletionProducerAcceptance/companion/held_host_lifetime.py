@@ -21,7 +21,7 @@ import owned_normal_hosts as normal_source
 SOURCE_SHA256 = {
     'held_linux_exit': 'e7c809d0a1a9c8e8673ed5ef299dd530774d68a48196a739a90f0eaaf5e11515',
     'owned_normal_hosts': 'e5fee39ac7ced3b1304698c734abfd192660a29e94e7e1dcb366b34f15205988',
-    'owned_front_host': '18e2626756b55f0e3921e4c5bd2d5f4d53844d01a2c22a181d981dcdd71e1699',
+    'owned_front_host': '7b06c9abce7aed3cca7cc90944a75b2d01d4c91ec95b1286486444a29f04392b',
 }
 
 

@@ -59,8 +59,8 @@ def validate_network(network, network_id, created, run, members):
 class BorrowedScannerBridge:
     """One backend borrow; scanner owner must close ONLY through close_scanner().
 
-    This slice supports standalone scanner/storage proof only. It refuses actual
-    File/front borrowing until their source-owned lifecycle handoff is integrated.
+    Optional File/front consumers must use the exact retained original lifetime
+    capability; ordinary process/dictionary adoption remains refused.
 
     The Python reference retains the actual Scanner. It cannot prevent an outside
     owner from calling Scanner.close directly; doing so invalidates refresh.
@@ -119,6 +119,22 @@ class BorrowedScannerBridge:
 
     def _refresh_members(self, members, cleanup=False):
         self.context.validate(os.environ, datetime.now(timezone.utc), cleanup=cleanup)
+        if self._consumers and not cleanup:
+            capability = self._retained_consumers()
+            require(not capability.failed and not capability.released,
+                    'Retained consumers are quarantined or settled')
+            if capability.admitted:
+                capability.observe_before_use()
+            else:
+                # Phase follows original Child custody, not the admitted flag:
+                # front-only preparation uses actual original live observation;
+                # any File birth/publication requires full consumer admission.
+                fronts = [row for row in capability.lifetime.children
+                          if row.owner is capability.front and row.role == 'Front']
+                if fronts:
+                    capability.observe_prepared_front()
+                else:
+                    capability.observe_prebirth()
         require(not self._released and self.scanner.network_id == self.network_id
                 and self.scanner.container_id == self.scanner_container_id
                 and self.scanner.image_id == self._runtime_id
@@ -188,8 +204,51 @@ class BorrowedScannerBridge:
         # retained lifecycle handoff is still absent; refuse consumer use.
         raise BridgeRefused('Qualified File/front lifecycle handoff unavailable')
 
+    @sticky
+    def retain_file_front_consumers(self, capability):
+        """Atomic pre-birth retention; no process adoption or caller receipts."""
+        import retained_file_front_consumers as consumers
+        require(type(capability) is consumers.RetainedFileFrontConsumers,
+                'Exact original retained consumer capability required')
+        require(not self._failure and not self._released and self._borrow is not None
+                and not self._consumers, 'One current consumer handoff required')
+        # Retain BOTH references before fallible original-custody observation.
+        self._consumers = {'File': capability, 'Front': capability}
+        retained = self._retained_consumers()
+        require(not capability.admitted and not capability.failed and not capability.released
+                and capability.front.process is None and not any(
+                    row.role in ('File', 'Front') for row in capability.lifetime.children),
+                'Original consumers must be retained before birth')
+        retained.observe_prebirth()
+        return None
+
+    def _retained_consumers(self):
+        import retained_file_front_consumers as consumers
+        import held_host_lifetime as lifetime
+        require(set(self._consumers) == {'File', 'Front'}
+                and self._consumers['File'] is self._consumers['Front'],
+                'Exact paired retained consumers required')
+        capability = self._consumers['File']
+        require(type(capability) is consumers.RetainedFileFrontConsumers
+                and type(capability.lifetime) is lifetime.HostLifetime
+                and type(capability.normal) is lifetime.LifetimeNormalHosts
+                and type(capability.front) is lifetime.LifetimeFrontHost,
+                'Original consumer owner types required')
+        capability._custody()
+        require(capability.normal.context is self.context and capability.front.context is self.context,
+                'Original consumers must share the exact bridge context')
+        return capability
+
     def _quiescent(self):
-        require(not self._consumers, 'Standalone bridge proof cannot drain File/front consumers')
+        if not self._consumers:
+            return  # Original standalone path, no fabricated consumer settlement.
+        capability = self._retained_consumers()
+        # Always use the original source-owned close/release API, including repeat
+        # absence checks. Its clean close is idempotent; its failures remain sticky.
+        # Never clear retained references on success/failure or trust released alone.
+        capability.close_original_and_assert_backend_release()
+        require(capability.released and not capability.failed,
+                'Original consumer settlement remains incomplete')
 
     @sticky
     def remove_backend_after_quiescence(self):
