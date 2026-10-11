@@ -352,6 +352,13 @@ public sealed class WorkflowContractTests
     [InlineData("omitted-size-upload-trx")]
     [InlineData("omitted-size-upload-manifest")]
     [InlineData("omitted-size-ignore-failure")]
+    [InlineData("explicit-size-controls")]
+    [InlineData("explicit-size-filter")]
+    [InlineData("explicit-size-checker")]
+    [InlineData("explicit-size-log")]
+    [InlineData("explicit-size-upload-trx")]
+    [InlineData("explicit-size-upload-manifest")]
+    [InlineData("explicit-size-ignore-failure")]
     public void BuildAndTest_RejectsOrdinaryControllerParityBypass(string mutant)
     {
         WorkflowContractValidator.Validate(Workflow);
@@ -367,6 +374,34 @@ public sealed class WorkflowContractTests
         var inputs = Assert.IsType<YamlMappingNode>(ReadNode(upload, "with"));
         switch (mutant)
         {
+            case "explicit-size-controls":
+                controls.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(controls, "run")
+                    .Replace("test_quotation_explicit_size_results.py", "test_unreviewed_results.py", StringComparison.Ordinal));
+                break;
+            case "explicit-size-filter":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("FullyQualifiedName~Positive_explicit_size_is_not_capped_after_filtering", "FullyQualifiedName~UnreviewedCases", StringComparison.Ordinal));
+                break;
+            case "explicit-size-checker":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("python3 -B scripts/check_quotation_explicit_size_results.py", "echo unchecked", StringComparison.Ordinal));
+                break;
+            case "explicit-size-log":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("explicit-size.trx", "unreviewed.trx", StringComparison.Ordinal));
+                break;
+            case "explicit-size-upload-trx":
+                inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode(ReadScalar(inputs, "path")
+                    .Replace("TestResults/ExplicitSize/explicit-size.trx\n", "", StringComparison.Ordinal));
+                break;
+            case "explicit-size-upload-manifest":
+                inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode(ReadScalar(inputs, "path")
+                    .Replace("scripts/quotation_explicit_size_focus.json\n", "", StringComparison.Ordinal));
+                break;
+            case "explicit-size-ignore-failure":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("python3 -B scripts/check_quotation_explicit_size_results.py TestResults/ExplicitSize/explicit-size.trx", "python3 -B scripts/check_quotation_explicit_size_results.py TestResults/ExplicitSize/explicit-size.trx || true", StringComparison.Ordinal));
+                break;
             case "omitted-size-controls":
                 controls.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(controls, "run")
                     .Replace("test_quotation_omitted_size_results.py", "test_unreviewed_results.py", StringComparison.Ordinal));
@@ -546,6 +581,7 @@ internal static partial class WorkflowContractValidator
         python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_controller_parity_results.py'
         python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_pagination_parity_results.py'
         python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_omitted_size_results.py'
+        python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_explicit_size_results.py'
         """;
     private const string ControllerParityCollection = """
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
@@ -563,6 +599,11 @@ internal static partial class WorkflowContractValidator
           --filter 'FullyQualifiedName~Omitted_size_uses_filtered_count_without_default_or_cap' \
           --results-directory TestResults/OmittedSize --logger 'trx;LogFileName=omitted-size.trx'
         python3 -B scripts/check_quotation_omitted_size_results.py TestResults/OmittedSize/omitted-size.trx
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~Positive_explicit_size_is_not_capped_after_filtering' \
+          --results-directory TestResults/ExplicitSize --logger 'trx;LogFileName=explicit-size.trx'
+        python3 -B scripts/check_quotation_explicit_size_results.py TestResults/ExplicitSize/explicit-size.trx
         """;
     private const string CoverageProof = """
         python3 -m unittest discover -s scripts/tests -p 'test_*.py'
@@ -749,7 +790,7 @@ internal static partial class WorkflowContractValidator
             .SetEquals(["name", "path", "if-no-files-found", "retention-days"]))
             throw new InvalidOperationException("Controller parity evidence requires exactly four reviewed inputs.");
         RequireScalarValue(inputs, "name", "quotation-controller-parity-${{ github.sha }}");
-        RequireScalarValue(inputs, "path", "TestResults/ControllerParity/controller-parity.trx\nscripts/quotation_controller_parity_focus.json\nTestResults/PaginationParity/pagination-parity.trx\nscripts/quotation_pagination_parity_focus.json\nTestResults/OmittedSize/omitted-size.trx\nscripts/quotation_omitted_size_focus.json\n");
+        RequireScalarValue(inputs, "path", "TestResults/ControllerParity/controller-parity.trx\nscripts/quotation_controller_parity_focus.json\nTestResults/PaginationParity/pagination-parity.trx\nscripts/quotation_pagination_parity_focus.json\nTestResults/OmittedSize/omitted-size.trx\nscripts/quotation_omitted_size_focus.json\nTestResults/ExplicitSize/explicit-size.trx\nscripts/quotation_explicit_size_focus.json\n");
         RequireScalarValue(inputs, "if-no-files-found", "error");
         RequireScalarValue(inputs, "retention-days", "7");
     }

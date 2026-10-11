@@ -1,0 +1,97 @@
+{
+  "expectedCount": 15,
+  "names": [
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: False, size: 100)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: True, size: 100)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: False, size: 101)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: True, size: 101)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: False, size: 250)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: True, size: 250)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: False, size: 251)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: True, size: 251)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: False, size: 2147483647)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: True, size: 2147483647)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Positive_explicit_size_is_not_capped_after_filtering(size: 100)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Positive_explicit_size_is_not_capped_after_filtering(size: 101)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Positive_explicit_size_is_not_capped_after_filtering(size: 250)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Positive_explicit_size_is_not_capped_after_filtering(size: 251)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Positive_explicit_size_is_not_capped_after_filtering(size: 2147483647)"
+  ],
+  "testMethods": {
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: False, size: 100)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: True, size: 100)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: False, size: 101)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: True, size: 101)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: False, size: 250)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: True, size: 250)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: False, size: 251)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: True, size: 251)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: False, size: 2147483647)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Positive_explicit_size_is_not_capped_after_filtering(scoped: True, size: 2147483647)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Positive_explicit_size_is_not_capped_after_filtering(size: 100)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Positive_explicit_size_is_not_capped_after_filtering(size: 101)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Positive_explicit_size_is_not_capped_after_filtering(size: 250)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Positive_explicit_size_is_not_capped_after_filtering(size: 251)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Positive_explicit_size_is_not_capped_after_filtering(size: 2147483647)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Positive_explicit_size_is_not_capped_after_filtering",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    }
+  }
+}

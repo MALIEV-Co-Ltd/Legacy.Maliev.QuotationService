@@ -232,6 +232,65 @@ public sealed class QuotationDraftReadParityHttpTests(DraftReadFixture fixture) 
     }
 
     [Theory]
+    [InlineData(false, 100)]
+    [InlineData(true, 100)]
+    [InlineData(false, 101)]
+    [InlineData(true, 101)]
+    [InlineData(false, 250)]
+    [InlineData(true, 250)]
+    [InlineData(false, 251)]
+    [InlineData(true, 251)]
+    [InlineData(false, int.MaxValue)]
+    [InlineData(true, int.MaxValue)]
+    public async Task Positive_explicit_size_is_not_capped_after_filtering(bool scoped, int size)
+    {
+        const int count = 261;
+        var marker = Guid.NewGuid().ToString("N");
+        var customer = fixture.Customer();
+        var rows = new List<int>();
+        for (var i = 0; i < count; i++) rows.Add((await fixture.SeedAsync(customer, marker)).Id);
+        await fixture.SeedAsync(customer, "unrelated");
+        await fixture.SeedAsync(fixture.Customer(), scoped ? marker : "unrelated");
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        var route = scoped ? $"/quotations/customers/{customer}" : "/quotations";
+        foreach (var descending in new[] { false, true })
+        {
+            var expected = descending ? rows.AsEnumerable().Reverse().ToArray() : rows.ToArray();
+            var sort = descending ? "QuotationId_Descending" : "QuotationId_Ascending";
+            foreach (var index in new int?[] { null, -1, 0, 1, 2, 3, int.MaxValue })
+            {
+                var normalizedIndex = Math.Max(index ?? 1, 1);
+                var offset = ((long)normalizedIndex - 1) * size;
+                var query = $"{route}?search={marker}&sort={sort}&size={size}" + (index is null ? "" : $"&index={index}");
+                using var response = await client.GetAsync(query);
+                if (offset >= count)
+                {
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                    continue;
+                }
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                Assert.Equal(expected.Skip((int)offset).Take(size), Ids(json));
+                Assert.Equal(count, json.RootElement.GetProperty("TotalRecords").GetInt32());
+                Assert.Equal((int)Math.Ceiling(count / (double)size), json.RootElement.GetProperty("TotalPages").GetInt32());
+                Assert.Equal(normalizedIndex, json.RootElement.GetProperty("PageIndex").GetInt32());
+                Assert.Equal(normalizedIndex > 1, json.RootElement.GetProperty("HasPreviousPage").GetBoolean());
+                Assert.Equal(normalizedIndex < (int)Math.Ceiling(count / (double)size), json.RootElement.GetProperty("HasNextPage").GetBoolean());
+                Assert.False(json.RootElement.TryGetProperty("PageSize", out _));
+            }
+        }
+        using var missing = await client.GetAsync($"{route}?search={marker}-missing&size={size}");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        using var anonymous = fixture.Client(app, authenticated: false);
+        using var unauthenticated = await anonymous.GetAsync($"{route}?search={marker}&size={size}");
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
+        using var denied = fixture.Client(app, permissions: false);
+        using var forbidden = await denied.GetAsync($"{route}?search={marker}&size={size}");
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+    }
+
+    [Theory]
     [InlineData(false, int.MaxValue, 250)]
     [InlineData(true, int.MaxValue, 250)]
     [InlineData(false, 1073741825, 4)]
