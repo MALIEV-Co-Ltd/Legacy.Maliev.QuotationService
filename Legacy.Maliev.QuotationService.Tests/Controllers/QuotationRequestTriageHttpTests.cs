@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
@@ -178,6 +179,69 @@ public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture
         Assert.Equal(row.Message, persisted.Message);
         Assert.Equal(row.ModifiedDate, persisted.ModifiedDate);
         Assert.Equal(1, await db.RequestQualificationAudit.CountAsync(x => x.RequestId == row.Id));
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(9L)]
+    [InlineData(-864000000000L)]
+    public async Task Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses(long clockOffsetTicks)
+    {
+        var row = await fixture.SeedAsync(Guid.NewGuid().ToString("N"), audited: true);
+        var originalVersion = Assert.IsType<DateTime>(row.ModifiedDate);
+        var clock = new RequestMutationClock(new DateTimeOffset(DateTime.SpecifyKind(originalVersion.AddTicks(clockOffsetTicks), DateTimeKind.Utc)));
+        await using var originalApp = fixture.App();
+        await using var app = originalApp.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(clock);
+        }));
+        using var client = fixture.Client(app);
+        using var first = Update(row, true, originalVersion);
+        using var firstResponse = await client.SendAsync(first);
+        Assert.Equal(HttpStatusCode.NoContent, firstResponse.StatusCode);
+        using var firstDetail = await client.GetAsync($"/quotationrequests/{row.Id}");
+        Assert.Equal(HttpStatusCode.OK, firstDetail.StatusCode);
+        var firstState = await firstDetail.Content.ReadFromJsonAsync<QuotationRequestResponse>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(firstState);
+        Assert.Equal(originalVersion.AddTicks(10), firstState.ModifiedDate);
+        using var stale = Update(row, false, originalVersion);
+        using var staleResponse = await client.SendAsync(stale);
+        Assert.Equal(HttpStatusCode.Conflict, staleResponse.StatusCode);
+        await using (var db = fixture.Context())
+        {
+            var retained = await db.Requests.AsNoTracking().SingleAsync(x => x.Id == row.Id);
+            Assert.True(retained.Done);
+            Assert.Equal(firstState.ModifiedDate, retained.ModifiedDate);
+        }
+        using var fresh = Update(row, false, firstState.ModifiedDate);
+        using var freshResponse = await client.SendAsync(fresh);
+        Assert.Equal(HttpStatusCode.NoContent, freshResponse.StatusCode);
+        using var replay = Update(row, true, firstState.ModifiedDate);
+        using var replayResponse = await client.SendAsync(replay);
+        Assert.Equal(HttpStatusCode.Conflict, replayResponse.StatusCode);
+        using var finalDetail = await client.GetAsync($"/quotationrequests/{row.Id}");
+        Assert.Equal(HttpStatusCode.OK, finalDetail.StatusCode);
+        var finalState = await finalDetail.Content.ReadFromJsonAsync<QuotationRequestResponse>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(finalState);
+        Assert.Equal(originalVersion.AddTicks(20), finalState.ModifiedDate);
+        await using var verify = fixture.Context();
+        var persisted = await verify.Requests.AsNoTracking().SingleAsync(x => x.Id == row.Id);
+        Assert.False(persisted.Done);
+        Assert.Equal("Reviewed", persisted.Message);
+        Assert.Equal(finalState.ModifiedDate, persisted.ModifiedDate);
+        Assert.Equal(row.JourneyId, persisted.JourneyId);
+        Assert.Equal(row.TransactionId, persisted.TransactionId);
+        Assert.Equal(row.CreatedDate, persisted.CreatedDate);
+        Assert.Equal(row.QualificationState, persisted.QualificationState);
+        Assert.Equal(row.QualificationVersion, persisted.QualificationVersion);
+        Assert.Equal(row.QualificationStateChangedUtc, persisted.QualificationStateChangedUtc);
+        Assert.Equal(1, await verify.RequestQualificationAudit.CountAsync(x => x.RequestId == row.Id));
+    }
+
+    private sealed class RequestMutationClock(DateTimeOffset value) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => value;
     }
 
     [Fact]

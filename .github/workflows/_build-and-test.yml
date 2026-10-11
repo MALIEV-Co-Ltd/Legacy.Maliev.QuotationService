@@ -137,6 +137,31 @@ jobs:
           solution: Legacy.Maliev.QuotationService.slnx
           use-local-maliev-dependencies: 'true'
 
+      - name: Verify ordinary controller parity result controls
+        shell: bash
+        run: python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_controller_parity_results.py'
+
+      - name: Prove ordinary controller parity independently
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~QuotationOrderItemMutationVersionHttpTests|FullyQualifiedName~Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses|FullyQualifiedName~QuotationOrderItemCollectionContractTests|FullyQualifiedName~QuotationOrderItemCollectionHttpTests' \
+            --results-directory TestResults/ControllerParity --logger 'trx;LogFileName=controller-parity.trx'
+          python3 -B scripts/check_quotation_controller_parity_results.py TestResults/ControllerParity/controller-parity.trx
+
+      - name: Retain ordinary controller parity evidence
+        if: always() && hashFiles('TestResults/ControllerParity/controller-parity.trx') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: quotation-controller-parity-${{ github.sha }}
+          path: |
+            TestResults/ControllerParity/controller-parity.trx
+            scripts/quotation_controller_parity_focus.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Prove coverage gate failure and success behavior
         shell: bash
         run: |
