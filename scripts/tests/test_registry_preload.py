@@ -386,6 +386,56 @@ class DockerDiagnostics(unittest.TestCase):
    if not timeout:
     self.assertEqual(entry['failureDiagnostic']['capturedBytes'],4096);self.assertTrue(entry['failureDiagnostic']['truncated'])
     self.assertEqual(entry['cliResource']['startTicks'],123);self.assertEqual(entry['cliResource']['executable'],'/usr/bin/docker')
+class MutationOutcomeControls(unittest.TestCase):
+ def scenario(self,kind,present=False,custody=False):
+  import tempfile,subprocess
+  row=json.loads((R/'image-pins.json').read_bytes())[0]
+  if kind=='rejection':primary=p.command_failure(['docker','pull',row['mirror']],1,b'toomanyrequests',15)
+  elif kind=='killed':primary=p.command_failure(['docker','pull',row['mirror']],-9,b'',0)
+  elif kind=='timeout':primary=subprocess.TimeoutExpired(['docker','pull'],1)
+  else:primary=RuntimeError('mutation interrupted')
+  if kind!='unknown':
+   primary.owned_cli_resource={'exitConfirmed':True,'unresolvedCustody':custody,'terminalReturnCode':1 if kind=='rejection' else -9 if kind=='killed' else 0 if kind=='cleanup-failure' else -15,'executionOutcome':'completed' if kind in ('rejection','cleanup-failure') else 'interrupted'}
+  def run(args,required=True):
+   if args[1]=='pull':raise primary
+   if args[1:3]==['image','inspect']:return json.dumps([{'Id':row['configDigest']}]).encode() if present else None
+   if args[1:3]==['image','rm']:self.fail('No removal expected in this absent-reference scenario')
+   return b''
+  with tempfile.TemporaryDirectory() as root:
+   path=Path(root)/'journal.json';data={'createdTags':[]}
+   def save():p.atomic_save(path,data)
+   with self.assertRaises(type(primary)) as caught:p.mutate(['docker','pull',row['mirror']],row['mirror'],row,run,{'createdTags':data['createdTags'],'write':save})
+   self.assertIs(caught.exception,primary)
+   entry=json.loads(path.read_bytes())['createdTags'][0]
+   self.assertFalse(entry['commandSettled']);self.assertEqual(entry['daemonSettlementAuthority'],'unproved')
+   self.assertIn('external confirmation required',entry['unresolvedLease'])
+   self.assertEqual(entry['state'],'exact-reference-observed' if present else 'absence-unsettled')
+   if not present:
+    with self.assertRaises(ExceptionGroup):p.cleanup(data,run,save)
+    after=json.loads(path.read_bytes())['createdTags'][0]
+    self.assertEqual(after['cliOutcome'],entry['cliOutcome']);self.assertTrue(after['unresolvedDaemonOperation'])
+   return entry['cliOutcome']
+ def test_terminal_registry_rejection_retains_daemon_hold(self):
+  self.assertEqual(self.scenario('rejection'),{'execution':'returned-failure','terminalReturnCode':1,'exitConfirmed':True,'custodyResolved':True})
+ def test_timeout_exit_after_recovery_is_not_normal_completion(self):
+  self.assertEqual(self.scenario('timeout')['execution'],'interrupted');self.assertEqual(self.scenario('timeout')['terminalReturnCode'],-15)
+ def test_killed_cli_keeps_daemon_hold(self):self.assertEqual(self.scenario('killed')['execution'],'interrupted')
+ def test_partial_mutation_keeps_unproved_authority(self):self.assertEqual(self.scenario('rejection',present=True)['execution'],'returned-failure')
+ def test_uncertain_cli_cleanup_is_separate_from_exit(self):
+  outcome=self.scenario('rejection',custody=True);self.assertTrue(outcome['exitConfirmed']);self.assertFalse(outcome['custodyResolved'])
+ def test_completed_command_with_failed_custody_does_not_grant_authority(self):
+  outcome=self.scenario('cleanup-failure',custody=True);self.assertEqual(outcome['execution'],'completed-custody-unresolved');self.assertEqual(outcome['terminalReturnCode'],0);self.assertFalse(outcome['custodyResolved'])
+ def test_unknown_failure_does_not_invent_terminal_status(self):
+  self.assertEqual(self.scenario('unknown'),{'execution':'not-observed','terminalReturnCode':None,'exitConfirmed':None,'custodyResolved':None})
+ def test_success_outcome_survives_later_reconciliation_failure(self):
+  row=json.loads((R/'image-pins.json').read_bytes())[0];data={'createdTags':[]};primary=RuntimeError('inspect unavailable')
+  def run(args,required=True):
+   if args[1]=='pull':return b''
+   raise primary
+  with self.assertRaises(RuntimeError) as caught:p.mutate(['docker','pull',row['mirror']],row['mirror'],row,run,{'createdTags':data['createdTags'],'write':lambda:None})
+  self.assertIs(caught.exception,primary);entry=data['createdTags'][0]
+  self.assertEqual(entry['cliOutcome']['execution'],'returned-success');self.assertEqual(entry['daemonSettlementAuthority'],'successful-cli-completion')
+  self.assertTrue(entry['commandSettled']);self.assertEqual(entry['state'],'intent')
 class LiveCaptureControls(unittest.TestCase):
  def observe_identity(self,ticks=(123,123),executable='/usr/bin/docker',oversize=False):
   import io,types
@@ -445,6 +495,7 @@ class LiveCaptureControls(unittest.TestCase):
   with patch('os.name','posix'),patch.object(p.subprocess,'Popen',return_value=child),patch.object(p,'observe_cli_identity',side_effect=FileNotFoundError('Exited executable')),patch.object(selectors,'DefaultSelector',return_value=Selector()),patch('os.set_blocking'):
    result,total=p.run_docker_cli(['docker','inspect'],6)
   self.assertEqual(result.returncode,7);self.assertEqual(total,0)
+  self.assertEqual(result.owned_cli_resource['executionOutcome'],'completed');self.assertEqual(result.owned_cli_resource['terminalReturnCode'],7)
   self.assertTrue(result.owned_cli_resource['exitConfirmed']);self.assertFalse(result.owned_cli_resource['unresolvedCustody'])
   self.assertTrue(result.owned_cli_resource['identityUnavailableAfterExit']);self.assertIsNone(result.owned_cli_resource['startTicks'])
   self.assertTrue(child.stdout.closed and child.stderr.closed)
@@ -495,6 +546,8 @@ class LiveCaptureControls(unittest.TestCase):
    with self.assertRaises(subprocess.TimeoutExpired if mode=='deadline' else OSError) as caught:p.run_docker_cli(['docker','pull',p.RYUK],5)
   if mode!='deadline':self.assertIs(caught.exception,primary)
   else:self.assertTrue(caught.exception.__notes__)
+  self.assertEqual(caught.exception.owned_cli_resource['executionOutcome'],'interrupted')
+  if mode=='grace-timeout':self.assertEqual(caught.exception.owned_cli_resource['terminalReturnCode'],-9)
   self.assertEqual(closed,['stdout','stderr'] if mode in ('identity-fault','identity-missing') else ['selector','stdout','stderr']);self.assertEqual(events,[] if mode in ('budget-expiry','birth-drift','exe-drift','identity-fault','identity-missing') else ['terminate','kill'] if mode in ('grace-timeout','kill-failure') else ['terminate'])
   if mode in ('birth-drift','exe-drift','kill-drift','identity-fault','identity-missing'):
    resource=caught.exception.owned_cli_resource
@@ -535,6 +588,7 @@ class LiveCaptureControls(unittest.TestCase):
   with patch.object(p.subprocess,'Popen',side_effect=launch),patch.object(p,'observe_cli_identity',side_effect=observation):
    result,total=p.run_docker_cli(['docker','inspect'],6)
   self.assertEqual((result.returncode,result.stdout,result.stderr,total),(code,b'ok',b'error',5))
+  self.assertEqual(result.owned_cli_resource['executionOutcome'],'completed');self.assertEqual(result.owned_cli_resource['terminalReturnCode'],code)
   self.assertTrue(result.owned_cli_resource['exitConfirmed']);self.assertFalse(result.owned_cli_resource['unresolvedCustody'])
   if force_race:self.assertTrue(result.owned_cli_resource['identityUnavailableAfterExit'])
   self.assertTrue(all(child.poll() is not None and child.stdout.closed and child.stderr.closed for child in children))
