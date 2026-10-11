@@ -405,7 +405,8 @@ public sealed partial class QuotationRepository(
     public async Task<UpdateResult> UpdateOrderItemAsync(int id, UpsertQuotationOrderItemRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken)
     {
         var entity = await quotations.OrderItems.FindAsync([id], cancellationToken); if (entity is null) return UpdateResult.NotFound; if (expectedModifiedDate is not null) quotations.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified);
-        entity.QuotationId = request.QuotationId; entity.OrderId = request.OrderId; entity.Description = request.Description; entity.Quantity = request.Quantity; entity.UnitPrice = request.UnitPrice; entity.ModifiedDate = Now();
+        var nextVersion = NextDecisionVersion(Now(), entity.ModifiedDate ?? entity.CreatedDate);
+        entity.QuotationId = request.QuotationId; entity.OrderId = request.OrderId; entity.Description = request.Description; entity.Quantity = request.Quantity; entity.UnitPrice = request.UnitPrice; entity.ModifiedDate = nextVersion;
         try { await quotations.SaveChangesAsync(cancellationToken); return UpdateResult.Updated; } catch (DbUpdateConcurrencyException) { return UpdateResult.Conflict; }
     }
 
@@ -654,7 +655,8 @@ public sealed partial class QuotationRepository(
             var entity = await attempt.Requests.FindAsync([id], token);
             if (entity is null) return (UpdateResult.NotFound, false);
             if (expectedModifiedDate is not null) attempt.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified);
-            Map(entity, request).ModifiedDate = Now();
+            var nextVersion = NextDecisionVersion(Now(), entity.ModifiedDate ?? entity.CreatedDate);
+            Map(entity, request).ModifiedDate = nextVersion;
             try { await attempt.SaveChangesAsync(token); return (UpdateResult.Updated, true); }
             catch (DbUpdateConcurrencyException) { return (UpdateResult.Conflict, false); }
         }, cancellationToken);
