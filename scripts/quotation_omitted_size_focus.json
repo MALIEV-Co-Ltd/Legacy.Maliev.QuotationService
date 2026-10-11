@@ -1,0 +1,79 @@
+{
+  "expectedCount": 12,
+  "names": [
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: False, count: 0)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: False, count: 1)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: False, count: 261)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: False, count: 51)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: True, count: 0)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: True, count: 1)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: True, count: 261)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: True, count: 51)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(count: 0)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(count: 1)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(count: 261)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(count: 51)"
+  ],
+  "testMethods": {
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: False, count: 0)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Omitted_size_uses_filtered_count_without_default_or_cap",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: False, count: 1)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Omitted_size_uses_filtered_count_without_default_or_cap",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: False, count: 261)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Omitted_size_uses_filtered_count_without_default_or_cap",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: False, count: 51)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Omitted_size_uses_filtered_count_without_default_or_cap",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: True, count: 0)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Omitted_size_uses_filtered_count_without_default_or_cap",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: True, count: 1)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Omitted_size_uses_filtered_count_without_default_or_cap",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: True, count: 261)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Omitted_size_uses_filtered_count_without_default_or_cap",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(scoped: True, count: 51)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Omitted_size_uses_filtered_count_without_default_or_cap",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(count: 0)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Omitted_size_uses_filtered_count_without_default_or_cap",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(count: 1)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Omitted_size_uses_filtered_count_without_default_or_cap",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(count: 261)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Omitted_size_uses_filtered_count_without_default_or_cap",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Omitted_size_uses_filtered_count_without_default_or_cap(count: 51)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Omitted_size_uses_filtered_count_without_default_or_cap",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    }
+  }
+}

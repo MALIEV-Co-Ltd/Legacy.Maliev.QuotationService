@@ -180,6 +180,58 @@ public sealed class QuotationDraftReadParityHttpTests(DraftReadFixture fixture) 
     }
 
     [Theory]
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    [InlineData(false, 1)]
+    [InlineData(true, 1)]
+    [InlineData(false, 51)]
+    [InlineData(true, 51)]
+    [InlineData(false, 261)]
+    [InlineData(true, 261)]
+    public async Task Omitted_size_uses_filtered_count_without_default_or_cap(bool scoped, int count)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        var customer = fixture.Customer();
+        var rows = new List<int>();
+        for (var i = 0; i < count; i++) rows.Add((await fixture.SeedAsync(customer, marker)).Id);
+        await fixture.SeedAsync(customer, "unrelated");
+        await fixture.SeedAsync(fixture.Customer(), scoped ? marker : "unrelated");
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        var route = scoped ? $"/quotations/customers/{customer}" : "/quotations";
+        foreach (var descending in new[] { false, true })
+        {
+            var expected = descending ? rows.AsEnumerable().Reverse().ToArray() : rows.ToArray();
+            var sort = descending ? "QuotationId_Descending" : "QuotationId_Ascending";
+            foreach (var index in new int?[] { null, -1, 0, 1, 2, int.MaxValue })
+            {
+                var query = $"{route}?search={marker}&sort={sort}" + (index is null ? "" : $"&index={index}");
+                using var response = await client.GetAsync(query);
+                if (count == 0 || index > 1)
+                {
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                    continue;
+                }
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                Assert.Equal(expected, Ids(json));
+                Assert.Equal(count, json.RootElement.GetProperty("TotalRecords").GetInt32());
+                Assert.Equal(1, json.RootElement.GetProperty("TotalPages").GetInt32());
+                Assert.Equal(1, json.RootElement.GetProperty("PageIndex").GetInt32());
+                Assert.False(json.RootElement.TryGetProperty("PageSize", out _));
+            }
+            using var explicitSize = await client.GetAsync($"{route}?search={marker}&sort={sort}&size=50&index=1");
+            Assert.Equal(count == 0 ? HttpStatusCode.NotFound : HttpStatusCode.OK, explicitSize.StatusCode);
+            if (count == 0) continue;
+            using var explicitJson = JsonDocument.Parse(await explicitSize.Content.ReadAsStringAsync());
+            Assert.Equal(expected.Take(50), Ids(explicitJson));
+            Assert.Equal((int)Math.Ceiling(count / 50d), explicitJson.RootElement.GetProperty("TotalPages").GetInt32());
+        }
+        using var missing = await client.GetAsync($"{route}?search={marker}-missing");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    [Theory]
     [InlineData(false, int.MaxValue, 250)]
     [InlineData(true, int.MaxValue, 250)]
     [InlineData(false, 1073741825, 4)]
