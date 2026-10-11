@@ -1095,7 +1095,19 @@ public sealed partial class QuotationRepository(
     }
     private static bool IsSha256(string value) =>
         value.Length == 64 && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
-    private static async Task<PaginatedResponse<T>?> PageAsync<T>(IQueryable<T> query, int pageIndex, int pageSize, CancellationToken cancellationToken) { pageIndex = Math.Max(pageIndex, 1); pageSize = Math.Clamp(pageSize, 1, 250); var total = await query.CountAsync(cancellationToken); if (total == 0) return null; var items = await query.Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken); return new(items, pageIndex, (int)Math.Ceiling(total / (double)pageSize), total); }
+    private static async Task<PaginatedResponse<T>?> PageAsync<T>(IQueryable<T> query, int pageIndex, int pageSize, CancellationToken cancellationToken)
+    {
+        pageIndex = Math.Max(pageIndex, 1);
+        pageSize = Math.Clamp(pageSize, 1, 250);
+        var total = await query.CountAsync(cancellationToken);
+        if (total == 0) return null;
+        var totalPages = (int)Math.Ceiling(total / (double)pageSize);
+        var offset = ((long)pageIndex - 1) * pageSize;
+        // Keep the existing empty-page envelope without overflowing PostgreSQL's offset input.
+        if (offset >= total) return new([], pageIndex, totalPages, total);
+        var items = await query.Skip((int)offset).Take(pageSize).ToListAsync(cancellationToken);
+        return new(items, pageIndex, totalPages, total);
+    }
     private static Quotation Map(Quotation x, UpsertQuotationRequest r) { x.CustomerId = r.CustomerId; x.EmployeeId = r.EmployeeId; x.InvoiceId = r.InvoiceId; x.Period = r.Period; x.ExpirationDate = r.ExpirationDate; x.Subtotal = r.Subtotal; x.Vat = r.Vat; x.Total = r.Total; x.WithholdingTax = r.WithholdingTax; x.CurrencyId = r.CurrencyId; x.Comment = r.Comment; x.Fob = r.Fob; x.ShippedVia = r.ShippedVia; x.Terms = r.Terms; x.Accepted = r.Accepted; return x; }
     private static QuotationRequest Map(QuotationRequest x, UpsertQuotationRequestRequest r) { x.FirstName = r.FirstName; x.LastName = r.LastName; x.Email = r.Email; x.TelephoneNumber = r.TelephoneNumber; x.Country = r.Country; x.CompanyName = r.CompanyName; x.TaxIdentification = r.TaxIdentification; x.Message = r.Message; x.InternalComment = r.InternalComment; x.Done = r.Done; return x; }
     private static QuotationResponse ToResponse(Quotation x) => new(x.Id, x.CustomerId, x.EmployeeId, x.InvoiceId, x.Period, x.ExpirationDate, x.Subtotal, x.Vat, x.Total, x.WithholdingTax, x.QuotedAmount, x.CurrencyId, x.Comment, x.Fob, x.ShippedVia, x.Terms, x.Accepted, x.CreatedDate, x.ModifiedDate);
