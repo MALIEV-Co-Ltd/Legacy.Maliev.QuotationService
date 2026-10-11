@@ -28,7 +28,7 @@ public sealed class QuotationsController(
     {
         if (customerId is null && !await HasAdministrativeReadAsync()) return Forbid();
         var value = await service.GetQuotationsAsync(customerId, sort, search, Math.Max(index ?? 1, 1), Math.Clamp(size ?? 50, 1, customerId is null ? 250 : 100), cancellationToken);
-        return value is null ? NotFound() : value;
+        return value is null || value.Items.Count == 0 ? NotFound() : value;
     }
 
     [HttpGet("{quotationId:int}", Name = "GetQuotation"), RequirePermission(QuotationPermissions.CustomerQuotationsRead, ResourcePathTemplate = "/quotations/{quotationId}")]

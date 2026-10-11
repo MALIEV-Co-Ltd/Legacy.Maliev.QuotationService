@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
@@ -26,6 +27,58 @@ namespace Legacy.Maliev.QuotationService.Tests.Controllers;
 
 public sealed class QuotationDraftReadParityHttpTests(DraftReadFixture fixture) : IClassFixture<DraftReadFixture>
 {
+    [Fact]
+    public async Task Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages()
+    {
+        await using var existing = fixture.Context();
+        var connection = new NpgsqlConnectionStringBuilder(existing.Database.GetDbConnection().ConnectionString)
+        {
+            Database = "empty_page_" + Guid.NewGuid().ToString("N")
+        }.ConnectionString;
+        var options = new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(connection).Options;
+        await using var database = new QuotationDbContext(options);
+        Assert.False(await database.Database.CanConnectAsync());
+        Exception? primaryFailure = null;
+        try
+        {
+            await database.Database.MigrateAsync();
+            await using (var original = fixture.App())
+            await using (var app = original.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<QuotationDbContext>>();
+                services.AddSingleton(options);
+            })))
+            {
+                using var client = fixture.Client(app);
+                using (var response = await client.GetAsync("/quotations"))
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                using (var response = await client.GetAsync("/quotations?search=absent"))
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                using (var response = await client.GetAsync("/quotations/customers/41"))
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                using (var response = await client.GetAsync("/quotations?index=2147483647&size=250"))
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            }
+        }
+        catch (Exception error)
+        {
+            primaryFailure = error;
+            throw;
+        }
+        finally
+        {
+            try
+            {
+                await database.Database.EnsureDeletedAsync();
+                Assert.False(await database.Database.CanConnectAsync());
+            }
+            catch (Exception cleanup) when (primaryFailure is not null)
+            {
+                primaryFailure.Data["EmptyPageDatabaseCleanupFailure"] = cleanup;
+            }
+        }
+    }
+
     [Theory]
     [InlineData("%", "ordinary")]
     [InlineData("_", "ordinary")]
@@ -124,6 +177,35 @@ public sealed class QuotationDraftReadParityHttpTests(DraftReadFixture fixture) 
         Assert.Equal(1, json.RootElement.GetProperty("TotalPages").GetInt32());
         Assert.False(json.RootElement.TryGetProperty("PageSize", out _));
         Assert.False(json.RootElement.GetProperty("Items")[0].TryGetProperty("InvoiceId", out _));
+    }
+
+    [Theory]
+    [InlineData(false, int.MaxValue, 250)]
+    [InlineData(true, int.MaxValue, 250)]
+    [InlineData(false, 1073741825, 4)]
+    [InlineData(true, 1073741825, 4)]
+    [InlineData(false, int.MaxValue, 2)]
+    [InlineData(true, int.MaxValue, 2)]
+    public async Task Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping(bool scoped, int pageIndex, int size)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        var customer = fixture.Customer();
+        var first = await fixture.SeedAsync(customer, marker);
+        var second = await fixture.SeedAsync(customer, marker);
+        var outside = await fixture.SeedAsync(fixture.Customer(), marker);
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        var route = scoped ? $"/quotations/customers/{customer}" : "/quotations";
+        using var response = await client.GetAsync($"{route}?search={marker}&index={pageIndex}&size={size}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var total = scoped ? 2 : 3;
+        using var missing = await client.GetAsync($"{route}?search={marker}-missing&index={pageIndex}&size={size}");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        using var firstPage = await client.GetAsync($"{route}?search={marker}&index=1&size=250");
+        Assert.Equal(HttpStatusCode.OK, firstPage.StatusCode);
+        using var full = JsonDocument.Parse(await firstPage.Content.ReadAsStringAsync());
+        Assert.Equal(scoped ? new[] { first.Id, second.Id } : new[] { first.Id, second.Id, outside.Id }, Ids(full));
+        Assert.Equal(total, full.RootElement.GetProperty("TotalRecords").GetInt32());
     }
 
     [Theory]

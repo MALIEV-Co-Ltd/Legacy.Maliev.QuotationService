@@ -139,7 +139,9 @@ jobs:
 
       - name: Verify ordinary controller parity result controls
         shell: bash
-        run: python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_controller_parity_results.py'
+        run: |
+          python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_controller_parity_results.py'
+          python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_pagination_parity_results.py'
 
       - name: Prove ordinary controller parity independently
         timeout-minutes: 5
@@ -150,6 +152,11 @@ jobs:
             --filter 'FullyQualifiedName~QuotationOrderItemMutationVersionHttpTests|FullyQualifiedName~Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses|FullyQualifiedName~QuotationOrderItemCollectionContractTests|FullyQualifiedName~QuotationOrderItemCollectionHttpTests' \
             --results-directory TestResults/ControllerParity --logger 'trx;LogFileName=controller-parity.trx'
           python3 -B scripts/check_quotation_controller_parity_results.py TestResults/ControllerParity/controller-parity.trx
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages|FullyQualifiedName~Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping|FullyQualifiedName~Distant_page_does_not_overflow_or_replay_first_page_rows|FullyQualifiedName~Numeric_search_and_page_bounds_preserve_current_consumer_contract' \
+            --results-directory TestResults/PaginationParity --logger 'trx;LogFileName=pagination-parity.trx'
+          python3 -B scripts/check_quotation_pagination_parity_results.py TestResults/PaginationParity/pagination-parity.trx
 
       - name: Retain ordinary controller parity evidence
         if: always() && hashFiles('TestResults/ControllerParity/controller-parity.trx') != ''
@@ -159,6 +166,8 @@ jobs:
           path: |
             TestResults/ControllerParity/controller-parity.trx
             scripts/quotation_controller_parity_focus.json
+            TestResults/PaginationParity/pagination-parity.trx
+            scripts/quotation_pagination_parity_focus.json
           if-no-files-found: error
           retention-days: 7
 

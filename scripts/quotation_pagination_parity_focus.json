@@ -1,0 +1,79 @@
+{
+  "expectedCount": 12,
+  "names": [
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping(scoped: False, pageIndex: 1073741825, size: 4)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping(scoped: False, pageIndex: 2147483647, size: 2)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping(scoped: False, pageIndex: 2147483647, size: 250)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping(scoped: True, pageIndex: 1073741825, size: 4)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping(scoped: True, pageIndex: 2147483647, size: 2)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping(scoped: True, pageIndex: 2147483647, size: 250)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Distant_page_does_not_overflow_or_replay_first_page_rows(pageIndex: 1073741825, size: 4)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Distant_page_does_not_overflow_or_replay_first_page_rows(pageIndex: 2147483647, size: 2)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Distant_page_does_not_overflow_or_replay_first_page_rows(pageIndex: 2147483647, size: 250)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Numeric_search_and_page_bounds_preserve_current_consumer_contract"
+  ],
+  "testMethods": {
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping(scoped: False, pageIndex: 1073741825, size: 4)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping(scoped: False, pageIndex: 2147483647, size: 2)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping(scoped: False, pageIndex: 2147483647, size: 250)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping(scoped: True, pageIndex: 1073741825, size: 4)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping(scoped: True, pageIndex: 2147483647, size: 2)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping(scoped: True, pageIndex: 2147483647, size: 250)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests.Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationDraftReadParityHttpTests",
+      "name": "Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Distant_page_does_not_overflow_or_replay_first_page_rows(pageIndex: 1073741825, size: 4)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Distant_page_does_not_overflow_or_replay_first_page_rows",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Distant_page_does_not_overflow_or_replay_first_page_rows(pageIndex: 2147483647, size: 2)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Distant_page_does_not_overflow_or_replay_first_page_rows",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Distant_page_does_not_overflow_or_replay_first_page_rows(pageIndex: 2147483647, size: 250)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Distant_page_does_not_overflow_or_replay_first_page_rows",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Numeric_search_and_page_bounds_preserve_current_consumer_contract": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Numeric_search_and_page_bounds_preserve_current_consumer_contract",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    }
+  }
+}

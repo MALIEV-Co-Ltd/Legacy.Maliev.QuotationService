@@ -338,6 +338,13 @@ public sealed class WorkflowContractTests
     [InlineData("artifact-name")]
     [InlineData("missing-test-log")]
     [InlineData("extra-dotnet")]
+    [InlineData("pagination-controls")]
+    [InlineData("pagination-filter")]
+    [InlineData("pagination-checker")]
+    [InlineData("pagination-log")]
+    [InlineData("pagination-upload-trx")]
+    [InlineData("pagination-upload-manifest")]
+    [InlineData("pagination-ignore-failure")]
     public void BuildAndTest_RejectsOrdinaryControllerParityBypass(string mutant)
     {
         WorkflowContractValidator.Validate(Workflow);
@@ -353,6 +360,34 @@ public sealed class WorkflowContractTests
         var inputs = Assert.IsType<YamlMappingNode>(ReadNode(upload, "with"));
         switch (mutant)
         {
+            case "pagination-controls":
+                controls.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(controls, "run")
+                    .Replace("test_quotation_pagination_parity_results.py", "test_unreviewed_results.py", StringComparison.Ordinal));
+                break;
+            case "pagination-filter":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("FullyQualifiedName~Distant_page_does_not_overflow_or_replay_first_page_rows", "FullyQualifiedName~UnreviewedCases", StringComparison.Ordinal));
+                break;
+            case "pagination-checker":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("python3 -B scripts/check_quotation_pagination_parity_results.py", "echo unchecked", StringComparison.Ordinal));
+                break;
+            case "pagination-log":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("pagination-parity.trx", "unreviewed.trx", StringComparison.Ordinal));
+                break;
+            case "pagination-upload-trx":
+                inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode(ReadScalar(inputs, "path")
+                    .Replace("TestResults/PaginationParity/pagination-parity.trx\n", "", StringComparison.Ordinal));
+                break;
+            case "pagination-upload-manifest":
+                inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode(ReadScalar(inputs, "path")
+                    .Replace("scripts/quotation_pagination_parity_focus.json\n", "", StringComparison.Ordinal));
+                break;
+            case "pagination-ignore-failure":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("python3 -B scripts/check_quotation_pagination_parity_results.py TestResults/PaginationParity/pagination-parity.trx", "python3 -B scripts/check_quotation_pagination_parity_results.py TestResults/PaginationParity/pagination-parity.trx || true", StringComparison.Ordinal));
+                break;
             case "controls": controls.Children[new YamlScalarNode("run")] = new YamlScalarNode("echo controls skipped"); break;
             case "filter":
                 focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
@@ -472,13 +507,21 @@ internal static partial class WorkflowContractValidator
 
     private const string CheckoutAction = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
     private const string SharedValidationAction = "MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@53892c362a30130f582c40da7525e44f11474e8e";
-    private const string ControllerParityProof = "python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_controller_parity_results.py'";
+    private const string ControllerParityProof = """
+        python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_controller_parity_results.py'
+        python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_pagination_parity_results.py'
+        """;
     private const string ControllerParityCollection = """
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
           --filter 'FullyQualifiedName~QuotationOrderItemMutationVersionHttpTests|FullyQualifiedName~Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses|FullyQualifiedName~QuotationOrderItemCollectionContractTests|FullyQualifiedName~QuotationOrderItemCollectionHttpTests' \
           --results-directory TestResults/ControllerParity --logger 'trx;LogFileName=controller-parity.trx'
         python3 -B scripts/check_quotation_controller_parity_results.py TestResults/ControllerParity/controller-parity.trx
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages|FullyQualifiedName~Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping|FullyQualifiedName~Distant_page_does_not_overflow_or_replay_first_page_rows|FullyQualifiedName~Numeric_search_and_page_bounds_preserve_current_consumer_contract' \
+          --results-directory TestResults/PaginationParity --logger 'trx;LogFileName=pagination-parity.trx'
+        python3 -B scripts/check_quotation_pagination_parity_results.py TestResults/PaginationParity/pagination-parity.trx
         """;
     private const string CoverageProof = """
         python3 -m unittest discover -s scripts/tests -p 'test_*.py'
@@ -665,7 +708,7 @@ internal static partial class WorkflowContractValidator
             .SetEquals(["name", "path", "if-no-files-found", "retention-days"]))
             throw new InvalidOperationException("Controller parity evidence requires exactly four reviewed inputs.");
         RequireScalarValue(inputs, "name", "quotation-controller-parity-${{ github.sha }}");
-        RequireScalarValue(inputs, "path", "TestResults/ControllerParity/controller-parity.trx\nscripts/quotation_controller_parity_focus.json\n");
+        RequireScalarValue(inputs, "path", "TestResults/ControllerParity/controller-parity.trx\nscripts/quotation_controller_parity_focus.json\nTestResults/PaginationParity/pagination-parity.trx\nscripts/quotation_pagination_parity_focus.json\n");
         RequireScalarValue(inputs, "if-no-files-found", "error");
         RequireScalarValue(inputs, "retention-days", "7");
     }

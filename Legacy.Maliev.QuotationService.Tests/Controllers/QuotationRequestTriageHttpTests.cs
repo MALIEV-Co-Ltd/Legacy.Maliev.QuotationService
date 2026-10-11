@@ -33,6 +33,56 @@ namespace Legacy.Maliev.QuotationService.Tests.Controllers;
 /// <summary>Normal JWT/Production HTTP lifecycle; real databases, Redis and IAM client with controlled remote IAM HTTP only.</summary>
 public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture) : IClassFixture<RequestTriageFixture>
 {
+    [Fact]
+    public async Task Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages()
+    {
+        await using var existing = fixture.Context();
+        var connection = new NpgsqlConnectionStringBuilder(existing.Database.GetDbConnection().ConnectionString)
+        {
+            Database = "empty_page_" + Guid.NewGuid().ToString("N")
+        }.ConnectionString;
+        var options = new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(connection).Options;
+        await using var database = new QuotationRequestDbContext(options);
+        Assert.False(await database.Database.CanConnectAsync());
+        Exception? primaryFailure = null;
+        try
+        {
+            await database.Database.MigrateAsync();
+            await using (var original = fixture.App())
+            await using (var app = original.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<QuotationRequestDbContext>>();
+                services.AddSingleton(options);
+            })))
+            {
+                using var client = fixture.Client(app);
+                using (var response = await client.GetAsync("/quotationrequests"))
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                using (var response = await client.GetAsync("/quotationrequests?search=absent"))
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                using (var response = await client.GetAsync("/quotationrequests?index=2147483647&size=250"))
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            }
+        }
+        catch (Exception error)
+        {
+            primaryFailure = error;
+            throw;
+        }
+        finally
+        {
+            try
+            {
+                await database.Database.EnsureDeletedAsync();
+                Assert.False(await database.Database.CanConnectAsync());
+            }
+            catch (Exception cleanup) when (primaryFailure is not null)
+            {
+                primaryFailure.Data["EmptyPageDatabaseCleanupFailure"] = cleanup;
+            }
+        }
+    }
+
     [Theory]
     [InlineData("%")]
     [InlineData("_")]
@@ -113,15 +163,35 @@ public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture
         Assert.Equal(1, json.RootElement.GetProperty("PageIndex").GetInt32());
         Assert.Equal(1, json.RootElement.GetProperty("TotalPages").GetInt32());
         using var outOfRange = await client.GetAsync($"/quotationrequests?search={row.Id}&index=2&size=1");
-        // Characterization only: source returns404; current Intranet accepts either empty-page form.
-        Assert.Equal(HttpStatusCode.OK, outOfRange.StatusCode);
-        using var empty = await JsonAsync(outOfRange);
-        Assert.Empty(Ids(empty));
-        Assert.Equal(1, empty.RootElement.GetProperty("TotalRecords").GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound, outOfRange.StatusCode);
         using var missing = await client.GetAsync("/quotationrequests?search=" + Guid.NewGuid().ToString("N"));
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
         using var missingDetail = await client.GetAsync("/quotationrequests/2147483647");
         Assert.Equal(HttpStatusCode.NotFound, missingDetail.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(int.MaxValue, 250)]
+    [InlineData(1073741825, 4)]
+    [InlineData(int.MaxValue, 2)]
+    public async Task Distant_page_does_not_overflow_or_replay_first_page_rows(int pageIndex, int size)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        var first = await fixture.SeedAsync(marker);
+        var second = await fixture.SeedAsync(marker);
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        using var response = await client.GetAsync($"/quotationrequests?search={marker}&index={pageIndex}&size={size}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        using var missing = await client.GetAsync($"/quotationrequests?search={marker}-missing&index={pageIndex}&size={size}");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        using var firstPage = await client.GetAsync($"/quotationrequests?search={marker}&index=1&size=250");
+        Assert.Equal(HttpStatusCode.OK, firstPage.StatusCode);
+        using var full = await JsonAsync(firstPage);
+        Assert.Equal([first.Id, second.Id], Ids(full));
+        Assert.Equal(2, full.RootElement.GetProperty("TotalRecords").GetInt32());
+        Assert.Equal(first.JourneyId, full.RootElement.GetProperty("Items")[0].GetProperty("JourneyId").GetGuid());
+        Assert.Equal(first.TransactionId, full.RootElement.GetProperty("Items")[0].GetProperty("TransactionId").GetString());
     }
 
     [Theory]
