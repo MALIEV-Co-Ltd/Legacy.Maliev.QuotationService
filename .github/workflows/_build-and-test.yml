@@ -142,6 +142,7 @@ jobs:
         run: |
           python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_controller_parity_results.py'
           python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_pagination_parity_results.py'
+          python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_omitted_size_results.py'
 
       - name: Prove ordinary controller parity independently
         timeout-minutes: 5
@@ -157,6 +158,11 @@ jobs:
             --filter 'FullyQualifiedName~Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages|FullyQualifiedName~Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping|FullyQualifiedName~Distant_page_does_not_overflow_or_replay_first_page_rows|FullyQualifiedName~Numeric_search_and_page_bounds_preserve_current_consumer_contract' \
             --results-directory TestResults/PaginationParity --logger 'trx;LogFileName=pagination-parity.trx'
           python3 -B scripts/check_quotation_pagination_parity_results.py TestResults/PaginationParity/pagination-parity.trx
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~Omitted_size_uses_filtered_count_without_default_or_cap' \
+            --results-directory TestResults/OmittedSize --logger 'trx;LogFileName=omitted-size.trx'
+          python3 -B scripts/check_quotation_omitted_size_results.py TestResults/OmittedSize/omitted-size.trx
 
       - name: Retain ordinary controller parity evidence
         if: always() && hashFiles('TestResults/ControllerParity/controller-parity.trx') != ''
@@ -168,6 +174,8 @@ jobs:
             scripts/quotation_controller_parity_focus.json
             TestResults/PaginationParity/pagination-parity.trx
             scripts/quotation_pagination_parity_focus.json
+            TestResults/OmittedSize/omitted-size.trx
+            scripts/quotation_omitted_size_focus.json
           if-no-files-found: error
           retention-days: 7
 

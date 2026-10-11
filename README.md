@@ -21,7 +21,10 @@ source and private package credentials without changing quotation contracts.
 - `/quotationrequests/files[/{requestFileId}]` and `/quotationrequests/{requestId}/files`
 
 The service preserves the original route templates, named routes, six-value sort enums,
-pagination fields, and the legacy 250-row safety ceiling. Most JSON remains PascalCase with
+pagination fields, and omitted-size behavior: the first page contains all matching rows after
+customer/search filtering, with no substituted default or cap. Explicit sizes retain the migrated
+1..250 bounds (1..100 for customer quotations); these bounds are not asserted as original-source
+behavior. Most JSON remains PascalCase with
 null omission; the qualification-outcome readback intentionally retains the source's camelCase,
 null-omission receipt wire. Every action requires JWT authentication and an explicit permission.
 

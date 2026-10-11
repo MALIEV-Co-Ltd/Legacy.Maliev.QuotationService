@@ -9,7 +9,7 @@ public interface IQuotationService
     Task<QuotationResponse?> GetQuotationAsync(int id, CancellationToken cancellationToken);
     Task<CustomerQuotationDetails?> GetCustomerQuotationAsync(int customerId, int id, CancellationToken cancellationToken);
     Task<QuotationResponse?> GetQuotationByInvoiceAsync(int invoiceId, CancellationToken cancellationToken);
-    Task<PaginatedResponse<QuotationResponse>?> GetQuotationsAsync(int? customerId, QuotationSortType? sort, string? search, int pageIndex, int pageSize, CancellationToken cancellationToken);
+    Task<PaginatedResponse<QuotationResponse>?> GetQuotationsAsync(int? customerId, QuotationSortType? sort, string? search, int pageIndex, int? pageSize, CancellationToken cancellationToken);
     Task<QuotationStatsResponse> GetStatsAsync(CancellationToken cancellationToken);
     Task<QuotationOutcomeReadback> GetOutcomeReadbackAsync(
         DateTime fromUtc,
@@ -61,7 +61,7 @@ public interface IQuotationService
         CancellationToken cancellationToken);
     Task<bool> DeleteRequestAsync(int id, CancellationToken cancellationToken);
     Task<QuotationRequestResponse?> GetRequestAsync(int id, CancellationToken cancellationToken);
-    Task<PaginatedResponse<QuotationRequestResponse>?> GetRequestsAsync(RequestSortType? sort, string? search, int pageIndex, int pageSize, CancellationToken cancellationToken);
+    Task<PaginatedResponse<QuotationRequestResponse>?> GetRequestsAsync(RequestSortType? sort, string? search, int pageIndex, int? pageSize, CancellationToken cancellationToken);
     Task<UpdateResult> UpdateRequestAsync(int id, UpsertQuotationRequestRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken);
     Task<QualificationReceipt?> GetRequestQualificationAsync(int id, CancellationToken cancellationToken);
     Task<QualificationOutcomeReadback> GetQualificationOutcomeReadbackAsync(

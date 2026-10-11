@@ -171,6 +171,51 @@ public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture
     }
 
     [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(51)]
+    [InlineData(261)]
+    public async Task Omitted_size_uses_filtered_count_without_default_or_cap(int count)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        var rows = new List<int>();
+        for (var i = 0; i < count; i++) rows.Add((await fixture.SeedAsync(marker)).Id);
+        await fixture.SeedAsync("unrelated");
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        foreach (var descending in new[] { false, true })
+        {
+            var expected = descending ? rows.AsEnumerable().Reverse().ToArray() : rows.ToArray();
+            var sort = descending ? "RequestId_Descending" : "RequestId_Ascending";
+            foreach (var index in new int?[] { null, -1, 0, 1, 2, int.MaxValue })
+            {
+                var query = $"/quotationrequests?search={marker}&sort={sort}" + (index is null ? "" : $"&index={index}");
+                using var response = await client.GetAsync(query);
+                if (count == 0 || index > 1)
+                {
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                    continue;
+                }
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                using var json = await JsonAsync(response);
+                Assert.Equal(expected, Ids(json));
+                Assert.Equal(count, json.RootElement.GetProperty("TotalRecords").GetInt32());
+                Assert.Equal(1, json.RootElement.GetProperty("TotalPages").GetInt32());
+                Assert.Equal(1, json.RootElement.GetProperty("PageIndex").GetInt32());
+                Assert.False(json.RootElement.TryGetProperty("PageSize", out _));
+            }
+            using var explicitSize = await client.GetAsync($"/quotationrequests?search={marker}&sort={sort}&size=50&index=1");
+            Assert.Equal(count == 0 ? HttpStatusCode.NotFound : HttpStatusCode.OK, explicitSize.StatusCode);
+            if (count == 0) continue;
+            using var explicitJson = await JsonAsync(explicitSize);
+            Assert.Equal(expected.Take(50), Ids(explicitJson));
+            Assert.Equal((int)Math.Ceiling(count / 50d), explicitJson.RootElement.GetProperty("TotalPages").GetInt32());
+        }
+        using var missing = await client.GetAsync($"/quotationrequests?search={marker}-missing");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    [Theory]
     [InlineData(int.MaxValue, 250)]
     [InlineData(1073741825, 4)]
     [InlineData(int.MaxValue, 2)]
