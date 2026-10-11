@@ -143,6 +143,7 @@ jobs:
           python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_controller_parity_results.py'
           python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_pagination_parity_results.py'
           python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_omitted_size_results.py'
+          python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_explicit_size_results.py'
 
       - name: Prove ordinary controller parity independently
         timeout-minutes: 5
@@ -163,6 +164,11 @@ jobs:
             --filter 'FullyQualifiedName~Omitted_size_uses_filtered_count_without_default_or_cap' \
             --results-directory TestResults/OmittedSize --logger 'trx;LogFileName=omitted-size.trx'
           python3 -B scripts/check_quotation_omitted_size_results.py TestResults/OmittedSize/omitted-size.trx
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~Positive_explicit_size_is_not_capped_after_filtering' \
+            --results-directory TestResults/ExplicitSize --logger 'trx;LogFileName=explicit-size.trx'
+          python3 -B scripts/check_quotation_explicit_size_results.py TestResults/ExplicitSize/explicit-size.trx
 
       - name: Retain ordinary controller parity evidence
         if: always() && hashFiles('TestResults/ControllerParity/controller-parity.trx') != ''
@@ -176,6 +182,8 @@ jobs:
             scripts/quotation_pagination_parity_focus.json
             TestResults/OmittedSize/omitted-size.trx
             scripts/quotation_omitted_size_focus.json
+            TestResults/ExplicitSize/explicit-size.trx
+            scripts/quotation_explicit_size_focus.json
           if-no-files-found: error
           retention-days: 7
 

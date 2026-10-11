@@ -27,7 +27,7 @@ public sealed class QuotationsController(
     public async Task<ActionResult<PaginatedResponse<QuotationResponse>>> GetPaginatedQuotationAsync(int? customerId, [FromQuery] QuotationSortType? sort, [FromQuery] string? search, [FromQuery] int? index, [FromQuery] int? size, CancellationToken cancellationToken)
     {
         if (customerId is null && !await HasAdministrativeReadAsync()) return Forbid();
-        var value = await service.GetQuotationsAsync(customerId, sort, search, Math.Max(index ?? 1, 1), size is null ? null : Math.Clamp(size.Value, 1, customerId is null ? 250 : 100), cancellationToken);
+        var value = await service.GetQuotationsAsync(customerId, sort, search, Math.Max(index ?? 1, 1), size is null ? null : Math.Max(size.Value, 1), cancellationToken);
         return value is null || value.Items.Count == 0 ? NotFound() : value;
     }
 

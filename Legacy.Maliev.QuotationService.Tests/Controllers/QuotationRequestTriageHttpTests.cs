@@ -171,6 +171,63 @@ public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture
     }
 
     [Theory]
+    [InlineData(100)]
+    [InlineData(101)]
+    [InlineData(250)]
+    [InlineData(251)]
+    [InlineData(int.MaxValue)]
+    public async Task Positive_explicit_size_is_not_capped_after_filtering(int size)
+    {
+        const int count = 261;
+        var marker = Guid.NewGuid().ToString("N");
+        var rows = new List<int>();
+        for (var i = 0; i < count; i++) rows.Add((await fixture.SeedAsync(marker)).Id);
+        await fixture.SeedAsync("unrelated");
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        foreach (var descending in new[] { false, true })
+        {
+            var expected = descending ? rows.AsEnumerable().Reverse().ToArray() : rows.ToArray();
+            var sort = descending ? "RequestId_Descending" : "RequestId_Ascending";
+            foreach (var index in new int?[] { null, -1, 0, 1, 2, 3, int.MaxValue })
+            {
+                var normalizedIndex = Math.Max(index ?? 1, 1);
+                var offset = ((long)normalizedIndex - 1) * size;
+                var query = $"/quotationrequests?search={marker}&sort={sort}&size={size}" + (index is null ? "" : $"&index={index}");
+                using var response = await client.GetAsync(query);
+                if (offset >= count)
+                {
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                    continue;
+                }
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                using var json = await JsonAsync(response);
+                Assert.Equal(expected.Skip((int)offset).Take(size), Ids(json));
+                Assert.Equal(count, json.RootElement.GetProperty("TotalRecords").GetInt32());
+                Assert.Equal((int)Math.Ceiling(count / (double)size), json.RootElement.GetProperty("TotalPages").GetInt32());
+                Assert.Equal(normalizedIndex, json.RootElement.GetProperty("PageIndex").GetInt32());
+                Assert.Equal(normalizedIndex > 1, json.RootElement.GetProperty("HasPreviousPage").GetBoolean());
+                Assert.Equal(normalizedIndex < (int)Math.Ceiling(count / (double)size), json.RootElement.GetProperty("HasNextPage").GetBoolean());
+                Assert.False(json.RootElement.TryGetProperty("PageSize", out _));
+                foreach (var row in json.RootElement.GetProperty("Items").EnumerateArray())
+                {
+                    Assert.NotEqual(Guid.Empty, row.GetProperty("JourneyId").GetGuid());
+                    Assert.Equal($"request-{row.GetProperty("Id").GetInt32()}", row.GetProperty("TransactionId").GetString());
+                }
+            }
+        }
+        using var missing = await client.GetAsync($"/quotationrequests?search={marker}-missing&size={size}");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        using var anonymous = fixture.Client(app, authenticated: false);
+        using var unauthenticated = await anonymous.GetAsync($"/quotationrequests?search={marker}&size={size}");
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
+        await using var deniedApp = fixture.App(allowed: false);
+        using var denied = fixture.Client(deniedApp);
+        using var forbidden = await denied.GetAsync($"/quotationrequests?search={marker}&size={size}");
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(51)]
