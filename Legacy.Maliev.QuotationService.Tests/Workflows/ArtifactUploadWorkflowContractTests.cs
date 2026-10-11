@@ -12,6 +12,10 @@ public sealed class ArtifactUploadWorkflowContractTests
     [InlineData("Retain actual qualification wire-source evidence", "stale")]
     [InlineData("Retain actual qualification wire-source evidence", "unreviewed")]
     [InlineData("Retain actual qualification wire-source evidence", "commented-pin")]
+    [InlineData("Retain ordinary controller parity evidence", "floating")]
+    [InlineData("Retain ordinary controller parity evidence", "stale")]
+    [InlineData("Retain ordinary controller parity evidence", "unreviewed")]
+    [InlineData("Retain ordinary controller parity evidence", "commented-pin")]
     public void EvidenceUpload_RejectsAnyRevisionOtherThanReviewedPin(string stepName, string mutant)
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
