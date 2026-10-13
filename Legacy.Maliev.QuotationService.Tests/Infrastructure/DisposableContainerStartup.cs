@@ -134,7 +134,7 @@ internal static class DisposableContainerStartup
                 catch { /* Observe both original tasks before independent owner cleanup. */ }
                 IStartupResource[] allocated;
                 lock (resources) allocated = resources.ToArray();
-                await Task.WhenAll(allocated.Select(async resource =>
+                var removals = Task.WhenAll(allocated.Select(async resource =>
                 {
                     try { await resource.DisposeAndVerifyAsync(); }
                     finally
@@ -143,6 +143,18 @@ internal static class DisposableContainerStartup
                             ContainerOperationCustody.RecordFailures(primary, "maliev.startup.eventual-failures", late);
                     }
                 }));
+                try { await removals; }
+                catch
+                {
+                    // Await unwraps one fault; the settled aggregate retains every independently attempted owner failure.
+                    if (removals.Exception is { } aggregate)
+                    {
+                        ContainerOperationCustody.RecordFailures(primary, "maliev.cleanup.failures",
+                            aggregate.Flatten().InnerExceptions.ToArray());
+                        ExceptionDispatchInfo.Capture(aggregate).Throw();
+                    }
+                    throw;
+                }
             }
         }
         finally

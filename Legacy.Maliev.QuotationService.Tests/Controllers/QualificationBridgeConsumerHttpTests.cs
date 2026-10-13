@@ -610,7 +610,7 @@ public sealed class QualificationBridgeConsumerFixture : IAsyncLifetime
                     .WithName(attempt.Name).WithLabel(attempt.Labels)
                     .WithLabel("maliev.proof.expires-utc", expires)
                     .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "5432/tcp", 512L * 1024 * 1024)).Build(),
-                attempt => new ContainerBuilder("redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499").WithDockerEndpoint(attempt.Endpoint)
+                attempt => new ContainerBuilder("public.ecr.aws/docker/library/redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499").WithDockerEndpoint(attempt.Endpoint)
                     .WithImagePullPolicy(_ => false)
                     .WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true)
                     .WithLabel("maliev.proof.expires-utc", expires)
