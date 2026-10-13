@@ -209,6 +209,10 @@ jobs:
         run: |
           dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
             --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~ContainerOperationCustodyContractTests|FullyQualifiedName~DockerBindCollisionContractTests.FailedCleanupOfHostBindAttemptNeverAdmitsBackoffOrReplacement|FullyQualifiedName~QualificationBridgeConsumerHttpTests.Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap' \
+            --results-directory TestResults/QualificationCustody --logger 'trx;LogFileName=qualification-custody.trx'
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
             --filter 'FullyQualifiedName~QuotationInvoiceCapabilityVerifierTests' \
             --results-directory TestResults/C821Verifier --logger 'trx;LogFileName=c821-verifier.trx'
           dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
@@ -251,13 +255,14 @@ jobs:
           python3 scripts/check_owned_coverage.py "${reports[0]}" --minimum 80 --raw
 
       - name: Retain complete coverage evidence
-        if: always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx') != '')
+        if: always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx') != '')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: quotation-complete-coverage-${{ github.sha }}
           path: |
             TestResults/C821Verifier/c821-verifier.trx
             TestResults/C821Recipient/c821-recipient.trx
+            TestResults/QualificationCustody/qualification-custody.trx
             TestResults/CompanionAdmission/companion-admission.trx
             TestResults/CompanionSigning/companion-signing.trx
             TestResults/StorageFront/storage-front.trx
