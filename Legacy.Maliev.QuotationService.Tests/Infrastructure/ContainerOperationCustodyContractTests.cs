@@ -321,18 +321,44 @@ public sealed class ContainerOperationCustodyContractTests
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var primary = new IOException("Controlled startup failure before cancellation callback fault.");
         var callback = new InvalidOperationException("Controlled cancellation callback fault.");
+        var invoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationTokenRegistration registration = default;
         var first = new ProbeResource(async token => { await entered.Task.WaitAsync(token); throw primary; }, () => Task.CompletedTask);
         var second = new ProbeResource(async token =>
         {
-            using var registration = token.Register(() => throw callback);
+            registration = token.Register(() => { invoked.TrySetResult(); throw callback; });
             entered.SetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
         }, () => Task.CompletedTask);
-        Assert.Same(primary, await Assert.ThrowsAsync<IOException>(() =>
-            DisposableContainerStartup.StartPairAsync(() => first, () => second, NoDelay)));
-        Assert.Equal(1, first.Disposals);
-        Assert.Equal(1, second.Disposals);
-        Assert.Contains(callback, ContainerOperationCustody.FailuresFor(primary, "maliev.cancellation.callback.failures"));
+        var startup = DisposableContainerStartup.StartPairAsync(() => first, () => second, NoDelay);
+        Exception? assertionFailure = null;
+        try
+        {
+            Assert.Same(primary, await Assert.ThrowsAsync<IOException>(() => startup));
+            Assert.True(invoked.Task.IsCompletedSuccessfully);
+            Assert.Equal(1, first.Disposals);
+            Assert.Equal(1, second.Disposals);
+            Assert.Contains(callback, ContainerOperationCustody.FailuresFor(primary, "maliev.cancellation.callback.failures"));
+        }
+        catch (Exception failure)
+        {
+            assertionFailure = failure;
+            throw;
+        }
+        finally
+        {
+            var cleanup = SettleRegistrationAsync();
+            if (assertionFailure is null) await cleanup;
+            else await ContainerOperationCustody.CleanupPreservingAsync(assertionFailure, cleanup,
+                TimeSpan.FromSeconds(2), "callback-regression-finally", [startup, registration]);
+        }
+
+        async Task SettleRegistrationAsync()
+        {
+            try { await startup.WaitAsync(TimeSpan.FromSeconds(2)); }
+            catch (IOException failure) when (ReferenceEquals(failure, primary)) { }
+            finally { await registration.DisposeAsync(); }
+        }
     }
 
     [Fact]
