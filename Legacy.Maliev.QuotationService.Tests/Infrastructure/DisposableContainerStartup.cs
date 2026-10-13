@@ -46,55 +46,143 @@ internal static class DisposableContainerStartup
     }
 
     internal static async Task<IStartupResource> StartAsync(Func<IStartupResource> create,
-        Func<TimeSpan, CancellationToken, Task> delay, CancellationToken token = default)
+        Func<TimeSpan, CancellationToken, Task> delay, CancellationToken token = default, TimeSpan? cleanupBudget = null)
     {
         for (var attempt = 1; ; attempt++)
         {
             token.ThrowIfCancellationRequested();
             var resource = create();
-            try { await resource.StartAsync(token); return resource; }
+            Task? startup = null;
+            try
+            {
+                startup = resource.StartAsync(token);
+                await startup.WaitAsync(token);
+                return resource;
+            }
             catch (Exception error)
             {
-                await resource.DisposeAndVerifyAsync();
-                token.ThrowIfCancellationRequested();
+                var cleanup = CleanupAfterStartupAsync();
+                await ContainerOperationCustody.CleanupPreservingAsync(error, cleanup,
+                    cleanupBudget ?? TimeSpan.FromSeconds(15), "container-startup-cleanup", [resource, startup!]);
+                if (!cleanup.IsCompletedSuccessfully || token.IsCancellationRequested) throw;
                 if (attempt >= 3 || error is not DockerApiException docker || !IsCollision(docker)) throw;
                 await delay(TimeSpan.FromMilliseconds(100 * attempt), token);
+
+                async Task CleanupAfterStartupAsync()
+                {
+                    if (startup is not null)
+                    {
+                        try { await startup; }
+                        catch (Exception failure) { ContainerOperationCustody.RecordFailures(error, "maliev.startup.eventual-failures", failure); }
+                    }
+                    await resource.DisposeAndVerifyAsync();
+                }
             }
         }
     }
 
     internal static async Task<(IStartupResource First, IStartupResource Second)> StartPairAsync(
         Func<IStartupResource> first, Func<IStartupResource> second,
-        Func<TimeSpan, CancellationToken, Task> delay, CancellationToken token = default)
+        Func<TimeSpan, CancellationToken, Task> delay, CancellationToken token = default, TimeSpan? cleanupBudget = null)
     {
-        using var siblings = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var siblings = CancellationTokenSource.CreateLinkedTokenSource(token);
         var resources = new List<IStartupResource>();
+        var cancellationTasks = new List<Task>();
+        void TrackCancellation(Task actual) { lock (cancellationTasks) cancellationTasks.Add(actual); }
+        Exception? startupFailure = null;
         IStartupResource Record(Func<IStartupResource> factory)
         {
-            var resource = factory();
+            var resource = new StartupResourceLifetime(factory());
             lock (resources) resources.Add(resource);
             return resource;
         }
         async Task<IStartupResource> Run(Func<IStartupResource> factory)
         {
-            try { return await StartAsync(() => Record(factory), delay, siblings.Token); }
-            catch { await siblings.CancelAsync(); throw; }
+            try { return await StartAsync(() => Record(factory), delay, siblings.Token, cleanupBudget); }
+            catch (Exception failure)
+            {
+                Interlocked.CompareExchange(ref startupFailure, failure, null);
+                await ContainerOperationCustody.CancelPreservingAsync(siblings, failure,
+                    cleanupBudget ?? TimeSpan.FromSeconds(15), TrackCancellation);
+                throw;
+            }
         }
         var firstTask = Run(first);
         var secondTask = Run(second);
+        var startup = Task.WhenAll(firstTask, secondTask);
+        Task? cleanupLifetime = null;
         try
         {
-            await Task.WhenAll(firstTask, secondTask);
-            return (firstTask.Result, secondTask.Result);
+            await startup.WaitAsync(siblings.Token);
+            return (((StartupResourceLifetime)firstTask.Result).Resource, ((StartupResourceLifetime)secondTask.Result).Resource);
         }
-        catch
+        catch (Exception failure)
         {
-            // Both tasks are settled; independently clean every allocated sibling, even when another cleanup fails.
-            await Task.WhenAll(resources.Select(async x => await x.DisposeAndVerifyAsync()));
-            var failure = new[] { firstTask, secondTask }.Where(x => x.IsFaulted)
-                .SelectMany(x => x.Exception!.InnerExceptions).FirstOrDefault(x => x is not OperationCanceledException);
-            if (failure is not null) ExceptionDispatchInfo.Capture(failure).Throw();
-            throw;
+            var primary = startupFailure ?? failure;
+            var cleanup = CleanupAfterSiblingsAsync();
+            cleanupLifetime = cleanup;
+            await ContainerOperationCustody.CancelPreservingAsync(siblings, primary,
+                cleanupBudget ?? TimeSpan.FromSeconds(15), TrackCancellation);
+            await ContainerOperationCustody.CleanupPreservingAsync(primary, cleanup,
+                cleanupBudget ?? TimeSpan.FromSeconds(15), "container-pair-cleanup", [resources, firstTask, secondTask]);
+            ExceptionDispatchInfo.Capture(primary).Throw();
+            throw; // Unreachable, required for tuple-return flow analysis.
+
+            async Task CleanupAfterSiblingsAsync()
+            {
+                try { await startup; }
+                catch { /* Observe both original tasks before independent owner cleanup. */ }
+                IStartupResource[] allocated;
+                lock (resources) allocated = resources.ToArray();
+                await Task.WhenAll(allocated.Select(async resource =>
+                {
+                    try { await resource.DisposeAndVerifyAsync(); }
+                    finally
+                    {
+                        if (resource is StartupResourceLifetime { StartupFailure: { } late })
+                            ContainerOperationCustody.RecordFailures(primary, "maliev.startup.eventual-failures", late);
+                    }
+                }));
+            }
+        }
+        finally
+        {
+            Task[] callbacks;
+            lock (cancellationTasks) callbacks = cancellationTasks.ToArray();
+            var actualLifetime = Task.WhenAll(new[] { cleanupLifetime ?? startup }.Concat(callbacks));
+            if (actualLifetime.IsCompleted)
+            {
+                _ = actualLifetime.Exception; // Observe the aggregate, including callback faults.
+                siblings.Dispose();
+            }
+            else ContainerOperationCustody.Retain(actualLifetime, "container-pair-cancellation-source-release",
+                [siblings, resources], siblings.Dispose);
+        }
+    }
+
+    private sealed class StartupResourceLifetime(IStartupResource resource) : IStartupResource
+    {
+        internal IStartupResource Resource => resource;
+        internal Exception? StartupFailure { get; private set; }
+        private readonly object gate = new();
+        private Task? startup;
+        private Task? cleanup;
+        public Task StartAsync(CancellationToken token)
+        {
+            lock (gate) return startup ??= resource.StartAsync(token);
+        }
+        public Task DisposeAndVerifyAsync()
+        {
+            lock (gate) return cleanup ??= DisposeAfterStartupAsync();
+        }
+        private async Task DisposeAfterStartupAsync()
+        {
+            if (startup is not null)
+            {
+                try { await startup; }
+                catch (Exception failure) { StartupFailure = failure; }
+            }
+            await resource.DisposeAndVerifyAsync();
         }
     }
 
@@ -179,6 +267,11 @@ internal sealed class DisposableContainerPair : IAsyncDisposable
     private readonly DockerClient docker;
     private readonly OwnedContainer first;
     private readonly OwnedContainer second;
+    private int clientReleased;
+    private void ReleaseClient()
+    {
+        if (Interlocked.Exchange(ref clientReleased, 1) == 0) docker.Dispose();
+    }
     private DisposableContainerPair(DockerClient docker, OwnedContainer first, OwnedContainer second)
     { this.docker = docker; this.first = first; this.second = second; }
     internal IContainer First => first.Container;
@@ -204,23 +297,57 @@ internal sealed class DisposableContainerPair : IAsyncDisposable
                 () => Create("pg", ++pgAttempt, postgres), () => Create(secondResource, ++redisAttempt, redis), Task.Delay, token);
             return new(docker, (OwnedContainer)result.First, (OwnedContainer)result.Second);
         }
-        catch { docker.Dispose(); throw; }
+        catch (Exception failure)
+        {
+            if (ContainerOperationCustody.CustodyFor(failure) is { } retained)
+                ContainerOperationCustody.Retain(retained.Operation, "container-pair-client-release", [docker, retained], docker.Dispose);
+            else docker.Dispose();
+            throw;
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
-        try { await Task.WhenAll(first.DisposeAndVerifyAsync(), second.DisposeAndVerifyAsync()); }
-        finally { docker.Dispose(); }
+        var cleanup = Task.WhenAll(first.DisposeAndVerifyAsync(), second.DisposeAndVerifyAsync());
+        try { await cleanup.WaitAsync(TimeSpan.FromSeconds(15)); }
+        catch (Exception failure)
+        {
+            ContainerOperationCustody.AttachCustody(failure, ContainerOperationCustody.Retain(cleanup,
+                "container-pair-disposal-client-release", [docker, first, second], ReleaseClient));
+            throw;
+        }
+        finally
+        {
+            if (cleanup.IsCompleted) ReleaseClient();
+        }
     }
 
     internal sealed class OwnedContainer(IContainer container, DockerClient docker, ContainerAttempt identity) : IStartupResource
     {
         private bool removed;
+        private Task? startup;
+        private Task? disposal;
+        private readonly object gate = new();
         public IContainer Container => container;
-        public Task StartAsync(CancellationToken token) => container.StartAsync(token);
+        public Task StartAsync(CancellationToken token)
+        {
+            lock (gate) return startup ??= container.StartAsync(token);
+        }
         public async Task DisposeAndVerifyAsync()
         {
+            Task actual;
+            lock (gate) actual = disposal ??= DisposeCoreAsync();
+            await actual;
+        }
+
+        private async Task DisposeCoreAsync()
+        {
             if (removed) return;
+            if (startup is not null)
+            {
+                try { await startup; }
+                catch { /* Startup failure is preserved by its caller; actual startup must settle before removal. */ }
+            }
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15)); // Independent of canceled startup token.
             ContainerInspectResponse? inspect;
             try { inspect = await docker.Containers.InspectContainerAsync(identity.Name, timeout.Token); }
@@ -239,7 +366,7 @@ internal sealed class DisposableContainerPair : IAsyncDisposable
                 throw new InvalidOperationException("Disposable container removal was not verified.");
             }
             catch (DockerApiException error) when (error.StatusCode == HttpStatusCode.NotFound) { }
-            await container.DisposeAsync().AsTask().WaitAsync(timeout.Token);
+            await container.DisposeAsync(); // Actual task stays owned; pair bounds waiting without releasing its client early.
             removed = true;
         }
     }
