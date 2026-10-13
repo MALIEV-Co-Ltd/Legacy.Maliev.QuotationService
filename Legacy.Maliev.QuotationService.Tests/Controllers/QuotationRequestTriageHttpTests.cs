@@ -199,6 +199,7 @@ public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture
             using var response = await client.GetAsync(uri);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.True(binding.Observed);
+            Assert.Equal(search is not null, binding.ArgumentPresent);
             Assert.Null(binding.Search);
             using var json = await JsonAsync(response);
             Assert.Equal(rows.Select(x => x.Id).OrderBy(id => id).ToArray(), Ids(json));
@@ -318,12 +319,14 @@ public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture
     private sealed class LiteralSearchBindingCapture : IActionFilter
     {
         public bool Observed { get; private set; }
+        public bool ArgumentPresent { get; private set; }
         public string? Search { get; private set; }
         public void OnActionExecuting(ActionExecutingContext context)
         {
-            if (context.ActionArguments.TryGetValue("search", out var value))
+            if (context.ActionDescriptor.Parameters.Any(parameter => parameter.Name == "search"))
             {
                 Observed = true;
+                ArgumentPresent = context.ActionArguments.TryGetValue("search", out var value);
                 Search = value as string;
             }
         }
