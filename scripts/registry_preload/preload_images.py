@@ -76,14 +76,27 @@ def reconcile(entry,run):
  entry['state']='exact-reference-observed'
 def mutate(args,tag,row,run,receipt):
  # This durable intent precedes the daemon command, including failure/timeout paths.
- entry={'tag':tag,'configDigest':row['configDigest'],'preExisting':False,'state':'intent','commandSettled':False,'unresolvedLease':'until this finite ephemeral hosted job runner is destroyed; external confirmation required'}
+ entry={'tag':tag,'configDigest':row['configDigest'],'preExisting':False,'state':'intent','commandSettled':False,'cliOutcome':{'execution':'not-observed','terminalReturnCode':None,'exitConfirmed':None,'custodyResolved':None},'daemonSettlementAuthority':'unproved','unresolvedLease':'until this finite ephemeral hosted job runner is destroyed; external confirmation required'}
  receipt['createdTags'].append(entry);receipt['write']()
  try:
-  run(args);entry['commandSettled']=True;reconcile(entry,run)
+  run(args)
+  # The required runner returns only after successful completion and CLI custody
+  # cleanup. A terminal failure or recovery signal never grants daemon authority.
+  entry['cliOutcome']={'execution':'returned-success','terminalReturnCode':0,'exitConfirmed':True,'custodyResolved':True}
+  entry['commandSettled']=True;entry['daemonSettlementAuthority']='successful-cli-completion'
+  reconcile(entry,run)
   if entry['state']!='exact-reference-observed':raise ValueError('Daemon mutation not observed')
  except BaseException as primary:
   if isinstance(primary,DockerCommandFailure):entry['failureDiagnostic']=primary.diagnostic
-  if hasattr(primary,'owned_cli_resource'):entry['cliResource']=primary.owned_cli_resource
+  if not entry['commandSettled']:
+   resource=getattr(primary,'owned_cli_resource',{})
+   if resource:entry['cliResource']=resource
+   code=resource.get('terminalReturnCode',primary.diagnostic['returnCode'] if isinstance(primary,DockerCommandFailure) else None)
+   execution='not-observed'
+   if resource.get('executionOutcome')=='interrupted' or type(code) is int and code<0:execution='interrupted'
+   elif isinstance(primary,DockerCommandFailure):execution='returned-failure'
+   elif resource.get('executionOutcome')=='completed':execution='completed-custody-unresolved'
+   entry['cliOutcome']={'execution':execution,'terminalReturnCode':code,'exitConfirmed':resource.get('exitConfirmed'),'custodyResolved':not resource['unresolvedCustody'] if type(resource.get('unresolvedCustody')) is bool else None}
   try:reconcile(entry,run)
   except BaseException as secondary:primary.add_note('Secondary reconciliation failure: '+type(secondary).__name__)
   try:receipt['write']()
@@ -273,6 +286,10 @@ def run_docker_cli(args,timeout,hard_deadline=None):
  resource=None
  if process is not None:
   resource={'pid':getattr(process,'pid',None),'executable':identity['executable'] if identity else None,'startTicks':identity['startTicks'] if identity else None,'identityObserved':identity is not None,'identityUnavailableAfterExit':identity_unavailable_after_exit,'identityDrift':identity_drift,'admissionMonotonic':started,'hardDeadlineMonotonic':deadline,'workDeadlineMonotonic':work_deadline,'recoveryReserveSeconds':3,'exitConfirmed':not identity_drift and process.returncode is not None,'cleanupErrors':len(cleanup_errors),'expiryDoesNotProveExit':True,'unresolvedCustody':identity_drift or identity is None and not identity_unavailable_after_exit or bool(cleanup_errors) or process.returncode is None}
+  # Capture whether command work completed before recovery, separately from the
+  # terminal status that may have resulted from terminate/kill during recovery.
+  resource['executionOutcome']='completed' if result is not None and result[0].returncode>=0 else 'interrupted'
+  resource['terminalReturnCode']=process.returncode
  if primary is not None:
   if resource is not None:primary.owned_cli_resource=resource
   for error in cleanup_errors:primary.add_note('Secondary owned CLI cleanup failure: '+type(error).__name__)

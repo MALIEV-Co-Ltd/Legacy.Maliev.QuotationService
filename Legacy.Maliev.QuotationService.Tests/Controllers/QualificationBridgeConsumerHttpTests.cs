@@ -345,6 +345,76 @@ public sealed class QualificationBridgeConsumerHttpTests(QualificationBridgeCons
         Assert.Empty(await db.RequestQualificationAudit.Where(x => x.RequestId == seed.Id).ToListAsync());
     }
 
+    [Theory]
+    [InlineData("qualified")]
+    [InlineData("not_qualified")]
+    [InlineData("duplicate")]
+    public async Task Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap(string state)
+    {
+        var seed = await fixture.SeedAsync();
+        await using (var setup = fixture.RequestContext())
+        {
+            var row = await setup.Requests.SingleAsync(value => value.Id == seed.Id);
+            row.QualificationVersion = int.MaxValue - 1;
+            await setup.SaveChangesAsync();
+        }
+        var token = fixture.EmployeeToken();
+        var transport = new QualificationAuthorityTransport(token, fixture.WorkloadToken);
+        await using var app = fixture.App(true, transport);
+        using var client = app.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var last = new QualificationStateUpdateRequest(state, state == "qualified" ? null : "synthetic final review",
+            "complete", state == "duplicate" ? 1 : 0, null, "revision-last-" + Guid.NewGuid().ToString("N"), int.MaxValue - 1);
+        using var lastResponse = await client.PutAsJsonAsync($"/quotationrequests/{seed.Id}/qualification", last);
+        AssertNoCache(lastResponse);
+        Assert.Equal(HttpStatusCode.OK, lastResponse.StatusCode);
+        var committedReceipt = await lastResponse.Content.ReadAsStringAsync();
+        using (var receipt = JsonDocument.Parse(committedReceipt))
+        {
+            Assert.Equal(int.MaxValue, receipt.RootElement.GetProperty("Version").GetInt32());
+            Assert.Equal(state, receipt.RootElement.GetProperty("State").GetString());
+        }
+        QuotationRequest committed;
+        string committedAudit;
+        await using (var read = fixture.RequestContext())
+        {
+            committed = await read.Requests.AsNoTracking().SingleAsync(value => value.Id == seed.Id);
+            var audit = Assert.Single(await read.RequestQualificationAudit.AsNoTracking().Where(value => value.RequestId == seed.Id).ToListAsync());
+            Assert.Equal(int.MaxValue, committed.QualificationVersion);
+            Assert.Equal(int.MaxValue, audit.Version);
+            Assert.Equal("unreviewed", audit.PreviousState);
+            Assert.Equal(state, audit.NewState);
+            Assert.Equal("employee-42", audit.ChangedBy);
+            Assert.Equal(last.IdempotencyKey, audit.IdempotencyKey);
+            Assert.Equal(committed.QualificationStateChangedUtc, audit.ChangedUtc);
+            committedAudit = JsonSerializer.Serialize(audit);
+        }
+        var exhausted = last with { IdempotencyKey = "revision-exhausted-" + Guid.NewGuid().ToString("N"), ExpectedVersion = int.MaxValue };
+        using var conflict = await client.PutAsJsonAsync($"/quotationrequests/{seed.Id}/qualification", exhausted);
+        AssertNoCache(conflict);
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        // Replay is reconciled before revision admission: exhaustion must not reject committed evidence.
+        using var replay = await client.PutAsJsonAsync($"/quotationrequests/{seed.Id}/qualification", last);
+        AssertNoCache(replay);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Equal(committedReceipt, await replay.Content.ReadAsStringAsync());
+        using var readback = await client.GetAsync($"/quotationrequests/{seed.Id}/qualification-receipt");
+        AssertNoCache(readback);
+        Assert.Equal(HttpStatusCode.OK, readback.StatusCode);
+        Assert.Equal(committedReceipt, await readback.Content.ReadAsStringAsync());
+        await using var verify = fixture.RequestContext();
+        var retained = await verify.Requests.AsNoTracking().SingleAsync(value => value.Id == seed.Id);
+        Assert.Equal(committed.QualificationVersion, retained.QualificationVersion);
+        Assert.Equal(committed.QualificationState, retained.QualificationState);
+        Assert.Equal(committed.QualificationStateChangedUtc, retained.QualificationStateChangedUtc);
+        Assert.Equal(committed.ModifiedDate, retained.ModifiedDate);
+        Assert.Equal(seed.CreatedDate, retained.CreatedDate);
+        Assert.Equal(seed.JourneyId, retained.JourneyId);
+        Assert.Equal(seed.TransactionId, retained.TransactionId);
+        Assert.Equal(committedAudit, JsonSerializer.Serialize(Assert.Single(await verify.RequestQualificationAudit.AsNoTracking().Where(value => value.RequestId == seed.Id).ToListAsync())));
+        Assert.False(await verify.RequestQualificationAudit.AnyAsync(value => value.RequestId == seed.Id && value.IdempotencyKey == exhausted.IdempotencyKey));
+    }
+
     private static void AssertNoCache(HttpResponseMessage response)
     {
         Assert.True(response.Headers.CacheControl?.NoStore == true);
@@ -483,34 +553,84 @@ public sealed class AllowedIamTransport : HttpMessageHandler
 public sealed class QualificationBridgeConsumerFixture : IAsyncLifetime
 {
     private Infrastructure.DisposableContainerPair? containers;
+    private Infrastructure.ContainerOperationCustody.InitializationLifetime? initialization;
+    private readonly Func<CancellationToken, Task<IAsyncDisposable>>? startOverride;
+    private readonly Func<CancellationToken, Task>? initializeOverride;
+    private readonly TimeSpan initializationDeadline = TimeSpan.FromMinutes(2);
+    private readonly TimeSpan cleanupBudget = TimeSpan.FromSeconds(15);
+    private int keyReleased;
     private PostgreSqlContainer postgres => (PostgreSqlContainer)containers!.First;
     private IContainer redis => containers!.Second;
     private readonly RSA key = RSA.Create(2048);
     private string? workloadToken;
+    /// <summary>Constructs the ordinary PostgreSQL/Redis fixture.</summary>
+    public QualificationBridgeConsumerFixture() { }
+
+    internal QualificationBridgeConsumerFixture(Func<CancellationToken, Task<IAsyncDisposable>> start,
+        Func<CancellationToken, Task> initialize, TimeSpan deadline, TimeSpan cleanup)
+    {
+        startOverride = start;
+        initializeOverride = initialize;
+        initializationDeadline = deadline;
+        cleanupBudget = cleanup;
+    }
+
+    private void ReleaseKey()
+    {
+        if (Interlocked.Exchange(ref keyReleased, 1) == 0) key.Dispose();
+    }
     public string WorkloadToken => workloadToken ??= IssueToken([new("sub", "service:legacy-quotation"), new("identity_kind", "service"),
         new("permissions", "legacy-auth.quotation-qualification.introspect")]);
     private string RequestConnection => new NpgsqlConnectionStringBuilder(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())) { Database = "quotation76_requests" }.ConnectionString;
 
     public async Task InitializeAsync()
     {
+        using var deadline = new CancellationTokenSource(initializationDeadline);
+        try
+        {
+            var owner = await (startOverride ?? StartContainersAsync)(deadline.Token);
+            initialization = new Infrastructure.ContainerOperationCustody.InitializationLifetime(owner);
+            await initialization.InitializeAsync(initializeOverride ?? InitializeDatabasesAsync, deadline.Token, cleanupBudget);
+        }
+        catch (Exception primary)
+        {
+            if (Infrastructure.ContainerOperationCustody.CustodyFor(primary) is { } retained)
+                Infrastructure.ContainerOperationCustody.Retain(retained.Operation, "fixture-key-release", [this, retained], ReleaseKey);
+            else ReleaseKey();
+            throw;
+        }
+    }
+
+    private async Task<IAsyncDisposable> StartContainersAsync(CancellationToken token)
+    {
+        var expires = DateTimeOffset.UtcNow.AddMinutes(15).ToString("O");
         containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation99-qualification-bridge",
-            attempt => new PostgreSqlBuilder("postgres:18-alpine").WithDockerEndpoint(attempt.Endpoint)
-                .WithName(attempt.Name).WithLabel(attempt.Labels)
-                .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "5432/tcp")).Build(),
-            attempt => new ContainerBuilder("redis:7-alpine").WithDockerEndpoint(attempt.Endpoint)
-                .WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true)
-                .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
-                .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "6379/tcp")).Build());
+                attempt => new PostgreSqlBuilder("public.ecr.aws/docker/library/postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873").WithDockerEndpoint(attempt.Endpoint)
+                    .WithImagePullPolicy(_ => false)
+                    .WithName(attempt.Name).WithLabel(attempt.Labels)
+                    .WithLabel("maliev.proof.expires-utc", expires)
+                    .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "5432/tcp", 512L * 1024 * 1024)).Build(),
+                attempt => new ContainerBuilder("public.ecr.aws/docker/library/redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499").WithDockerEndpoint(attempt.Endpoint)
+                    .WithImagePullPolicy(_ => false)
+                    .WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true)
+                    .WithLabel("maliev.proof.expires-utc", expires)
+                    .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(6379))
+                    .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "6379/tcp", 256L * 1024 * 1024)).Build(), token);
+        return containers;
+    }
+
+    private async Task InitializeDatabasesAsync(CancellationToken token)
+    {
         await using (var connection = new NpgsqlConnection(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())))
         {
-            await connection.OpenAsync();
+            await connection.OpenAsync(token);
             await using var command = new NpgsqlCommand("CREATE DATABASE quotation76_requests", connection);
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(token);
         }
         await using var quotation = new QuotationDbContext(new DbContextOptionsBuilder<QuotationDbContext>().UseNpgsql(Infrastructure.DisposablePostgresConnectionPolicy.Isolate(postgres.GetConnectionString())).Options);
-        await quotation.Database.MigrateAsync();
+        await quotation.Database.MigrateAsync(token);
         await using var requests = RequestContext();
-        await requests.Database.MigrateAsync();
+        await requests.Database.MigrateAsync(token);
     }
 
     public QuotationRequestDbContext RequestContext() => new(new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(RequestConnection).Options);
@@ -563,13 +683,23 @@ public sealed class QualificationBridgeConsumerFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        try { if (containers is not null) await containers.DisposeAsync(); }
-        finally { key.Dispose(); }
+        var actual = initialization?.DisposeAsync().AsTask() ?? Task.CompletedTask;
+        try { await actual.WaitAsync(cleanupBudget); }
+        catch (Exception primary)
+        {
+            Infrastructure.ContainerOperationCustody.AttachCustody(primary,
+                Infrastructure.ContainerOperationCustody.Retain(actual, "fixture-disposal", [this, initialization!], ReleaseKey));
+            throw;
+        }
+        finally { if (actual.IsCompleted) ReleaseKey(); }
     }
 
-    private static void ConfigureLoopback(Docker.DotNet.Models.CreateContainerParameters parameters, string port)
+    private static void ConfigureLoopback(Docker.DotNet.Models.CreateContainerParameters parameters, string port, long memoryBytes)
     {
         parameters.HostConfig ??= new Docker.DotNet.Models.HostConfig();
+        parameters.HostConfig.Memory = memoryBytes;
+        parameters.HostConfig.MemorySwap = memoryBytes;
+        parameters.HostConfig.NanoCPUs = 1_000_000_000;
         parameters.HostConfig.PortBindings ??= new Dictionary<string, IList<Docker.DotNet.Models.PortBinding>>();
         parameters.HostConfig.PortBindings[port] = [new Docker.DotNet.Models.PortBinding { HostIP = "127.0.0.1", HostPort = "" }];
     }

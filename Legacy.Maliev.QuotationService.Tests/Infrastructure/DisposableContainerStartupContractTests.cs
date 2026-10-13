@@ -111,9 +111,11 @@ public sealed class DisposableContainerStartupContractTests(ITestOutputHelper ou
     {
         var calls = 0;
         var failure = new IOException("Synthetic removal verification failure.");
-        var resource = new ScriptedResource("one", [], Failure(Collision), failure);
-        Assert.Same(failure, await Assert.ThrowsAsync<IOException>(() => StartupPrototype.StartAsync(
+        var primary = Failure(Collision);
+        var resource = new ScriptedResource("one", [], primary, failure);
+        Assert.Same(primary, await Assert.ThrowsAsync<DockerApiException>(() => StartupPrototype.StartAsync(
             () => { calls++; return resource; }, (_, _) => throw new InvalidOperationException("Must not wait."))));
+        Assert.Contains(failure, Assert.IsType<Exception[]>(primary.Data["maliev.cleanup.failures"]));
         Assert.Equal(1, calls);
     }
 

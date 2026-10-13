@@ -858,7 +858,7 @@ public sealed partial class QuotationRepository(
             return new(QualificationUpdateStatus.NotFound, null);
         }
 
-        if (entity.QualificationVersion != request.ExpectedVersion)
+        if (entity.QualificationVersion != request.ExpectedVersion || entity.QualificationVersion == int.MaxValue)
         {
             return new(QualificationUpdateStatus.VersionConflict, null);
         }
