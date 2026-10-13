@@ -237,6 +237,8 @@ public sealed class WorkflowContractTests
     [InlineData("custody-filter")]
     [InlineData("collision-filter")]
     [InlineData("exhaustion-filter")]
+    [InlineData("missing-guard-enrollment")]
+    [InlineData("broadened-guard-enrollment")]
     [InlineData("log")]
     [InlineData("ignore-failure")]
     [InlineData("missing-artifact")]
@@ -279,6 +281,14 @@ public sealed class WorkflowContractTests
             case "exhaustion-filter":
                 collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
                     "QualificationBridgeConsumerHttpTests.Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap", "QualificationBridgeConsumerHttpTests.UnreviewedCase", StringComparison.Ordinal));
+                break;
+            case "missing-guard-enrollment":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
+                    "|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass", "", StringComparison.Ordinal));
+                break;
+            case "broadened-guard-enrollment":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
+                    "FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass", "FullyQualifiedName~Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests", StringComparison.Ordinal));
                 break;
             case "log":
                 collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
@@ -694,7 +704,7 @@ internal static partial class WorkflowContractValidator
     internal const string QualificationCustodyCollection = """
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
-          --filter 'FullyQualifiedName~ContainerOperationCustodyContractTests|FullyQualifiedName~DockerBindCollisionContractTests.FailedCleanupOfHostBindAttemptNeverAdmitsBackoffOrReplacement|FullyQualifiedName~QualificationBridgeConsumerHttpTests.Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap' \
+          --filter 'FullyQualifiedName~ContainerOperationCustodyContractTests|FullyQualifiedName~DockerBindCollisionContractTests.FailedCleanupOfHostBindAttemptNeverAdmitsBackoffOrReplacement|FullyQualifiedName~QualificationBridgeConsumerHttpTests.Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass' \
           --results-directory TestResults/QualificationCustody --logger 'trx;LogFileName=qualification-custody.trx'
         """;
     private const string CoverageCollection = QualificationCustodyCollection + "\n" + """
