@@ -17,6 +17,9 @@ using Legacy.Maliev.QuotationService.Domain;
 using Maliev.Aspire.ServiceDefaults.IAM;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -101,6 +104,233 @@ public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture
         Assert.Contains(literal.Id, ids);
         Assert.DoesNotContain(distractor.Id, ids);
         Assert.Equal(1, json.RootElement.GetProperty("TotalRecords").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("FirstName")]
+    [InlineData("LastName")]
+    [InlineData("Message")]
+    [InlineData("TelephoneNumber")]
+    [InlineData("CompanyName")]
+    [InlineData("Email")]
+    [InlineData("InternalComment")]
+    [InlineData("Country")]
+    public async Task Padded_text_search_preserves_each_source_field_literal(string field)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        var literal = await fixture.SeedAsync(Guid.NewGuid().ToString("N"), field: field, value: " " + marker + " ");
+        var unpadded = await fixture.SeedAsync(Guid.NewGuid().ToString("N"), field: field, value: marker);
+        var absent = await fixture.SeedAsync(Guid.NewGuid().ToString("N"), field: field, value: null);
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        using var response = await client.GetAsync("/quotationrequests?search=" + Uri.EscapeDataString(" " + marker.ToUpperInvariant() + " "));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = await JsonAsync(response);
+        Assert.Equal(new[] { literal.Id }, Ids(json));
+        Assert.DoesNotContain(unpadded.Id, Ids(json));
+        Assert.DoesNotContain(absent.Id, Ids(json));
+        Assert.Equal(1, json.RootElement.GetProperty("TotalRecords").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("\t", "latin")]
+    [InlineData(" ", "ทดสอบ")]
+    public async Task Padded_text_search_preserves_tabs_and_Thai(string padding, string text)
+    {
+        var marker = text + Guid.NewGuid().ToString("N");
+        var literal = await fixture.SeedAsync(padding + marker + padding);
+        var unpadded = await fixture.SeedAsync(marker);
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        using var response = await client.GetAsync("/quotationrequests?search=" + Uri.EscapeDataString(padding + marker + padding));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = await JsonAsync(response);
+        Assert.Equal(new[] { literal.Id }, Ids(json));
+        Assert.DoesNotContain(unpadded.Id, Ids(json));
+        Assert.Equal(1, json.RootElement.GetProperty("TotalRecords").GetInt32());
+    }
+
+    [Fact]
+    public async Task Padded_text_without_literal_match_retains_source_notfound()
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        await fixture.SeedAsync(marker);
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        using var response = await client.GetAsync("/quotationrequests?search=" + Uri.EscapeDataString(" " + marker + " "));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task Padded_numeric_search_keeps_source_identifier_selection(string padding)
+    {
+        var row = await fixture.SeedAsync(Guid.NewGuid().ToString("N"));
+        var distractor = await fixture.SeedAsync(padding + row.Id + padding);
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        using var response = await client.GetAsync("/quotationrequests?search=" + Uri.EscapeDataString(padding + row.Id + padding));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = await JsonAsync(response);
+        Assert.Equal(new[] { row.Id }, Ids(json));
+        Assert.DoesNotContain(distractor.Id, Ids(json));
+        Assert.Equal(1, json.RootElement.GetProperty("TotalRecords").GetInt32());
+        var item = json.RootElement.GetProperty("Items")[0];
+        Assert.Equal(row.JourneyId, item.GetProperty("JourneyId").GetGuid());
+        Assert.Equal(row.TransactionId, item.GetProperty("TransactionId").GetString());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    [InlineData(" \t ")]
+    public async Task Blank_http_query_retains_actual_model_binding_contract(string? search)
+    {
+        var binding = new LiteralSearchBindingCapture();
+        await WithLiteralSearchDatabaseAsync(async (db, app) =>
+        {
+            var rows = await SeedLiteralSearchRowsAsync(db, "alpha beta", "alphabeta", null);
+            Assert.True(app.Services.GetRequiredService<IModelMetadataProvider>().GetMetadataForType(typeof(string)).ConvertEmptyStringToNull);
+            using var client = fixture.Client(app);
+            var uri = search is null ? "/quotationrequests" : "/quotationrequests?search=" + Uri.EscapeDataString(search);
+            using var response = await client.GetAsync(uri);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.True(binding.Observed);
+            Assert.Equal(search is not null, binding.ArgumentPresent);
+            Assert.Null(binding.Search);
+            using var json = await JsonAsync(response);
+            Assert.Equal(rows.Select(x => x.Id).OrderBy(id => id).ToArray(), Ids(json));
+            Assert.Equal(rows.Length, json.RootElement.GetProperty("TotalRecords").GetInt32());
+        }, binding);
+    }
+
+    [Theory]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    [InlineData(" \t ")]
+    public async Task Direct_repository_whitespace_keeps_source_literal_filter(string search)
+    {
+        await WithLiteralSearchDatabaseAsync(async (db, app) =>
+        {
+            var rows = await SeedLiteralSearchRowsAsync(db, "alpha" + search + "beta", "alphabeta", null);
+            await using var scope = app.Services.CreateAsyncScope();
+            var service = scope.ServiceProvider.GetRequiredService<IQuotationService>();
+            var page = await service.GetRequestsAsync(null, search, 1, null, CancellationToken.None);
+            Assert.NotNull(page);
+            Assert.Equal(new[] { rows[0].Id }, page.Items.Select(x => x.Id).ToArray());
+            Assert.Equal(1, page.TotalRecords);
+        });
+    }
+
+    [Theory]
+    [InlineData(false, true, HttpStatusCode.Unauthorized)]
+    [InlineData(true, false, HttpStatusCode.Forbidden)]
+    public async Task Padded_search_retains_auth_and_live_permission_guards(bool authenticated, bool allowed, HttpStatusCode status)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        await fixture.SeedAsync(" " + marker + " ");
+        await using var before = fixture.Context();
+        var requests = JsonSerializer.Serialize(await before.Requests.AsNoTracking().OrderBy(row => row.Id).ToArrayAsync());
+        var audits = JsonSerializer.Serialize(await before.RequestQualificationAudit.AsNoTracking().OrderBy(row => row.Id).ToArrayAsync());
+        await using var app = fixture.App(allowed: allowed);
+        using var client = fixture.Client(app, authenticated: authenticated);
+        using var response = await client.GetAsync("/quotationrequests?search=" + Uri.EscapeDataString(" " + marker + " "));
+        Assert.Equal(status, response.StatusCode);
+        Assert.Equal(requests, JsonSerializer.Serialize(await before.Requests.AsNoTracking().OrderBy(row => row.Id).ToArrayAsync()));
+        Assert.Equal(audits, JsonSerializer.Serialize(await before.RequestQualificationAudit.AsNoTracking().OrderBy(row => row.Id).ToArrayAsync()));
+    }
+
+    private async Task WithLiteralSearchDatabaseAsync(
+        Func<QuotationRequestDbContext, WebApplicationFactory<Program>, Task> action,
+        LiteralSearchBindingCapture? binding = null)
+    {
+        var owner = fixture.Context();
+        QuotationRequestDbContext? isolated = null;
+        WebApplicationFactory<Program>? original = null;
+        WebApplicationFactory<Program>? app = null;
+        Exception? primary = null;
+        var cleanupFailures = new List<Exception>();
+        try
+        {
+            var connection = new NpgsqlConnectionStringBuilder(owner.Database.GetDbConnection().ConnectionString)
+            {
+                Database = "literal_search_" + Guid.NewGuid().ToString("N")
+            }.ConnectionString;
+            var options = new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(connection).Options;
+            isolated = new(options);
+            await isolated.Database.EnsureCreatedAsync();
+            original = fixture.App();
+            app = original.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<QuotationRequestDbContext>>();
+                services.AddSingleton(options);
+                if (binding is not null) services.Configure<MvcOptions>(options => options.Filters.Add(binding));
+            }));
+            await action(isolated, app);
+        }
+        catch (Exception error)
+        {
+            primary = error;
+            throw;
+        }
+        finally
+        {
+            if (app is not null)
+                try { await app.DisposeAsync(); } catch (Exception error) { cleanupFailures.Add(error); }
+            if (original is not null)
+                try { await original.DisposeAsync(); } catch (Exception error) { cleanupFailures.Add(error); }
+            if (isolated is not null)
+            {
+                try { await isolated.Database.EnsureDeletedAsync(); } catch (Exception error) { cleanupFailures.Add(error); }
+                try { await isolated.DisposeAsync(); } catch (Exception error) { cleanupFailures.Add(error); }
+            }
+            try { await owner.DisposeAsync(); } catch (Exception error) { cleanupFailures.Add(error); }
+            if (cleanupFailures.Count != 0)
+            {
+                var cleanup = new AggregateException("Literal-search disposable database cleanup failed.", cleanupFailures);
+                if (primary is null) throw cleanup;
+                try { primary.Data["LiteralSearchDatabaseCleanupFailure"] = cleanup; }
+                catch { /* Secondary metadata access must never replace the original test failure. */ }
+            }
+        }
+    }
+
+    private static async Task<QuotationRequest[]> SeedLiteralSearchRowsAsync(QuotationRequestDbContext db, params string?[] messages)
+    {
+        var timestamp = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+        var rows = messages.Select(message => new QuotationRequest
+        {
+            Message = message,
+            JourneyId = Guid.NewGuid(),
+            CreatedDate = timestamp,
+            ModifiedDate = timestamp,
+            Done = false
+        }).ToArray();
+        db.Requests.AddRange(rows);
+        await db.SaveChangesAsync();
+        foreach (var row in rows) row.TransactionId = $"request-{row.Id}";
+        await db.SaveChangesAsync();
+        return rows;
+    }
+
+    private sealed class LiteralSearchBindingCapture : IActionFilter
+    {
+        public bool Observed { get; private set; }
+        public bool ArgumentPresent { get; private set; }
+        public string? Search { get; private set; }
+        public void OnActionExecuting(ActionExecutingContext context)
+        {
+            if (context.ActionDescriptor.Parameters.Any(parameter => parameter.Name == "search"))
+            {
+                Observed = true;
+                ArgumentPresent = context.ActionArguments.TryGetValue("search", out var value);
+                Search = value as string;
+            }
+        }
+        public void OnActionExecuted(ActionExecutedContext context) { }
     }
 
     [Theory]

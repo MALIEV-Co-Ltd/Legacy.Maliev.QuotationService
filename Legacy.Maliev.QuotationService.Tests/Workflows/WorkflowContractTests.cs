@@ -262,6 +262,8 @@ public sealed class WorkflowContractTests
     [InlineData("exhaustion-filter")]
     [InlineData("missing-guard-enrollment")]
     [InlineData("broadened-guard-enrollment")]
+    [InlineData("missing-literal-search-enrollment")]
+    [InlineData("broadened-literal-search-enrollment")]
     [InlineData("log")]
     [InlineData("ignore-failure")]
     [InlineData("missing-artifact")]
@@ -315,6 +317,14 @@ public sealed class WorkflowContractTests
             case "broadened-guard-enrollment":
                 collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
                     "FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass", "FullyQualifiedName~Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests", StringComparison.Ordinal));
+                break;
+            case "missing-literal-search-enrollment":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
+                    WorkflowContractValidator.RequestLiteralSearchEnrollment, "", StringComparison.Ordinal));
+                break;
+            case "broadened-literal-search-enrollment":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
+                    WorkflowContractValidator.RequestLiteralSearchEnrollment, "|FullyQualifiedName~Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests", StringComparison.Ordinal));
                 break;
             case "log":
                 collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
@@ -727,10 +737,11 @@ internal static partial class WorkflowContractValidator
         python3 -B scripts/check_qualification_wire_results.py
         dotnet tools/QualificationOutcomeWireSource/bin/Release/net10.0/QualificationOutcomeWireSource.dll "$GITHUB_WORKSPACE"
         """;
+    internal const string RequestLiteralSearchEnrollment = "|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Padded_text_search_preserves_each_source_field_literal|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Padded_text_search_preserves_tabs_and_Thai|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Padded_text_without_literal_match_retains_source_notfound|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Padded_numeric_search_keeps_source_identifier_selection|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Blank_http_query_retains_actual_model_binding_contract|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Direct_repository_whitespace_keeps_source_literal_filter|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Padded_search_retains_auth_and_live_permission_guards";
     internal const string QualificationCustodyCollection = """
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
-          --filter 'FullyQualifiedName~ContainerOperationCustodyContractTests|FullyQualifiedName~DockerBindCollisionContractTests.FailedCleanupOfHostBindAttemptNeverAdmitsBackoffOrReplacement|FullyQualifiedName~QualificationBridgeConsumerHttpTests.Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsC6SourceIndexFocusBypass|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsCoverageEvidenceContractMutation' \
+          --filter 'FullyQualifiedName~ContainerOperationCustodyContractTests|FullyQualifiedName~DockerBindCollisionContractTests.FailedCleanupOfHostBindAttemptNeverAdmitsBackoffOrReplacement|FullyQualifiedName~QualificationBridgeConsumerHttpTests.Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsC6SourceIndexFocusBypass|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsCoverageEvidenceContractMutation|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Padded_text_search_preserves_each_source_field_literal|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Padded_text_search_preserves_tabs_and_Thai|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Padded_text_without_literal_match_retains_source_notfound|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Padded_numeric_search_keeps_source_identifier_selection|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Blank_http_query_retains_actual_model_binding_contract|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Direct_repository_whitespace_keeps_source_literal_filter|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Padded_search_retains_auth_and_live_permission_guards' \
           --results-directory TestResults/QualificationCustody --logger 'trx;LogFileName=qualification-custody.trx'
         """;
     internal const string C6SourceIndexCollection = """
