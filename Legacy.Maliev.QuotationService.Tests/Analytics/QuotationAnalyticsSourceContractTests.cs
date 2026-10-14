@@ -48,8 +48,8 @@ public sealed class QuotationAnalyticsSourceContractTests
         Assert.True(journey.IsNullable);
         Assert.Equal("SourceRequestID", request.GetColumnName(table));
         Assert.Equal("SourceJourneyID", journey.GetColumnName(table));
-        var requestIndex = Assert.Single(entity.GetIndexes().Where(index => index.Properties.Count == 1 && index.Properties[0] == request));
-        var journeyIndex = Assert.Single(entity.GetIndexes().Where(index => index.Properties.Count == 1 && index.Properties[0] == journey));
+        var requestIndex = Assert.Single(entity.GetIndexes(), index => index.Properties.Count == 1 && index.Properties[0] == request);
+        var journeyIndex = Assert.Single(entity.GetIndexes(), index => index.Properties.Count == 1 && index.Properties[0] == journey);
         Assert.False(requestIndex.IsUnique);
         Assert.False(journeyIndex.IsUnique);
         Assert.Equal("IX_GoogleAnalyticsOutbox_SourceRequestID", requestIndex.GetDatabaseName());

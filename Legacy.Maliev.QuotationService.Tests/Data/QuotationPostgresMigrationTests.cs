@@ -133,7 +133,7 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         foreach (var column in new[] { "SourceJourneyID", "SourceRequestID" })
         {
             var name = "IX_GoogleAnalyticsOutbox_" + column;
-            var entry = Assert.Single(indexes.Where(value => value.StartsWith(name + "|", StringComparison.Ordinal)));
+            var entry = Assert.Single(indexes, value => value.StartsWith(name + "|", StringComparison.Ordinal));
             var parts = entry.Split('|', 4);
             Assert.Equal("false", parts[1]);
             var predicate = parts[2].Replace("(", "", StringComparison.Ordinal).Replace(")", "", StringComparison.Ordinal).Trim();
