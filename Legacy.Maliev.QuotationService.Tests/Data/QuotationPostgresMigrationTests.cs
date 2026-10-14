@@ -37,6 +37,119 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
     public async Task DisposeAsync() { if (containers is not null) await containers.DisposeAsync(); }
 
     [Fact]
+    public async Task AnalyticsSourceIndexMigration_GeneratesScriptsAndPreservesRowsAcrossUpgradeRollbackAndReupgrade()
+    {
+        const string previous = "20261006080000_QuotationInvoiceCompletionOperations";
+        const string current = "20261014013000_PreserveAnalyticsSourceIndexPredicates";
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        await using var context = QuotationContext();
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync(previous, cancellation.Token);
+
+        var up = migrator.GenerateScript(previous, current);
+        var down = migrator.GenerateScript(current, previous);
+        foreach (var (script, suffix, filtered) in new[] { (up, "Partial", true), (down, "Unfiltered", false) })
+        {
+            var creates = new List<int>();
+            var drops = new List<int>();
+            foreach (var column in new[] { "SourceRequestID", "SourceJourneyID" })
+            {
+                var name = "IX_GoogleAnalyticsOutbox_" + column;
+                var temporary = name + "_" + suffix;
+                var predicate = "\"" + column + "\" IS NOT NULL";
+                var create = script.IndexOf("CREATE INDEX \"" + temporary + "\"", StringComparison.Ordinal);
+                var drop = script.IndexOf("DROP INDEX \"" + name + "\"", StringComparison.Ordinal);
+                var rename = script.IndexOf("ALTER INDEX \"" + temporary + "\" RENAME TO \"" + name + "\"", StringComparison.Ordinal);
+                Assert.True(create >= 0 && drop >= 0 && rename > drop);
+                creates.Add(create);
+                drops.Add(drop);
+                if (filtered) Assert.Contains(predicate, script, StringComparison.Ordinal);
+                else Assert.DoesNotContain(predicate, script, StringComparison.Ordinal);
+            }
+            Assert.True(creates.Max() < drops.Min());
+        }
+        await AssertAnalyticsSourceIndexCatalogAsync(context, filtered: false, cancellation.Token);
+
+        var time = new DateTime(2026, 8, 30, 3, 4, 5, DateTimeKind.Unspecified).AddTicks(7);
+        var journey = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        var lease = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        for (var index = 0; index < 4; index++)
+        {
+            context.GoogleAnalyticsOutbox.Add(new GoogleAnalyticsOutbox
+            {
+                QuotationId = 43, EventKey = "c6-source-index-contract-" + index, EventName = "close_convert_lead",
+                SourceRequestId = index is 0 or 2 ? 456 : null,
+                SourceJourneyId = index is 0 or 3 ? journey : null,
+                ClientId = "123.456", SessionId = "789", Currency = "THB", Value = 10.25m,
+                OccurredUtc = time, NextAttemptUtc = time.AddSeconds(1), AttemptCount = index,
+                LeaseToken = index == 0 ? lease : null, LeaseUntilUtc = index == 0 ? time.AddMinutes(1) : null,
+                SentUtc = index == 1 ? time : null, FailedUtc = index == 2 ? time : null,
+                LastError = index == 2 ? "synthetic terminal marker" : null,
+            });
+        }
+        await context.SaveChangesAsync(cancellation.Token);
+        context.ChangeTracker.Clear();
+        var originalRows = JsonSerializer.Serialize(await context.GoogleAnalyticsOutbox.AsNoTracking()
+            .OrderBy(row => row.Id).ToArrayAsync(cancellation.Token));
+
+        foreach (var target in new[] { current, previous, current })
+        {
+            await migrator.MigrateAsync(target, cancellation.Token);
+            await AssertAnalyticsSourceIndexCatalogAsync(context, target == current, cancellation.Token);
+            var retainedRows = JsonSerializer.Serialize(await context.GoogleAnalyticsOutbox.AsNoTracking()
+                .OrderBy(row => row.Id).ToArrayAsync(cancellation.Token));
+            Assert.Equal(originalRows, retainedRows);
+            var latest = (await context.Database.GetAppliedMigrationsAsync(cancellation.Token)).Last();
+            Assert.Equal(target, latest);
+        }
+    }
+
+    private static async Task AssertAnalyticsSourceIndexCatalogAsync(QuotationDbContext context, bool filtered,
+        CancellationToken cancellationToken)
+    {
+        var columns = await context.Database.SqlQueryRaw<string>(
+            """
+            SELECT column_name || ':' || udt_name || ':' || is_nullable AS "Value"
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'GoogleAnalyticsOutbox'
+                AND column_name IN ('SourceRequestID', 'SourceJourneyID')
+            ORDER BY column_name
+            """).ToListAsync(cancellationToken);
+        Assert.Equal(new[] { "SourceJourneyID:uuid:YES", "SourceRequestID:int4:YES" }, columns);
+        var indexes = await context.Database.SqlQueryRaw<string>(
+            """
+            SELECT index_class.relname || '|' || pg_index.indisunique::text || '|' ||
+                COALESCE(pg_get_expr(pg_index.indpred, pg_index.indrelid), '') || '|' ||
+                pg_get_indexdef(pg_index.indexrelid) AS "Value"
+            FROM pg_index
+            JOIN pg_class AS index_class ON index_class.oid = pg_index.indexrelid
+            JOIN pg_class AS table_class ON table_class.oid = pg_index.indrelid
+            JOIN pg_namespace ON pg_namespace.oid = table_class.relnamespace
+            WHERE pg_namespace.nspname = 'public' AND table_class.relname = 'GoogleAnalyticsOutbox'
+                AND index_class.relname IN ('IX_GoogleAnalyticsOutbox_SourceRequestID', 'IX_GoogleAnalyticsOutbox_SourceJourneyID')
+            ORDER BY index_class.relname
+            """).ToListAsync(cancellationToken);
+        Assert.Equal(2, indexes.Count);
+        foreach (var column in new[] { "SourceJourneyID", "SourceRequestID" })
+        {
+            var name = "IX_GoogleAnalyticsOutbox_" + column;
+            var entry = Assert.Single(indexes.Where(value => value.StartsWith(name + "|", StringComparison.Ordinal)));
+            var parts = entry.Split('|', 4);
+            Assert.Equal("false", parts[1]);
+            var predicate = parts[2].Replace("(", "", StringComparison.Ordinal).Replace(")", "", StringComparison.Ordinal).Trim();
+            Assert.Equal(filtered ? "\"" + column + "\" IS NOT NULL" : "", predicate);
+            Assert.Contains("(\"" + column + "\")", parts[3], StringComparison.Ordinal);
+        }
+        Assert.Equal(0, await context.Database.SqlQueryRaw<int>(
+            """
+            SELECT COUNT(*)::int AS "Value" FROM pg_indexes
+            WHERE schemaname = 'public' AND tablename = 'GoogleAnalyticsOutbox'
+                AND indexname IN ('IX_GoogleAnalyticsOutbox_SourceRequestID_Partial', 'IX_GoogleAnalyticsOutbox_SourceJourneyID_Partial',
+                    'IX_GoogleAnalyticsOutbox_SourceRequestID_Unfiltered', 'IX_GoogleAnalyticsOutbox_SourceJourneyID_Unfiltered')
+            """).SingleAsync(cancellationToken));
+    }
+
+    [Fact]
     public async Task QualificationOutcomeReadback_ProjectsOrderedPiiFreeCurrentStateFromPostgreSql()
     {
         await using var quotationContext = QuotationContext();
