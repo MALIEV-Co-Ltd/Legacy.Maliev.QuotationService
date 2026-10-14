@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using Legacy.Maliev.QuotationService.Api.Analytics;
 using Legacy.Maliev.QuotationService.Domain;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -137,6 +138,107 @@ public sealed class QuotationAnalyticsRetryContractTests
         Assert.Equal(store.Row.LeaseToken, store.RecordedLease);
     }
 
+    [Theory]
+    [InlineData("client", true)]
+    [InlineData("client", false)]
+    [InlineData("session", true)]
+    [InlineData("session", false)]
+    [InlineData("user", true)]
+    [InlineData("user", false)]
+    public async Task Processor_IdentifierPrivacy_TerminalAdmissionIsFencedAndNeverSendsUnsafeIds(
+        string field, bool currentLease)
+    {
+        var store = new RecordingStore(1) { TerminalAllowed = currentLease };
+        const string unsafeValue = "privacy@example.invalid";
+        if (field == "client") store.Row.ClientId = unsafeValue;
+        if (field == "session") store.Row.SessionId = unsafeValue;
+        if (field == "user") store.Row.UserId = unsafeValue;
+        using var handler = new ResponseHandler(204);
+        using var client = new HttpClient(handler);
+        var audit = new PrivacyAudit();
+        var processor = new GoogleAnalyticsDeliveryProcessor(client, store,
+            Options.Create(new GoogleAnalyticsMeasurementProtocolOptions { Enabled = true, MaxAttempts = 100 }),
+            new Clock(), audit, () => throw new InvalidOperationException("Unsafe identifiers must not retry."));
+
+        Assert.Equal(1, await processor.DeliverBatchAsync(CancellationToken.None));
+
+        Assert.Equal(0, handler.Requests);
+        Assert.Equal(1, store.FailureAdmissions);
+        Assert.Equal(currentLease ? 1 : 0, store.Writes);
+        Assert.Equal(currentLease ? "failed" : null, store.Outcome);
+        Assert.Equal(currentLease ? "Unsafe analytics identifier." : null, store.Diagnostic);
+        Assert.Equal(currentLease ? 1 : 0, audit.Messages.Count);
+        Assert.DoesNotContain(audit.Messages, message => message.Contains(unsafeValue, StringComparison.Ordinal));
+        if (currentLease)
+        {
+            Assert.Equal(store.Row.Id, store.RecordedId);
+            Assert.Equal(store.Row.LeaseToken, store.RecordedLease);
+        }
+    }
+
+    [Fact]
+    public async Task Processor_IdentifierPrivacy_LegitimateOpaqueIdsStillSendNormally()
+    {
+        var store = new RecordingStore(1);
+        store.Row.ClientId = "client-opaque";
+        store.Row.SessionId = "session-opaque";
+        store.Row.UserId = "user-opaque";
+        using var handler = new ResponseHandler(204);
+        using var client = new HttpClient(handler);
+
+        Assert.Equal(1, await Processor(client, store, 10, 0).DeliverBatchAsync(CancellationToken.None));
+
+        Assert.Equal(1, handler.Requests);
+        Assert.Equal("sent", store.Outcome);
+        Assert.Equal(1, store.Writes);
+        Assert.Equal(0, store.FailureAdmissions);
+    }
+
+    [Fact]
+    public async Task Processor_IdentifierPrivacy_UnsafeRowDoesNotPreventLaterLegitimateDelivery()
+    {
+        var store = new RecordingStore(1);
+        store.Row.ClientId = "privacy@example.invalid";
+        store.NextRow = new GoogleAnalyticsOutbox
+        {
+            Id = 8,
+            QuotationId = 18,
+            LeaseToken = Guid.Parse("22222222-3333-4444-5555-666666666666"),
+            AttemptCount = 1,
+            EventKey = "quotation-18:close_convert_lead:v1",
+            EventName = "close_convert_lead",
+            ClientId = "client-opaque",
+            SessionId = "session-opaque",
+            Currency = "THB",
+            OccurredUtc = Clock.Utc.UtcDateTime,
+        };
+        using var handler = new ResponseHandler(204);
+        using var client = new HttpClient(handler);
+        var audit = new PrivacyAudit();
+        var processor = new GoogleAnalyticsDeliveryProcessor(client, store,
+            Options.Create(new GoogleAnalyticsMeasurementProtocolOptions { Enabled = true }),
+            new Clock(), audit, () => 0);
+
+        Assert.Equal(2, await processor.DeliverBatchAsync(CancellationToken.None));
+
+        Assert.Equal(1, handler.Requests);
+        Assert.Equal(1, store.FailureAdmissions);
+        Assert.Equal(2, store.Writes);
+        Assert.Equal("sent", store.Outcome);
+        Assert.Equal(8, store.RecordedId);
+        Assert.Single(audit.Messages);
+        Assert.DoesNotContain(audit.Messages, message => message.Contains("privacy@example.invalid", StringComparison.Ordinal));
+    }
+
+    private sealed class PrivacyAudit : ILogger<GoogleAnalyticsDeliveryProcessor>
+    {
+        internal List<string> Messages { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Messages.Add(formatter(state, exception));
+    }
+
     private static GoogleAnalyticsDeliveryProcessor Processor(HttpClient client, RecordingStore store, int maxAttempts, double jitter, bool enabled = true) =>
         new(client, store, Options.Create(new GoogleAnalyticsMeasurementProtocolOptions
         {
@@ -175,6 +277,9 @@ public sealed class QuotationAnalyticsRetryContractTests
 
     private sealed class RecordingStore(int attempt) : IGoogleAnalyticsOutboxStore
     {
+        internal GoogleAnalyticsOutbox? NextRow { get; set; }
+        internal bool TerminalAllowed { get; set; } = true;
+        internal int FailureAdmissions { get; private set; }
         internal GoogleAnalyticsOutbox Row { get; } = new()
         {
             Id = 7,
@@ -198,7 +303,9 @@ public sealed class QuotationAnalyticsRetryContractTests
         public Task<IReadOnlyList<GoogleAnalyticsOutbox>> ClaimAsync(DateTime nowUtc, TimeSpan leaseDuration, int batchSize, CancellationToken cancellationToken)
         {
             Claims++;
-            return Task.FromResult<IReadOnlyList<GoogleAnalyticsOutbox>>([Row]);
+            var rows = new List<GoogleAnalyticsOutbox> { Row };
+            if (NextRow is { } next) rows.Add(next);
+            return Task.FromResult<IReadOnlyList<GoogleAnalyticsOutbox>>(rows);
         }
         public Task MarkSentAsync(long id, Guid leaseToken, DateTime sentUtc, CancellationToken cancellationToken) =>
             Record("sent", id, leaseToken, sentUtc, null);
@@ -206,6 +313,8 @@ public sealed class QuotationAnalyticsRetryContractTests
             Record("retry", id, leaseToken, nextAttemptUtc, error);
         public async Task<bool> MarkFailedAsync(long id, Guid leaseToken, DateTime failedUtc, string error, CancellationToken cancellationToken)
         {
+            FailureAdmissions++;
+            if (!TerminalAllowed) return false;
             await Record("failed", id, leaseToken, failedUtc, error);
             return true;
         }

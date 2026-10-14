@@ -178,6 +178,11 @@ public sealed partial class QuotationRepository(
         CancellationToken cancellationToken, int? invoiceId, QuotationAnalyticsContext? analyticsContext,
         QuotationInvoiceCompletionContext? completion)
     {
+        if (accepted && analyticsContext is not null
+            && !QuotationAnalyticsContext.IdentifiersAreSafe(
+                analyticsContext.ClientId, analyticsContext.SessionId, analyticsContext.UserId))
+            throw new ArgumentException("Invalid analytics context.", nameof(analyticsContext));
+
         if (completion is not null)
         {
             var prior = await ReadAsync(completion.OperationId, cancellationToken);

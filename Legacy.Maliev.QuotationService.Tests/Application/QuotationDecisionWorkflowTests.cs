@@ -10,6 +10,68 @@ public sealed class QuotationDecisionWorkflowTests
     private static readonly DateTime InitialVersion = new(2026, 7, 18, 8, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime DecisionVersion = new(2026, 7, 18, 8, 5, 0, DateTimeKind.Utc);
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DecideAsync_IdentifierPrivacy_RejectsBeforeServiceOrOrderMutation(bool clientField)
+    {
+        var quotations = new Mock<IQuotationService>(MockBehavior.Strict);
+        var orders = new Mock<IOrderDecisionClient>(MockBehavior.Strict);
+        var workflow = new QuotationDecisionWorkflow(quotations.Object, orders.Object);
+        var request = new QuotationDecisionRequest(true)
+        {
+            ClientId = clientField ? "privacy@example.invalid" : "client-opaque",
+            SessionId = clientField ? "session-opaque" : "privacy@example.invalid",
+            Currency = "THB",
+        };
+
+        await Assert.ThrowsAsync<ArgumentException>(() => workflow.DecideAsync(7, request, null, CancellationToken.None));
+
+        quotations.VerifyNoOtherCalls();
+        orders.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task DecideAsync_IdentifierPrivacy_PreservesTrimmedOpaqueContext()
+    {
+        var quotations = new Mock<IQuotationService>(MockBehavior.Strict);
+        var orders = new Mock<IOrderDecisionClient>(MockBehavior.Strict);
+        var expected = new QuotationAnalyticsContext("client-opaque", "session-opaque", "THB", "user-opaque");
+        quotations.Setup(value => value.ApplyDecisionAsync(
+            7, true, QuotationAcceptanceOrigin.Customer, null, It.IsAny<CancellationToken>(), null,
+            It.Is<QuotationAnalyticsContext?>(context => context == expected)))
+            .ReturnsAsync(new QuotationDecisionPersistenceResult(QuotationDecisionPersistenceStatus.NotFound, null));
+        var workflow = new QuotationDecisionWorkflow(quotations.Object, orders.Object);
+        var request = new QuotationDecisionRequest(true)
+        {
+            ClientId = " client-opaque ",
+            SessionId = " session-opaque ",
+            UserId = " user-opaque ",
+            Currency = "thb",
+        };
+
+        Assert.Equal(QuotationDecisionStatus.NotFound,
+            (await workflow.DecideAsync(7, request, null, CancellationToken.None)).Status);
+
+        quotations.VerifyAll();
+        orders.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void Decision_IdentifierPrivacy_NoPairStillIgnoresOptionalUserAndCurrency()
+    {
+        var request = new QuotationDecisionRequest(true)
+        {
+            ClientId = " ",
+            SessionId = null,
+            UserId = "privacy@example.invalid",
+            Currency = "invalid",
+        };
+
+        Assert.True(request.TryGetAnalyticsContext(out var context));
+        Assert.Null(context);
+    }
+
     [Fact]
     public async Task DecideAsync_DeclinedReplay_IgnoresPriorAcceptedAttachmentBinding()
     {

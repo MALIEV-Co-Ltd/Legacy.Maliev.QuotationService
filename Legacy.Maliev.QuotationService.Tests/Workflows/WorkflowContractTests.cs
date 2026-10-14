@@ -47,8 +47,16 @@ public sealed class WorkflowContractTests
     [InlineData("name: quotation-docker-context-inspection-${{ github.sha }}", "name: unbound-inspection")]
     [InlineData("            scripts/docker_context_inspection_focus.json\n", "            scripts/**\n")]
     [InlineData("always() && hashFiles('TestResults/DockerContextInspection/docker-context-inspection.trx') != ''", "success()")]
-    public void BuildAndTest_RejectsInspectionFocusBypass(string original, string replacement) =>
+    public void BuildAndTest_RejectsInspectionFocusBypass(string original, string replacement)
+    {
         AssertMutationRejected(original, replacement);
+        // Existing executions also reject the matching privacy filter, result and retention bypasses.
+        AssertMutationRejected("FullyQualifiedName~IdentifierPrivacy", "FullyQualifiedName~UnreviewedPrivacy");
+        AssertMutationRejected("--logger 'trx;LogFileName=analytics-identifier-privacy.trx'",
+            "--logger 'trx;LogFileName=analytics-identifier-privacy.trx' || true");
+        AssertMutationRejected("            TestResults/AnalyticsIdentifierPrivacy/analytics-identifier-privacy.trx\n",
+            "            TestResults/**\n");
+    }
 
     [Theory]
     [InlineData("remove")]
@@ -698,6 +706,11 @@ internal static partial class WorkflowContractValidator
           --results-directory TestResults/DockerContextInspection \
           --logger 'trx;LogFileName=docker-context-inspection.trx'
         python3 -B scripts/check_docker_context_inspection_results.py
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~IdentifierPrivacy|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationInvoiceDecisionHttpPostgresTests.Decision_InvalidAnalyticsHttpContext_DoesNotWriteFinancialOrDeliveryRows' \
+          --results-directory TestResults/AnalyticsIdentifierPrivacy \
+          --logger 'trx;LogFileName=analytics-identifier-privacy.trx'
         """;
 
     private const string RyukImage = "ghcr.io/testcontainers/ryuk@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0";
@@ -992,7 +1005,7 @@ internal static partial class WorkflowContractValidator
         if (!inputs.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal).SetEquals(["name", "path", "if-no-files-found", "retention-days"]))
             throw new InvalidOperationException("Inspection evidence requires four exact inputs.");
         RequireScalarValue(inputs, "name", "quotation-docker-context-inspection-${{ github.sha }}");
-        RequireScalarValue(inputs, "path", "TestResults/DockerContextInspection/docker-context-inspection.trx\nscripts/docker_context_inspection_focus.json\n");
+        RequireScalarValue(inputs, "path", "TestResults/DockerContextInspection/docker-context-inspection.trx\nscripts/docker_context_inspection_focus.json\nTestResults/AnalyticsIdentifierPrivacy/analytics-identifier-privacy.trx\n");
         RequireScalarValue(inputs, "if-no-files-found", "error");
         RequireScalarValue(inputs, "retention-days", "7");
     }

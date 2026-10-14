@@ -153,6 +153,11 @@ jobs:
             --results-directory TestResults/DockerContextInspection \
             --logger 'trx;LogFileName=docker-context-inspection.trx'
           python3 -B scripts/check_docker_context_inspection_results.py
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~IdentifierPrivacy|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Controllers.QuotationInvoiceDecisionHttpPostgresTests.Decision_InvalidAnalyticsHttpContext_DoesNotWriteFinancialOrDeliveryRows' \
+            --results-directory TestResults/AnalyticsIdentifierPrivacy \
+            --logger 'trx;LogFileName=analytics-identifier-privacy.trx'
       - name: Retain Docker context inspection evidence
         if: always() && hashFiles('TestResults/DockerContextInspection/docker-context-inspection.trx') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -161,6 +166,7 @@ jobs:
           path: |
             TestResults/DockerContextInspection/docker-context-inspection.trx
             scripts/docker_context_inspection_focus.json
+            TestResults/AnalyticsIdentifierPrivacy/analytics-identifier-privacy.trx
           if-no-files-found: error
           retention-days: 7
       - name: Validate .NET solution
