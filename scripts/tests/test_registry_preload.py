@@ -602,4 +602,126 @@ class LiveCaptureControls(unittest.TestCase):
   with patch('os.name','posix'),patch.object(p.time,'monotonic',return_value=10),patch.object(p.subprocess,'Popen') as launch:
    with self.assertRaises(TimeoutError):p.run_docker_cli(['docker'],90,hard_deadline=12)
    launch.assert_not_called()
+class SafeProviderMetadata(unittest.TestCase):
+ def test_main_retains_safe_http_metadata_before_any_docker_mutation(self):
+  import io,os,tempfile,urllib.error
+  from unittest.mock import patch
+  error=urllib.error.HTTPError('https://host/path?token=CANARY',403,'private reason CANARY',
+   {'Retry-After':'5','RateLimit-Reset':'30','Authorization':'Bearer CANARY'},io.BytesIO(b'CANARY'))
+  class Opener:
+   def open(self,request,timeout):raise error
+  def fake_preload(rows,run,fetch,receipt):return fetch('https://host/path?token=CANARY','CANARY')
+  with tempfile.TemporaryDirectory(prefix='quotation-safe-metadata-control-') as directory:
+   with patch.dict(os.environ,{'RUNNER_TEMP':directory,'TESTCONTAINERS_RYUK_CONTAINER_IMAGE':p.RYUK}),patch.object(sys,'argv',['preload_images.py']),patch.object(p,'preload',side_effect=fake_preload),patch.object(p.urllib.request,'build_opener',return_value=Opener()),patch.object(p,'run_docker_cli') as docker:
+    with self.assertRaises(urllib.error.HTTPError) as caught:p.main()
+    self.assertIs(caught.exception,error);docker.assert_not_called()
+   data=json.loads((Path(directory)/'quotation-registry-preload.json').read_bytes())
+   self.assertEqual(data['createdTags'],[]);self.assertEqual(data['metadataFailureDiagnostic']['httpStatus'],403)
+   self.assertEqual(data['metadataFailureDiagnostic']['retryAfterSeconds'],5)
+   self.assertNotIn('CANARY',json.dumps(data));self.assertTrue(error.fp.closed)
+ def test_cli_code_status_and_retry_are_observed_without_raw_echo(self):
+  payload=b'Error response from daemon: toomanyrequests: secret-canary token=private\nRetry-After: 120\nRateLimit-Reset: 30\nX-RateLimit-Reset: 1791936000'
+  error=p.command_failure(['docker','pull',p.RYUK],1,payload,len(payload))
+  meta=error.diagnostic['safeProviderMetadata']
+  self.assertEqual(meta['errorCode'],'TOOMANYREQUESTS');self.assertEqual(meta['retryAfterSeconds'],120)
+  self.assertEqual(meta['rateLimitResetValue'],30);self.assertEqual(meta['xRateLimitResetValue'],1791936000)
+  self.assertIsNone(meta['httpStatus']);self.assertEqual(meta['origin'],'captured-cli-stderr')
+  encoded=json.dumps(error.diagnostic)+str(error)
+  self.assertNotIn('secret-canary',encoded);self.assertNotIn('token=',encoded);self.assertNotIn('private',encoded)
+  self.assertEqual(meta['rateLimitNature'],'unclassified');self.assertEqual(meta['resetUnits'],'not-inferred')
+ def test_missing_values_stay_unknown(self):
+  meta=p.safe_provider_metadata('arbitrary sensitive provider wording')
+  for key in ('errorCode','httpStatus','retryAfterSeconds','retryAfterHttpDate','rateLimitResetValue','xRateLimitResetValue'):self.assertIsNone(meta[key])
+ def test_code_inside_credentials_or_url_is_not_provider_code(self):
+  for value in ('https://host/TOOMANYREQUESTS?token=private','username=TOOMANYREQUESTS password=private','prefixThrottlingExceptionSuffix'):
+   self.assertIsNone(p.safe_provider_metadata(value)['errorCode'])
+ def test_header_allowlist_drops_credentials_and_unknown_values(self):
+  headers={'Retry-After':'4','X-RateLimit-Reset':'1791936000','x-amzn-ErrorType':'ThrottlingException',
+   'Authorization':'Bearer CANARY','Set-Cookie':'CANARY','WWW-Authenticate':'token=CANARY','Request-ID':'customer-CANARY'}
+  meta=p.safe_provider_metadata(headers=headers,status=429,origin='metadata-http-response')
+  self.assertEqual(meta['httpStatus'],429);self.assertEqual(meta['errorCode'],'ThrottlingException');self.assertEqual(meta['retryAfterSeconds'],4)
+  self.assertNotIn('CANARY',json.dumps(meta));self.assertNotIn('Authorization',json.dumps(meta))
+ def test_invalid_or_unbounded_retry_values_are_not_retained(self):
+  for value in ('-1','0.5','1e20','9'*100,'2147483648','secret CANARY'):
+   meta=p.safe_provider_metadata(headers={'Retry-After':value,'RateLimit-Reset':value,'X-RateLimit-Reset':value})
+   self.assertIsNone(meta['retryAfterSeconds']);self.assertIsNone(meta['rateLimitResetValue']);self.assertIsNone(meta['xRateLimitResetValue'])
+   self.assertNotIn('CANARY',json.dumps(meta))
+ def test_canonical_http_date_retained_but_not_used_to_change_retry(self):
+  meta=p.safe_provider_metadata(headers={'Retry-After':'Wed, 21 Oct 2015 07:28:00 GMT'})
+  self.assertEqual(meta['retryAfterHttpDate'],'Wed, 21 Oct 2015 07:28:00 GMT');self.assertIsNone(meta['retryAfterSeconds'])
+  errors,calls,waits,invoke=MetadataThrottling().scenario([429,200],'Wed, 21 Oct 2015 07:28:00 GMT')
+  with self.assertRaises(Exception):invoke()
+  self.assertFalse(waits);self.assertTrue(errors[0].fp.closed)
+ def test_http_failure_preserves_primary_and_closes_response(self):
+  errors,calls,waits,invoke=MetadataThrottling().scenario([403,200],'5')
+  with self.assertRaises(Exception) as caught:invoke()
+  self.assertIs(caught.exception,errors[0]);self.assertEqual(errors[0].safe_registry_diagnostic['httpStatus'],403)
+  self.assertEqual(errors[0].safe_registry_diagnostic['retryAfterSeconds'],5)
+  self.assertFalse(waits);self.assertTrue(errors[0].fp.closed)
+ def test_failed_pull_still_has_one_attempt_and_unsettled_intent(self):
+  row=json.loads((R/'image-pins.json').read_bytes())[0];calls=[]
+  payload=b'TOOMANYREQUESTS: rate exceeded';error=p.command_failure(['docker','pull',row['mirror']],1,payload,len(payload))
+  def run(args,required=True):
+   calls.append(args)
+   if args[1]=='pull':raise error
+   return None
+  receipt={'createdTags':[],'write':lambda:None}
+  with self.assertRaises(p.DockerCommandFailure) as caught:p.mutate(['docker','pull',row['mirror']],row['mirror'],row,run,receipt)
+  self.assertIs(caught.exception,error);self.assertEqual(sum(a[1]=='pull' for a in calls),1)
+  self.assertFalse(receipt['createdTags'][0]['commandSettled']);self.assertTrue(receipt['createdTags'][0].get('unresolvedLease'))
+
+class SafeMetadataFailureCustody(unittest.TestCase):
+ def test_unicode_code_lookalikes_remain_unknown_without_raw_echo(self):
+  for code in ('ThrottlİngException','ThrottlıngException','MANIFEſT_UNKNOWN'):
+   with self.subTest(code=code):
+    meta=p.safe_provider_metadata('Error response from daemon: '+code+': CANARY')
+    self.assertIsNone(meta['errorCode']);self.assertNotIn('CANARY',json.dumps(meta));self.assertNotIn(code,json.dumps(meta))
+ def test_legitimate_ascii_code_case_is_preserved(self):
+  for code,expected in (('tHrOtTlInGeXcEpTiOn','ThrottlingException'),('manifest_unknown','MANIFEST_UNKNOWN'),('TOOMANYREQUESTS','TOOMANYREQUESTS')):
+   self.assertEqual(p.safe_provider_metadata('Error response from daemon: '+code+': detail')['errorCode'],expected)
+ def test_extraction_and_note_failures_keep_primary_and_close_response(self):
+  import io,urllib.error
+  from unittest.mock import patch
+  class Error(urllib.error.HTTPError):
+   def add_note(self,note):raise RuntimeError('note failure')
+  error=Error('https://host/metadata',403,'primary',{},io.BytesIO(b''))
+  class Opener:
+   def open(self,request,timeout):raise error
+  with patch.object(p.urllib.request,'build_opener',return_value=Opener()),patch.object(p,'safe_provider_metadata',side_effect=ValueError('extraction failure')):
+   with self.assertRaises(urllib.error.HTTPError) as caught:p.fetch('https://host/metadata')
+  self.assertIs(caught.exception,error);self.assertTrue(error.fp.closed)
+ def main_failure(self,kind):
+  import io,os,tempfile,urllib.error
+  from unittest.mock import patch
+  class Error(urllib.error.HTTPError):
+   def add_note(self,note):raise RuntimeError('note failure')
+  class GetterError(Error):
+   @property
+   def safe_registry_diagnostic(self):raise ValueError('getter failure')
+  error=(GetterError if kind=='getter' else Error)('https://host/metadata',403,'primary',{},io.BytesIO(b''))
+  class Opener:
+   def open(self,request,timeout):raise error
+  calls=[];original=p.atomic_save
+  def save(path,data):
+   calls.append(True)
+   if kind=='save' and len(calls)>1:raise OSError('receipt failure')
+   return original(path,data)
+  def preload(rows,run,fetch,receipt):return fetch('https://host/metadata')
+  with tempfile.TemporaryDirectory(prefix='quotation-safe-metadata-failure-') as directory:
+   with patch.dict(os.environ,{'RUNNER_TEMP':directory,'TESTCONTAINERS_RYUK_CONTAINER_IMAGE':p.RYUK}),patch.object(sys,'argv',['preload_images.py']),patch.object(p,'preload',side_effect=preload),patch.object(p.urllib.request,'build_opener',return_value=Opener()),patch.object(p,'atomic_save',side_effect=save),patch.object(p,'run_docker_cli') as docker:
+    with self.assertRaises(urllib.error.HTTPError) as caught:p.main()
+    self.assertIs(caught.exception,error);self.assertTrue(error.fp.closed);docker.assert_not_called()
+   self.assertEqual(json.loads((Path(directory)/'quotation-registry-preload.json').read_bytes())['createdTags'],[])
+  return calls
+ def test_getter_and_note_failures_keep_main_primary_and_close_response(self):
+  self.assertGreaterEqual(len(self.main_failure('getter')),2)
+ def test_permanent_save_and_note_failures_keep_main_primary_and_close_response(self):
+  self.assertEqual(len(self.main_failure('save')),3)
+ def test_extraction_failure_keeps_existing_429_retry_and_response_close(self):
+  from unittest.mock import patch
+  errors,calls,waits,invoke=MetadataThrottling().scenario([429,200],'4')
+  with patch.object(p,'safe_provider_metadata',side_effect=ValueError('extraction failure')):
+   self.assertEqual(invoke(),b'verified-response')
+  self.assertEqual(waits,[4]);self.assertTrue(errors[0].fp.closed)
+
 if __name__=='__main__':unittest.main()
