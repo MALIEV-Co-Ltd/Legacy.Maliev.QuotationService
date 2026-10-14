@@ -1,0 +1,156 @@
+{
+  "className": "Legacy.Maliev.QuotationService.Tests.Infrastructure.DockerContextInspectionContractTests",
+  "methods": {
+    "CallerAlreadyCancelled_DoesNotInspectOrAllocateAProcess": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "HealthyExitedProcess_ReturnsOnlyTheCanonicalLocalEndpoint": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "FastExitedProcess_WithoutLiveIdentity_DrainsOriginalOutput": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "CallerCancellation_AfterAllocation_StopsAndSettlesItsProcess": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "InspectionTimeout_UsesGracefulStopBeforeExactProcessEscalation": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "GracefulStopUnsupported_StillVerifiesBeforeExactEscalation": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "OutputOverflow_RemainsPrimaryAfterIndependentCleanupFailures": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "CleanupNeverSettles_ReturnsOriginalFailureWithinOneFiniteBudget": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "UnprovedRetainedIdentity_RefusesEverySignalAndPreservesPrimary": {
+      "parameters": [
+        {
+          "name": "mutation",
+          "type": "string"
+        }
+      ],
+      "cases": [
+        "02d0b4a8e7b731c029af7a68ab811dd3f36ea3dc226649416747b3869ba249c7",
+        "165fe7bcbb2b51ff641c02dc47f2757ab30a4ac7edad1986895b1ebeb2f4f263",
+        "082a65e4744a82992b9e77e11d816c4c181a3b8b211a6dea879916be6d96982f",
+        "f6ef77ed9c3da81fd72e6224fecd594b4bbb657c68ff31f525f5d9aaf23101a7"
+      ]
+    },
+    "IdentityChangesAfterGracefulAttempt_RefusesExactEscalation": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "PipeCloseFailure_DoesNotPreventOtherPipeAndProcessHandleRelease": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "ReaderIgnoringCancellationUntilClose_IsObservedSettledBeforeReturn": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "CancellationIgnoringReader_WithCloseFailure_PreservesBothOutcomes": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "ReaderStillPendingAfterClose_IsReportedUnresolvedWithinTheBudget": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "CleanupWaitIgnoringCancellation_IsReportedPendingInsteadOfDiscarded": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "ActualInspectionTimeout_ExitsOnlyItsParentAndPreservesOwnedChild": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "PendingCancellationCallbacks_RetainActualTasksAndOwnersBeforeRecovery": {
+      "parameters": [
+        {
+          "name": "workCancellation",
+          "type": "bool"
+        }
+      ],
+      "cases": [
+        "1c28f2eb0958c3d15db1f0f0e7f2b8998ca2b8f67ab426a1fbb3d561fe76fad9",
+        "456e2e3fa05ee1e2f4e529558008ce162bbd388a9dd4a923c79543a4a1dba618"
+      ]
+    },
+    "ReadOnlyExceptionMetadata_PreservesPrimaryAndMandatoryRecoveryOwnership": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "FixtureStopFailure_RetainsOwnerUntilExactRecoveryConfirmsExit": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "InitialIdentityUnavailable_OriginalProcessLaterExitsSuccessfullyWithoutSignals": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "InitialIdentityUnavailable_FailedOrPendingWorkRetainsOriginalOwnerWithoutSignals": {
+      "parameters": [
+        {
+          "name": "waitFails",
+          "type": "bool"
+        }
+      ],
+      "cases": [
+        "1c28f2eb0958c3d15db1f0f0e7f2b8998ca2b8f67ab426a1fbb3d561fe76fad9",
+        "456e2e3fa05ee1e2f4e529558008ce162bbd388a9dd4a923c79543a4a1dba618"
+      ]
+    }
+  },
+  "sources": {
+    "Legacy.Maliev.QuotationService.Tests/Infrastructure/DockerContextInspectionContractTests.cs": "1ee1d387388e646009ab9081edee11b8ee5f4c25533def4ac8fc847d2365d4ef",
+    "Legacy.Maliev.QuotationService.Tests/Infrastructure/DockerContextInspection.cs": "2ea430f94c518ffe3b9bfbf439c64ed8fee0ca845d7ad2af2af9eb901dd241e3",
+    "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerStartup.cs": "565ab5168cbe2d2d0d34b413bf23e5a91fe56a302ba90a6ee92444efc807b39d"
+  }
+}

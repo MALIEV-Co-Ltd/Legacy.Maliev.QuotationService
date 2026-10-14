@@ -131,6 +131,38 @@ jobs:
         timeout-minutes: 5
         shell: bash
         run: python3 -B scripts/registry_preload/preload_images.py
+      - name: Set up SDK for inspection focus
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.x
+      - name: Verify inspection result controls
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          python3 -B -m unittest discover -s scripts/tests -p 'test_docker_context_inspection_results.py'
+          python3 -B -O -m unittest discover -s scripts/tests -p 'test_docker_context_inspection_results.py'
+      - name: Build and prove Docker context inspection before full suite
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          dotnet restore Legacy.Maliev.QuotationService.slnx -p:GITHUB_ACTIONS=false
+          dotnet build Legacy.Maliev.QuotationService.slnx --configuration Release --no-restore -warnaserror -p:GITHUB_ACTIONS=false
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~Legacy.Maliev.QuotationService.Tests.Infrastructure.DockerContextInspectionContractTests' \
+            --results-directory TestResults/DockerContextInspection \
+            --logger 'trx;LogFileName=docker-context-inspection.trx'
+          python3 -B scripts/check_docker_context_inspection_results.py
+      - name: Retain Docker context inspection evidence
+        if: always() && hashFiles('TestResults/DockerContextInspection/docker-context-inspection.trx') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: quotation-docker-context-inspection-${{ github.sha }}
+          path: |
+            TestResults/DockerContextInspection/docker-context-inspection.trx
+            scripts/docker_context_inspection_focus.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Validate .NET solution
         uses: MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@53892c362a30130f582c40da7525e44f11474e8e
         with:

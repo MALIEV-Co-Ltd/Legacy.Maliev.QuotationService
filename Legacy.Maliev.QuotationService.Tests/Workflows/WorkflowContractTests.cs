@@ -38,6 +38,43 @@ public sealed class WorkflowContractTests
         AssertMutationRejected(ackOriginal, ackReplacement);
     }
 
+    [Theory]
+    [InlineData("FullyQualifiedName~Legacy.Maliev.QuotationService.Tests.Infrastructure.DockerContextInspectionContractTests", "FullyQualifiedName~UnreviewedInspection")]
+    [InlineData("python3 -B scripts/check_docker_context_inspection_results.py", "echo inspection unchecked")]
+    [InlineData("name: Set up SDK for inspection focus", "name: Unreviewed SDK")]
+    [InlineData("name: Build and prove Docker context inspection before full suite", "name: Unreviewed inspection focus")]
+    [InlineData("--no-restore -warnaserror -p:GITHUB_ACTIONS=false", "--no-restore -p:GITHUB_ACTIONS=false")]
+    [InlineData("name: quotation-docker-context-inspection-${{ github.sha }}", "name: unbound-inspection")]
+    [InlineData("            scripts/docker_context_inspection_focus.json\n", "            scripts/**\n")]
+    [InlineData("always() && hashFiles('TestResults/DockerContextInspection/docker-context-inspection.trx') != ''", "success()")]
+    public void BuildAndTest_RejectsInspectionFocusBypass(string original, string replacement) =>
+        AssertMutationRejected(original, replacement);
+
+    [Theory]
+    [InlineData("remove")]
+    [InlineData("duplicate")]
+    [InlineData("after-full")]
+    public void BuildAndTest_RejectsInspectionStepOrderBypass(string mutation)
+    {
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(Workflow));
+        var root = Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+        var jobs = Assert.IsType<YamlMappingNode>(ReadNode(root, "jobs"));
+        var job = Assert.IsType<YamlMappingNode>(ReadNode(jobs, "validate"));
+        var steps = Assert.IsType<YamlSequenceNode>(ReadNode(job, "steps"));
+        var focus = steps.Children[8];
+        switch (mutation)
+        {
+            case "remove": steps.Children.RemoveAt(8); break;
+            case "duplicate": steps.Children.Insert(8, focus); break;
+            case "after-full": (steps.Children[8], steps.Children[10]) = (steps.Children[10], steps.Children[8]); break;
+            default: throw new InvalidOperationException("Unexpected inspection mutation.");
+        }
+        using var serialized = new StringWriter();
+        yaml.Save(serialized, assignAnchors: false);
+        Assert.Throws<InvalidOperationException>(() => WorkflowContractValidator.Validate(serialized.ToString()));
+    }
+
     [Fact]
     public void BuildAndTest_SatisfiesStructuralContract()
     {
@@ -277,8 +314,8 @@ public sealed class WorkflowContractTests
         var jobs = Assert.IsType<YamlMappingNode>(ReadNode(root, "jobs"));
         var job = Assert.IsType<YamlMappingNode>(ReadNode(jobs, "validate"));
         var steps = Assert.IsType<YamlSequenceNode>(ReadNode(job, "steps"));
-        var collection = Assert.IsType<YamlMappingNode>(steps.Children[12]);
-        var upload = Assert.IsType<YamlMappingNode>(steps.Children[14]);
+        var collection = Assert.IsType<YamlMappingNode>(steps.Children[16]);
+        var upload = Assert.IsType<YamlMappingNode>(steps.Children[18]);
         var inputs = Assert.IsType<YamlMappingNode>(ReadNode(upload, "with"));
         var run = ReadScalar(collection, "run");
         var prefix = WorkflowContractValidator.QualificationCustodyCollection.ReplaceLineEndings("\n") + "\n";
@@ -404,7 +441,7 @@ public sealed class WorkflowContractTests
         var steps = Assert.IsType<YamlSequenceNode>(ReadNode(job, "steps"));
         var controlsIndex = jobName == "validate" ? 4 : 7;
         var preloadIndex = controlsIndex + 1;
-        var cleanupIndex = jobName == "validate" ? 16 : 10;
+        var cleanupIndex = jobName == "validate" ? 20 : 10;
         var uploadIndex = cleanupIndex + 1;
         var preload = Assert.IsType<YamlMappingNode>(steps.Children[preloadIndex]);
         var environment = Assert.IsType<YamlMappingNode>(ReadNode(job, "env"));
@@ -488,9 +525,9 @@ public sealed class WorkflowContractTests
         var jobs = Assert.IsType<YamlMappingNode>(ReadNode(root, "jobs"));
         var job = Assert.IsType<YamlMappingNode>(ReadNode(jobs, "validate"));
         var steps = Assert.IsType<YamlSequenceNode>(ReadNode(job, "steps"));
-        var controls = Assert.IsType<YamlMappingNode>(steps.Children[7]);
-        var focus = Assert.IsType<YamlMappingNode>(steps.Children[8]);
-        var upload = Assert.IsType<YamlMappingNode>(steps.Children[9]);
+        var controls = Assert.IsType<YamlMappingNode>(steps.Children[11]);
+        var focus = Assert.IsType<YamlMappingNode>(steps.Children[12]);
+        var upload = Assert.IsType<YamlMappingNode>(steps.Children[13]);
         var inputs = Assert.IsType<YamlMappingNode>(ReadNode(upload, "with"));
         switch (mutant)
         {
@@ -590,9 +627,9 @@ public sealed class WorkflowContractTests
             case "timeout": focus.Children[new YamlScalarNode("timeout-minutes")] = new YamlScalarNode("30"); break;
             case "conditional": focus.Children.Add(new YamlScalarNode("if"), new YamlScalarNode("false")); break;
             case "failure-override": focus.Children.Add(new YamlScalarNode("continue-on-error"), new YamlScalarNode("true")); break;
-            case "missing-focus": steps.Children.RemoveAt(8); break;
-            case "duplicate-focus": steps.Children.Insert(8, focus); break;
-            case "reorder": (steps.Children[7], steps.Children[8]) = (steps.Children[8], steps.Children[7]); break;
+            case "missing-focus": steps.Children.RemoveAt(12); break;
+            case "duplicate-focus": steps.Children.Insert(12, focus); break;
+            case "reorder": (steps.Children[11], steps.Children[12]) = (steps.Children[12], steps.Children[11]); break;
             case "upload-path": inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode("TestResults/**\n"); break;
             case "upload-condition": upload.Children[new YamlScalarNode("if")] = new YamlScalarNode("success()"); break;
             case "upload-overwrite": inputs.Children.Add(new YamlScalarNode("overwrite"), new YamlScalarNode("true")); break;
@@ -647,6 +684,21 @@ public sealed class WorkflowContractTests
 
 internal static partial class WorkflowContractValidator
 {
+
+    private const string InspectionControls = """
+        python3 -B -m unittest discover -s scripts/tests -p 'test_docker_context_inspection_results.py'
+        python3 -B -O -m unittest discover -s scripts/tests -p 'test_docker_context_inspection_results.py'
+        """;
+    private const string InspectionFocus = """
+        dotnet restore Legacy.Maliev.QuotationService.slnx -p:GITHUB_ACTIONS=false
+        dotnet build Legacy.Maliev.QuotationService.slnx --configuration Release --no-restore -warnaserror -p:GITHUB_ACTIONS=false
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~Legacy.Maliev.QuotationService.Tests.Infrastructure.DockerContextInspectionContractTests' \
+          --results-directory TestResults/DockerContextInspection \
+          --logger 'trx;LogFileName=docker-context-inspection.trx'
+        python3 -B scripts/check_docker_context_inspection_results.py
+        """;
 
     private const string RyukImage = "ghcr.io/testcontainers/ryuk@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0";
     private const string RegistryControls = """
@@ -858,9 +910,9 @@ internal static partial class WorkflowContractValidator
         RejectDuplicatedValidationActionsAndCommands(jobs);
 
         var steps = RequireSequence(validateJob, "steps");
-        if (steps.Children.Count != 18)
+        if (steps.Children.Count != 22)
         {
-            throw new InvalidOperationException("Validate job must contain exactly eighteen caller-owned steps.");
+            throw new InvalidOperationException("Validate job must contain exactly twenty-two caller-owned steps.");
         }
 
         ValidateStep(
@@ -900,25 +952,49 @@ internal static partial class WorkflowContractValidator
                 ["path"] = ".dependencies/Legacy.Maliev.AccountingService",
                 ["persist-credentials"] = "false",
             });
-        ValidateRegistrySteps(steps, controls: 4, preload: 5, cleanup: 16, upload: 17);
+        ValidateRegistrySteps(steps, controls: 4, preload: 5, cleanup: 20, upload: 21);
+        ValidateStep(steps.Children[6], "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["dotnet-version"] = "10.0.x" });
+        RequireScalarValue(RequireMapping(steps.Children[6], "inspection SDK"), "name", "Set up SDK for inspection focus");
+        ValidateScriptStep(steps.Children[7], "Verify inspection result controls", InspectionControls, expectedTimeout: "2");
+        ValidateScriptStep(steps.Children[8], "Build and prove Docker context inspection before full suite", InspectionFocus, expectedTimeout: "5");
+        ValidateInspectionEvidenceStep(steps.Children[9]);
+
         ValidateStep(
-            steps.Children[6],
+            steps.Children[10],
             SharedValidationAction,
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["solution"] = "Legacy.Maliev.QuotationService.slnx",
                 ["use-local-maliev-dependencies"] = "true",
             });
-        ValidateScriptStep(steps.Children[7], "Verify ordinary controller parity result controls", ControllerParityProof);
-        ValidateScriptStep(steps.Children[8], "Prove ordinary controller parity independently", ControllerParityCollection, expectedTimeout: "5");
-        ValidateControllerParityEvidenceStep(steps.Children[9]);
-        ValidateScriptStep(steps.Children[10], "Prove coverage gate failure and success behavior", CoverageProof);
-        ValidateScriptStep(steps.Children[11], "Prove actual qualification DTO and controller serializer wire",
+        ValidateScriptStep(steps.Children[11], "Verify ordinary controller parity result controls", ControllerParityProof);
+        ValidateScriptStep(steps.Children[12], "Prove ordinary controller parity independently", ControllerParityCollection, expectedTimeout: "5");
+        ValidateControllerParityEvidenceStep(steps.Children[13]);
+        ValidateScriptStep(steps.Children[14], "Prove coverage gate failure and success behavior", CoverageProof);
+        ValidateScriptStep(steps.Children[15], "Prove actual qualification DTO and controller serializer wire",
             QualificationWireCollection, expectedTimeout: "2");
-        ValidateScriptStep(steps.Children[12], "Collect QuotationService coverage", CoverageCollection);
-        ValidateScriptStep(steps.Children[13], "Enforce 80 percent owned handwritten line coverage", CoverageEnforcement);
-        ValidateCoverageEvidenceStep(steps.Children[14]);
-        ValidateWireEvidenceStep(steps.Children[15]);
+        ValidateScriptStep(steps.Children[16], "Collect QuotationService coverage", CoverageCollection);
+        ValidateScriptStep(steps.Children[17], "Enforce 80 percent owned handwritten line coverage", CoverageEnforcement);
+        ValidateCoverageEvidenceStep(steps.Children[18]);
+        ValidateWireEvidenceStep(steps.Children[19]);
+    }
+
+    private static void ValidateInspectionEvidenceStep(YamlNode node)
+    {
+        var step = RequireMapping(node, "inspection evidence");
+        if (!step.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal).SetEquals(["name", "if", "uses", "with"]))
+            throw new InvalidOperationException("Inspection evidence requires exact reviewed settings.");
+        RequireScalarValue(step, "name", "Retain Docker context inspection evidence");
+        RequireScalarValue(step, "if", "always() && hashFiles('TestResults/DockerContextInspection/docker-context-inspection.trx') != ''");
+        RequireScalarValue(step, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+        var inputs = RequireMapping(step, "with");
+        if (!inputs.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal).SetEquals(["name", "path", "if-no-files-found", "retention-days"]))
+            throw new InvalidOperationException("Inspection evidence requires four exact inputs.");
+        RequireScalarValue(inputs, "name", "quotation-docker-context-inspection-${{ github.sha }}");
+        RequireScalarValue(inputs, "path", "TestResults/DockerContextInspection/docker-context-inspection.trx\nscripts/docker_context_inspection_focus.json\n");
+        RequireScalarValue(inputs, "if-no-files-found", "error");
+        RequireScalarValue(inputs, "retention-days", "7");
     }
 
     private static void ValidateControllerParityEvidenceStep(YamlNode node)
@@ -1119,7 +1195,8 @@ internal static partial class WorkflowContractValidator
                 if (GetOptional(stepNode, "uses") is YamlScalarNode usesNode)
                 {
                     var action = usesNode.Value ?? string.Empty;
-                    if (action.StartsWith("actions/setup-dotnet@", StringComparison.OrdinalIgnoreCase)
+                    if ((action.StartsWith("actions/setup-dotnet@", StringComparison.OrdinalIgnoreCase)
+                         && (GetOptional(stepNode, "name") as YamlScalarNode)?.Value != "Set up SDK for inspection focus")
                         || action.StartsWith("actions/cache@", StringComparison.OrdinalIgnoreCase))
                     {
                         throw new InvalidOperationException($"Caller duplicates shared action {action}.");
@@ -1128,7 +1205,7 @@ internal static partial class WorkflowContractValidator
 
                 if (GetOptional(stepNode, "run") is YamlScalarNode runNode
                     && (GetOptional(stepNode, "name") as YamlScalarNode)?.Value is not
-                        ("Collect QuotationService coverage" or "Prove actual qualification DTO and controller serializer wire" or "Prove ordinary controller parity independently"))
+                        ("Build and prove Docker context inspection before full suite" or "Collect QuotationService coverage" or "Prove actual qualification DTO and controller serializer wire" or "Prove ordinary controller parity independently"))
                 {
                     RejectDuplicatedDotNetCommand(runNode.Value ?? string.Empty);
                 }
