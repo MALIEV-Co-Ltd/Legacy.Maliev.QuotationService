@@ -20,8 +20,23 @@ public sealed class WorkflowContractTests
     [InlineData("python3 -B scripts/check_c6_source_index_results.py", "echo C6 receipt omitted")]
     [InlineData("            TestResults/C6SourceIndex/c6-source-index.trx\n", "            TestResults/C6SourceIndex/**\n")]
     [InlineData("'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx'", "'TestResults/QualificationCustody/qualification-custody.trx'")]
-    public void BuildAndTest_RejectsC6SourceIndexFocusBypass(string original, string replacement) =>
+    public void BuildAndTest_RejectsC6SourceIndexFocusBypass(string original, string replacement)
+    {
         AssertMutationRejected(original, replacement);
+        // These four already-focused cases independently reject the matching ACK enrollment bypass.
+        var (ackOriginal, ackReplacement) = original switch
+        {
+            "FullyQualifiedName~QuotationAnalyticsSourceContractTests" =>
+                ("FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Analytics.QuotationTerminalLoggingPipelineTests.Program_ReclaimedLease_OnlyCurrentOwnerEmitsDurableTerminalFailure", "FullyQualifiedName~MissingAnalyticsLeaseRace"),
+            "python3 -B scripts/check_c6_source_index_results.py" =>
+                ("python3 -B scripts/check_analytics_ack_focused_results.py", "echo ACK receipt omitted"),
+            "            TestResults/C6SourceIndex/c6-source-index.trx\n" =>
+                ("            TestResults/AnalyticsLeaseReclaim/analytics-lease-reclaim.trx\n", "            TestResults/AnalyticsLeaseReclaim/**\n"),
+            _ =>
+                ("'TestResults/AnalyticsLeaseReclaim/analytics-lease-reclaim.trx', 'TestResults/AnalyticsDeliverySettlement/analytics-delivery-settlement.trx'", "'TestResults/AnalyticsLeaseReclaim/analytics-lease-reclaim.trx'")
+        };
+        AssertMutationRejected(ackOriginal, ackReplacement);
+    }
 
     [Fact]
     public void BuildAndTest_SatisfiesStructuralContract()
@@ -234,7 +249,7 @@ public sealed class WorkflowContractTests
     [InlineData("retention-days: 7", "retention-days: 90")]
     [InlineData("include-hidden-files: false", "include-hidden-files: true")]
     [InlineData("TestResults/CoverageGate/*/coverage.cobertura.xml", "TestResults/**")]
-    [InlineData("always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx') != '')", "success()")]
+    [InlineData("always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx', 'TestResults/AnalyticsLeaseReclaim/analytics-lease-reclaim.trx', 'TestResults/AnalyticsDeliverySettlement/analytics-delivery-settlement.trx') != '')", "success()")]
     public void BuildAndTest_RejectsCoverageEvidenceContractMutation(string original, string replacement) =>
         AssertMutationRejected(original, replacement);
 
@@ -725,7 +740,18 @@ internal static partial class WorkflowContractValidator
           --results-directory TestResults/C6SourceIndex --logger 'trx;LogFileName=c6-source-index.trx'
         python3 -B scripts/check_c6_source_index_results.py
         """;
-    private const string CoverageCollection = C6SourceIndexCollection + "\n" + QualificationCustodyCollection + "\n" + """
+    private const string AnalyticsAcknowledgementCollection = """
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Analytics.QuotationTerminalLoggingPipelineTests.Program_ReclaimedLease_OnlyCurrentOwnerEmitsDurableTerminalFailure' \
+          --results-directory TestResults/AnalyticsLeaseReclaim --logger 'trx;LogFileName=analytics-lease-reclaim.trx'
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~Legacy.Maliev.QuotationService.Tests.Analytics.QuotationTerminalLoggingPipelineTests.DeliverySettlement_' \
+          --results-directory TestResults/AnalyticsDeliverySettlement --logger 'trx;LogFileName=analytics-delivery-settlement.trx'
+        python3 -B scripts/check_analytics_ack_focused_results.py
+        """;
+    private const string CoverageCollection = C6SourceIndexCollection + "\n" + QualificationCustodyCollection + "\n" + AnalyticsAcknowledgementCollection + "\n" + """
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
           --filter 'FullyQualifiedName~QuotationInvoiceCapabilityVerifierTests' \
@@ -910,13 +936,13 @@ internal static partial class WorkflowContractValidator
             .SetEquals(["name", "if", "uses", "with"]))
             throw new InvalidOperationException("Coverage evidence step must have only its reviewed keys.");
         RequireScalarValue(step, "name", "Retain complete coverage evidence");
-        RequireScalarValue(step, "if", "always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx') != '')");
+        RequireScalarValue(step, "if", "always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx', 'TestResults/AnalyticsLeaseReclaim/analytics-lease-reclaim.trx', 'TestResults/AnalyticsDeliverySettlement/analytics-delivery-settlement.trx') != '')");
         RequireScalarValue(step, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
         var inputs = RequireMapping(step, "with");
         if (inputs.Children.Count != 6)
             throw new InvalidOperationException("Coverage evidence action must have exactly six reviewed inputs.");
         RequireScalarValue(inputs, "name", "quotation-complete-coverage-${{ github.sha }}");
-        RequireScalarValue(inputs, "path", "TestResults/C6SourceIndex/c6-source-index.trx\nTestResults/C821Verifier/c821-verifier.trx\nTestResults/C821Recipient/c821-recipient.trx\nTestResults/QualificationCustody/qualification-custody.trx\nTestResults/CompanionAdmission/companion-admission.trx\nTestResults/CompanionSigning/companion-signing.trx\nTestResults/StorageFront/storage-front.trx\nTestResults/FinancialCompletion/financial-completion.trx\nTestResults/CoverageGate/quotation-complete-coverage.trx\nTestResults/CoverageGate/*/coverage.cobertura.xml\n");
+        RequireScalarValue(inputs, "path", "TestResults/C6SourceIndex/c6-source-index.trx\nTestResults/C821Verifier/c821-verifier.trx\nTestResults/C821Recipient/c821-recipient.trx\nTestResults/QualificationCustody/qualification-custody.trx\nTestResults/AnalyticsLeaseReclaim/analytics-lease-reclaim.trx\nTestResults/AnalyticsDeliverySettlement/analytics-delivery-settlement.trx\nTestResults/CompanionAdmission/companion-admission.trx\nTestResults/CompanionSigning/companion-signing.trx\nTestResults/StorageFront/storage-front.trx\nTestResults/FinancialCompletion/financial-completion.trx\nTestResults/CoverageGate/quotation-complete-coverage.trx\nTestResults/CoverageGate/*/coverage.cobertura.xml\n");
         RequireScalarValue(inputs, "if-no-files-found", "error");
         RequireScalarValue(inputs, "retention-days", "7");
         RequireScalarValue(inputs, "include-hidden-files", "false");

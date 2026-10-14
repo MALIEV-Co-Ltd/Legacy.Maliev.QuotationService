@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Net;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Legacy.Maliev.QuotationService.Api.Analytics;
 using Legacy.Maliev.QuotationService.Data;
@@ -202,7 +203,8 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var staleDelivery = staleScope.ServiceProvider.GetRequiredService<GoogleAnalyticsDeliveryProcessor>()
             .DeliverBatchAsync(cancellation.Token);
-        try
+        var cleanupFailures = new List<DeliveryCleanupFailure>();
+        await RunWithDeliverySettlementAsync(async () =>
         {
             await transport.Entered.Task.WaitAsync(cancellation.Token);
             var claimed = await Read();
@@ -232,12 +234,145 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
             var terminal = audit.Entries.Where(entry => entry.Event.Id == 5201).ToArray();
             if (currentStatus == 204) Assert.Empty(terminal);
             else AssertTerminal(Assert.Single(terminal), currentStatus, 2);
+        }, staleDelivery,
+            () => transport.Release.TrySetResult(true),
+            () => cancellation.Cancel(),
+            task => task.WaitAsync(TimeSpan.FromSeconds(15)), cleanupFailures);
+    }
+
+    [Fact]
+    public async Task DeliverySettlement_PrimaryFailureSurvivesIndependentReleaseCancelAndDeliveryFailures()
+    {
+        var primary = new InvalidOperationException("primary-control");
+        var release = new InvalidOperationException("release-control");
+        var cancel = new InvalidOperationException("cancel-control");
+        var late = new InvalidOperationException("delivery-control");
+        var failures = new List<DeliveryCleanupFailure>();
+        var delivery = Task.FromException(late);
+        var observed = await Assert.ThrowsAsync<InvalidOperationException>(() => RunWithDeliverySettlementAsync(
+            () => Task.FromException(primary), delivery,
+            () => throw release, () => throw cancel, task => task, failures));
+        Assert.Same(primary, observed);
+        Assert.True(delivery.IsCompleted);
+        Assert.Collection(failures,
+            failure => { Assert.Equal("release-gate", failure.Phase); Assert.Same(release, failure.Error); },
+            failure => { Assert.Equal("cancel-delivery", failure.Phase); Assert.Same(cancel, failure.Error); },
+            failure => { Assert.Equal("observe-delivery", failure.Phase); Assert.Same(late, failure.Error); });
+        Assert.Same(failures, observed.Data["DeliveryCleanupFailures"]);
+    }
+
+    [Fact]
+    public async Task DeliverySettlement_TimeoutKeepsResourcesOwnedUntilActualLateTaskSettlement()
+    {
+        var primary = new InvalidOperationException("primary-control");
+        var timeout = new TimeoutException("observation-control");
+        var late = new InvalidOperationException("late-control");
+        var delivery = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var observedDeadline = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resource = new SettlementResource();
+        var failures = new List<DeliveryCleanupFailure>();
+        Exception? observed = null;
+        var completedBeforeSettlement = true;
+        var disposedBeforeSettlement = true;
+        var owner = OwnResourceAsync();
+        try
+        {
+            await observedDeadline.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            completedBeforeSettlement = owner.IsCompleted;
+            disposedBeforeSettlement = resource.Disposed;
         }
         finally
         {
-            transport.Release.TrySetResult(true);
-            await staleDelivery.WaitAsync(TimeSpan.FromSeconds(15));
+            delivery.TrySetException(late);
+            try { await owner; }
+            catch (Exception error) { observed = error; }
         }
+        Assert.False(completedBeforeSettlement);
+        Assert.False(disposedBeforeSettlement);
+        Assert.True(delivery.Task.IsCompleted);
+        Assert.True(owner.IsCompleted);
+        Assert.True(resource.Disposed);
+        Assert.Same(primary, observed);
+        Assert.Collection(failures,
+            failure => { Assert.Equal("observe-delivery", failure.Phase); Assert.Same(timeout, failure.Error); },
+            failure => { Assert.Equal("settle-delivery", failure.Phase); Assert.Same(late, failure.Error); });
+
+        async Task OwnResourceAsync()
+        {
+            using (resource)
+                await RunWithDeliverySettlementAsync(() => Task.FromException(primary), delivery.Task,
+                    () => { }, () => { }, _ =>
+                    {
+                        observedDeadline.TrySetResult(true);
+                        return Task.FromException(timeout);
+                    }, failures);
+        }
+    }
+
+    [Fact]
+    public async Task DeliverySettlement_ObserverReturnCannotHideActualFaultWhenBodySucceeded()
+    {
+        var late = new InvalidOperationException("delivery-control");
+        var failures = new List<DeliveryCleanupFailure>();
+        var delivery = Task.FromException(late);
+        var observed = await Assert.ThrowsAsync<AggregateException>(() => RunWithDeliverySettlementAsync(
+            () => Task.CompletedTask, delivery, () => { }, () => { }, _ => Task.CompletedTask, failures));
+        Assert.True(delivery.IsCompleted);
+        Assert.Same(late, Assert.Single(observed.InnerExceptions));
+        var failure = Assert.Single(failures);
+        Assert.Equal("settle-delivery", failure.Phase);
+        Assert.Same(late, failure.Error);
+    }
+
+    private static async Task RunWithDeliverySettlementAsync(Func<Task> body, Task delivery,
+        Action releaseGate, Action cancelDelivery, Func<Task, Task> observeDelivery,
+        List<DeliveryCleanupFailure> failures)
+    {
+        ExceptionDispatchInfo? primary = null;
+        Exception? observedDeliveryFailure = null;
+        try { await body(); }
+        catch (Exception error) { primary = ExceptionDispatchInfo.Capture(error); }
+
+        try { releaseGate(); }
+        catch (Exception error) { failures.Add(new("release-gate", error)); }
+        try { cancelDelivery(); }
+        catch (Exception error) { failures.Add(new("cancel-delivery", error)); }
+        try { await observeDelivery(delivery); }
+        catch (Exception error)
+        {
+            observedDeliveryFailure = error;
+            failures.Add(new("observe-delivery", error));
+        }
+
+        // A deadline is not settlement. Keep the owning test frame (and its using scopes/app)
+        // alive until this same actual task becomes terminal. No detached continuation or
+        // unqualified fixture/provider handoff can authorize resource disposal here.
+        // If cancellation/release is ignored, the test remains pending under the finite
+        // hosted-job lifetime; timeout/runner exit is never reported as task settlement.
+        try { await delivery; }
+        catch (Exception error)
+        {
+            if (!ReferenceEquals(error, observedDeliveryFailure))
+                failures.Add(new("settle-delivery", error));
+        }
+
+        if (primary is not null)
+        {
+            try { primary.SourceException.Data["DeliveryCleanupFailures"] = failures; }
+            catch (Exception error) { failures.Add(new("attach-secondary-report", error)); }
+            primary.Throw();
+        }
+        if (failures.Count != 0)
+            throw new AggregateException("Delivery cleanup failed after actual task settlement.",
+                failures.Select(failure => failure.Error));
+    }
+
+    private sealed record DeliveryCleanupFailure(string Phase, Exception Error);
+
+    private sealed class SettlementResource : IDisposable
+    {
+        public bool Disposed { get; private set; }
+        public void Dispose() => Disposed = true;
     }
 
     private StructuredAudit Audit() => new(() =>

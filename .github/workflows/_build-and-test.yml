@@ -218,6 +218,15 @@ jobs:
             --results-directory TestResults/QualificationCustody --logger 'trx;LogFileName=qualification-custody.trx'
           dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
             --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Analytics.QuotationTerminalLoggingPipelineTests.Program_ReclaimedLease_OnlyCurrentOwnerEmitsDurableTerminalFailure' \
+            --results-directory TestResults/AnalyticsLeaseReclaim --logger 'trx;LogFileName=analytics-lease-reclaim.trx'
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~Legacy.Maliev.QuotationService.Tests.Analytics.QuotationTerminalLoggingPipelineTests.DeliverySettlement_' \
+            --results-directory TestResults/AnalyticsDeliverySettlement --logger 'trx;LogFileName=analytics-delivery-settlement.trx'
+          python3 -B scripts/check_analytics_ack_focused_results.py
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
             --filter 'FullyQualifiedName~QuotationInvoiceCapabilityVerifierTests' \
             --results-directory TestResults/C821Verifier --logger 'trx;LogFileName=c821-verifier.trx'
           dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
@@ -260,7 +269,7 @@ jobs:
           python3 scripts/check_owned_coverage.py "${reports[0]}" --minimum 80 --raw
 
       - name: Retain complete coverage evidence
-        if: always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx') != '')
+        if: always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx', 'TestResults/AnalyticsLeaseReclaim/analytics-lease-reclaim.trx', 'TestResults/AnalyticsDeliverySettlement/analytics-delivery-settlement.trx') != '')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: quotation-complete-coverage-${{ github.sha }}
@@ -269,6 +278,8 @@ jobs:
             TestResults/C821Verifier/c821-verifier.trx
             TestResults/C821Recipient/c821-recipient.trx
             TestResults/QualificationCustody/qualification-custody.trx
+            TestResults/AnalyticsLeaseReclaim/analytics-lease-reclaim.trx
+            TestResults/AnalyticsDeliverySettlement/analytics-delivery-settlement.trx
             TestResults/CompanionAdmission/companion-admission.trx
             TestResults/CompanionSigning/companion-signing.trx
             TestResults/StorageFront/storage-front.trx
