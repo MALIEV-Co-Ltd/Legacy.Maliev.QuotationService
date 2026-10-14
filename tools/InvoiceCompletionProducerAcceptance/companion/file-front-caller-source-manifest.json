@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "qualificationBase": "4dc6d4982ad90bdd6c10fbf42c6acd5e60d0859b",
+  "sourceOnly": true,
+  "ordinaryFileAuthorityAccepted": false,
+  "modules": [
+    {
+      "name": "actual_dotnet_start",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/actual_dotnet_start.py",
+      "sha256": "ed6d1d1b455c4c0ee2148c9a62f3b5d2e138701cbb89e8b5dcea71570c37fbfd",
+      "length": 6984
+    },
+    {
+      "name": "borrowed_scanner_bridge",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/borrowed_scanner_bridge.py",
+      "sha256": "6682dd2f8aa327682b3f0b89cc89fe4110b222b2a99e4a6e9f65efb4e6a45b2a",
+      "length": 16355
+    },
+    {
+      "name": "held_host_lifetime",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/held_host_lifetime.py",
+      "sha256": "d9d15c362550339bdf7ce3a85b07a79c4cce6536915125f75ab912800548e5d4",
+      "length": 22802
+    },
+    {
+      "name": "held_linux_exit",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/held_linux_exit.py",
+      "sha256": "e7c809d0a1a9c8e8673ed5ef299dd530774d68a48196a739a90f0eaaf5e11515",
+      "length": 4218
+    },
+    {
+      "name": "held_pair_launcher",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/held_pair_launcher.py",
+      "sha256": "985d7adefea26cc24fb40580c7336f20dc0e505fe64c0ca025e078f4bd033825",
+      "length": 14235
+    },
+    {
+      "name": "hosted_companion_resources",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_companion_resources.py",
+      "sha256": "58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f",
+      "length": 51476
+    },
+    {
+      "name": "hosted_scanner_readiness",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py",
+      "sha256": "34f794ca4d05dcd8664fbb8a919975fd0864802bb0ecbd95edae9d67acbd63b6",
+      "length": 49622
+    },
+    {
+      "name": "owned_front_host",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/owned_front_host.py",
+      "sha256": "7b06c9abce7aed3cca7cc90944a75b2d01d4c91ec95b1286486444a29f04392b",
+      "length": 17942
+    },
+    {
+      "name": "owned_normal_hosts",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/owned_normal_hosts.py",
+      "sha256": "e5fee39ac7ced3b1304698c734abfd192660a29e94e7e1dcb366b34f15205988",
+      "length": 14525
+    },
+    {
+      "name": "owned_storage_backend",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/owned_storage_backend.py",
+      "sha256": "0c3dd559961f61b51bd25afa7489d593822fd877816fd7514c75bd7dbc72cbbf",
+      "length": 37634
+    },
+    {
+      "name": "pair_failure_diagnostic",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py",
+      "sha256": "494b2603fd4ee8deaf7d4393959a6943188b7297c4e8fc747fd9ccd9111a5e13",
+      "length": 58672
+    },
+    {
+      "name": "regular_owned_files",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/regular_owned_files.py",
+      "sha256": "3799a862fd53cd240bb4880af3444df1957a7293bd3c473419e7b2f28ced5029",
+      "length": 5109
+    },
+    {
+      "name": "retained_file_front_consumers",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/retained_file_front_consumers.py",
+      "sha256": "0b6f7089b36921fd81adf4b1b03bea29c71b5912983ededcd4f64c0cbc663af7",
+      "length": 11487
+    },
+    {
+      "name": "run_eight_host_financial_acceptance",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/run_eight_host_financial_acceptance.py",
+      "sha256": "7c84fe56fb8fd728c39f4104e4c708ffe2b967388bf9a351fbb5f5570d9a9bc4",
+      "length": 3192
+    },
+    {
+      "name": "scanner_docker_command",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_docker_command.py",
+      "sha256": "89daed400342a5d43a5c62bafbac50f024bf3ced95c6aa2d482d4e540b15a6d6",
+      "length": 18024
+    },
+    {
+      "name": "scanner_loopback_relay",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner_loopback_relay.py",
+      "sha256": "7a209ff9b1a5defbfb861075a6e211fb25b95840df19fe8534068959f8baae31",
+      "length": 26792
+    },
+    {
+      "name": "sdk_observer_command",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/sdk_observer_command.py",
+      "sha256": "3bf9e1245588dfb90ab1def9304f233585936f42575255ab37f8d22cc3ffa917",
+      "length": 8432
+    },
+    {
+      "name": "shared_file_front_configuration",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/shared_file_front_configuration.py",
+      "sha256": "6cc02ff11b0caee381c65400ac52c6dc76200e174f0ad96ca5876166a1ea0b7d",
+      "length": 12579
+    },
+    {
+      "name": "storage_owner_command",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/storage_owner_command.py",
+      "sha256": "5d063f59ad00c8071e962ebfe34651e343f5c1e2ae6add58cc9a72f837dc1d09",
+      "length": 2722
+    },
+    {
+      "name": "tls_listener_admission",
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/tls_listener_admission.py",
+      "sha256": "f9c84ed4a8bf6e24614a725838adc36aa0870b997c648d30677608e429a8f5cf",
+      "length": 11640
+    }
+  ],
+  "controls": [
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_bridge_consumers.py",
+      "sha256": "1d7e3a8e9934d9f3dac98555f8c99df8583048dcc756e629de779e5d9a6cc9f0",
+      "length": 7249
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/test_actual_dotnet_start.py",
+      "sha256": "6251da336794974606ab76ea8222cc8dea069adcdcc327e3683a70b87aa2f707",
+      "length": 3004
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/test_caller_source_admission.py",
+      "sha256": "a5534bd00af1cfd40d5bbb4f62d3cbde90a793046294a2be521f1f00d13d6686",
+      "length": 6373
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/test_caller_startup.py",
+      "sha256": "c7acf85ceab86c45a9b26323a376a9d591d094bf6b303512090436c59174ce21",
+      "length": 18312
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/test_retained_file_front_consumers.py",
+      "sha256": "39dd99a0b8fa1a9c30a232ce2bca94e6414fb43c26bc44f4b032a5db353a363d",
+      "length": 13778
+    },
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/test_sdk_observer_command.py",
+      "sha256": "10277b6c34e565628c10e7a220299bf33cdf59bfba1bf7df30e3705dfb54c356",
+      "length": 6292
+    }
+  ],
+  "reviewedPackets": [
+    {
+      "packet": "retained-file-front-bridge-proposal",
+      "sealSha256": "58605f6810dbb90ba7b2c3eab997a640e53ecd9b78e1293902f060d562d7367d",
+      "base": "d5e4a14a84066baeb4c68e89cb0d0f639693c702"
+    },
+    {
+      "packet": "file-front-caller-startup-proposal",
+      "sealSha256": "9d6edca5211a6be1333b80877c5de168aa4326dcd514ff34e0dd66e4f6920dc1",
+      "base": "d5e4a14a84066baeb4c68e89cb0d0f639693c702"
+    },
+    {
+      "packet": "sdk-observer-deadline-proposal",
+      "sealSha256": "6a61dd7fe08e35e0acf99a129454eb277767d8195739059bc042a1f6d6f78c05",
+      "base": "d5e4a14a84066baeb4c68e89cb0d0f639693c702"
+    }
+  ]
+}
