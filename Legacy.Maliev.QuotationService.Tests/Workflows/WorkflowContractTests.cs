@@ -234,7 +234,7 @@ public sealed class WorkflowContractTests
     [InlineData("retention-days: 7", "retention-days: 90")]
     [InlineData("include-hidden-files: false", "include-hidden-files: true")]
     [InlineData("TestResults/CoverageGate/*/coverage.cobertura.xml", "TestResults/**")]
-    [InlineData("always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx') != '')", "success()")]
+    [InlineData("always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx') != '')", "success()")]
     public void BuildAndTest_RejectsCoverageEvidenceContractMutation(string original, string replacement) =>
         AssertMutationRejected(original, replacement);
 
@@ -265,18 +265,21 @@ public sealed class WorkflowContractTests
         var inputs = Assert.IsType<YamlMappingNode>(ReadNode(upload, "with"));
         var run = ReadScalar(collection, "run");
         var prefix = WorkflowContractValidator.QualificationCustodyCollection.ReplaceLineEndings("\n") + "\n";
-        Assert.StartsWith(prefix, run, StringComparison.Ordinal);
-        var remainder = run[prefix.Length..];
+        var c6Prefix = WorkflowContractValidator.C6SourceIndexCollection.ReplaceLineEndings("\n") + "\n";
+        Assert.StartsWith(c6Prefix, run, StringComparison.Ordinal);
+        var custodyRun = run[c6Prefix.Length..];
+        Assert.StartsWith(prefix, custodyRun, StringComparison.Ordinal);
+        var remainder = custodyRun[prefix.Length..];
         switch (mutant)
         {
             case "missing-focus":
-                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(remainder);
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(c6Prefix + remainder);
                 break;
             case "duplicate-focus":
-                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(prefix + run);
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(c6Prefix + prefix + custodyRun);
                 break;
             case "reordered-after-full":
-                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(remainder.TrimEnd() + "\n" + prefix);
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(c6Prefix + remainder.TrimEnd() + "\n" + prefix);
                 break;
             case "custody-filter":
                 collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
@@ -712,10 +715,10 @@ internal static partial class WorkflowContractValidator
     internal const string QualificationCustodyCollection = """
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
-          --filter 'FullyQualifiedName~ContainerOperationCustodyContractTests|FullyQualifiedName~DockerBindCollisionContractTests.FailedCleanupOfHostBindAttemptNeverAdmitsBackoffOrReplacement|FullyQualifiedName~QualificationBridgeConsumerHttpTests.Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsC6SourceIndexFocusBypass' \
+          --filter 'FullyQualifiedName~ContainerOperationCustodyContractTests|FullyQualifiedName~DockerBindCollisionContractTests.FailedCleanupOfHostBindAttemptNeverAdmitsBackoffOrReplacement|FullyQualifiedName~QualificationBridgeConsumerHttpTests.Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsC6SourceIndexFocusBypass|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsCoverageEvidenceContractMutation' \
           --results-directory TestResults/QualificationCustody --logger 'trx;LogFileName=qualification-custody.trx'
         """;
-    private const string C6SourceIndexCollection = """
+    internal const string C6SourceIndexCollection = """
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
           --filter 'FullyQualifiedName~QuotationAnalyticsSourceContractTests|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Data.QuotationPostgresMigrationTests.AnalyticsSourceIndexMigration_GeneratesScriptsAndPreservesRowsAcrossUpgradeRollbackAndReupgrade' \
