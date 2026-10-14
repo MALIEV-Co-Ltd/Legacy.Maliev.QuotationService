@@ -65,8 +65,8 @@ namespace Legacy.Maliev.QuotationService.Data.Migrations.Quotation
                 b.HasKey("Id");
                 b.HasIndex("EventKey").IsUnique();
                 b.HasIndex("QuotationId");
-                b.HasIndex("SourceRequestId");
-                b.HasIndex("SourceJourneyId");
+                b.HasIndex("SourceRequestId").HasFilter("\"SourceRequestID\" IS NOT NULL");
+                b.HasIndex("SourceJourneyId").HasFilter("\"SourceJourneyID\" IS NOT NULL");
                 b.HasIndex("SentUtc", "FailedUtc", "NextAttemptUtc", "LeaseUntilUtc")
                     .HasDatabaseName("IX_GoogleAnalyticsOutbox_DeliveryDue");
                 b.ToTable("GoogleAnalyticsOutbox");

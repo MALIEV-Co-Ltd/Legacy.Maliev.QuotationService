@@ -56,8 +56,8 @@ public sealed class QuotationDbContext(DbContextOptions<QuotationDbContext> opti
         delivery.Property(x => x.LastError).HasMaxLength(1024);
         delivery.HasIndex(x => x.EventKey).IsUnique();
         delivery.HasIndex(x => x.QuotationId);
-        delivery.HasIndex(x => x.SourceRequestId);
-        delivery.HasIndex(x => x.SourceJourneyId);
+        delivery.HasIndex(x => x.SourceRequestId).HasFilter("\"SourceRequestID\" IS NOT NULL");
+        delivery.HasIndex(x => x.SourceJourneyId).HasFilter("\"SourceJourneyID\" IS NOT NULL");
         delivery.HasIndex(x => new { x.SentUtc, x.FailedUtc, x.NextAttemptUtc, x.LeaseUntilUtc })
             .HasDatabaseName("IX_GoogleAnalyticsOutbox_DeliveryDue");
 
