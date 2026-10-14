@@ -204,8 +204,11 @@ public sealed class QuotationAnalyticsRetryContractTests
             Record("sent", id, leaseToken, sentUtc, null);
         public Task MarkRetryAsync(long id, Guid leaseToken, DateTime nextAttemptUtc, string error, CancellationToken cancellationToken) =>
             Record("retry", id, leaseToken, nextAttemptUtc, error);
-        public Task MarkFailedAsync(long id, Guid leaseToken, DateTime failedUtc, string error, CancellationToken cancellationToken) =>
-            Record("failed", id, leaseToken, failedUtc, error);
+        public async Task<bool> MarkFailedAsync(long id, Guid leaseToken, DateTime failedUtc, string error, CancellationToken cancellationToken)
+        {
+            await Record("failed", id, leaseToken, failedUtc, error);
+            return true;
+        }
         private Task Record(string outcome, long id, Guid lease, DateTime utc, string? diagnostic)
         {
             Writes++;

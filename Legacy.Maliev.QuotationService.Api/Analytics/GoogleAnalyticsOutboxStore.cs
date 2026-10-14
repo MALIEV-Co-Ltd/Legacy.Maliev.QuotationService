@@ -9,7 +9,8 @@ public interface IGoogleAnalyticsOutboxStore
     Task<IReadOnlyList<GoogleAnalyticsOutbox>> ClaimAsync(DateTime nowUtc, TimeSpan leaseDuration, int batchSize, CancellationToken cancellationToken);
     Task MarkSentAsync(long id, Guid leaseToken, DateTime sentUtc, CancellationToken cancellationToken);
     Task MarkRetryAsync(long id, Guid leaseToken, DateTime nextAttemptUtc, string error, CancellationToken cancellationToken);
-    Task MarkFailedAsync(long id, Guid leaseToken, DateTime failedUtc, string error, CancellationToken cancellationToken);
+    /// <summary>Returns true only when this lease durably transitions its row to failed.</summary>
+    Task<bool> MarkFailedAsync(long id, Guid leaseToken, DateTime failedUtc, string error, CancellationToken cancellationToken);
 }
 
 /// <summary>Conditional database claims; a reclaimed token fences every stale acknowledgement.</summary>
@@ -60,15 +61,16 @@ public sealed class GoogleAnalyticsOutboxStore(QuotationDbContext context) : IGo
                 .SetProperty(row => row.LastError, diagnostic), cancellationToken);
     }
 
-    public async Task MarkFailedAsync(long id, Guid leaseToken, DateTime failedUtc, string error, CancellationToken cancellationToken)
+    public async Task<bool> MarkFailedAsync(long id, Guid leaseToken, DateTime failedUtc, string error, CancellationToken cancellationToken)
     {
         var failed = StorageUtc(failedUtc);
         var diagnostic = Bound(error);
-        await context.GoogleAnalyticsOutbox
+        var updated = await context.GoogleAnalyticsOutbox
             .Where(row => row.Id == id && row.LeaseToken == leaseToken && row.SentUtc == null && row.FailedUtc == null)
             .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.FailedUtc, (DateTime?)failed)
                 .SetProperty(row => row.LeaseToken, (Guid?)null).SetProperty(row => row.LeaseUntilUtc, (DateTime?)null)
                 .SetProperty(row => row.LastError, diagnostic), cancellationToken);
+        return updated == 1;
     }
 
     private static DateTime StorageUtc(DateTime value) => DateTime.SpecifyKind(
