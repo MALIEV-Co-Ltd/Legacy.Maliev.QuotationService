@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "expectedCount": 14,
+  "sourceCommits": [
+    "1c1020d799645beecc810ef6454f2158f2232fe3",
+    "1cd90602827ba1ab8f5719124230b4a1097efc03"
+  ],
+  "filter": "FullyQualifiedName~QuotationOrderItemMutationVersionHttpTests|FullyQualifiedName~Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses|FullyQualifiedName~QuotationOrderItemCollectionContractTests|FullyQualifiedName~QuotationOrderItemCollectionHttpTests",
+  "names": [
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionContractTests.Nonzero_collection_keeps_service_payload_and_exact_parent_token",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionContractTests.Nonzero_empty_collection_keeps_original_notfound(quotationId: -1)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionContractTests.Nonzero_empty_collection_keeps_original_notfound(quotationId: 17)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionContractTests.Zero_parent_returns_original_bad_request_without_querying_service",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionHttpTests.Authenticated_allowed_nonzero_empty_collection_retains_http404",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionHttpTests.Authenticated_allowed_zero_parent_keeps_source_wire400_before_service_query",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionHttpTests.Zero_parent_keeps_authentication_and_live_denial_before_input_validation(authenticated: False, expected: Unauthorized)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionHttpTests.Zero_parent_keeps_authentication_and_live_denial_before_input_validation(authenticated: True, expected: Forbidden)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemMutationVersionHttpTests.Line_version_advances_at_database_precision_and_rejects_replayed_tokens(clockOffsetTicks: -864000000000)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemMutationVersionHttpTests.Line_version_advances_at_database_precision_and_rejects_replayed_tokens(clockOffsetTicks: 0)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemMutationVersionHttpTests.Line_version_advances_at_database_precision_and_rejects_replayed_tokens(clockOffsetTicks: 9)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses(clockOffsetTicks: -864000000000)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses(clockOffsetTicks: 0)",
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses(clockOffsetTicks: 9)"
+  ],
+  "testMethods": {
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionContractTests.Nonzero_collection_keeps_service_payload_and_exact_parent_token": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionContractTests",
+      "name": "Nonzero_collection_keeps_service_payload_and_exact_parent_token",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionContractTests.Nonzero_empty_collection_keeps_original_notfound(quotationId: -1)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionContractTests",
+      "name": "Nonzero_empty_collection_keeps_original_notfound",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionContractTests.Nonzero_empty_collection_keeps_original_notfound(quotationId: 17)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionContractTests",
+      "name": "Nonzero_empty_collection_keeps_original_notfound",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionContractTests.Zero_parent_returns_original_bad_request_without_querying_service": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionContractTests",
+      "name": "Zero_parent_returns_original_bad_request_without_querying_service",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionHttpTests.Authenticated_allowed_nonzero_empty_collection_retains_http404": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionHttpTests",
+      "name": "Authenticated_allowed_nonzero_empty_collection_retains_http404",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionHttpTests.Authenticated_allowed_zero_parent_keeps_source_wire400_before_service_query": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionHttpTests",
+      "name": "Authenticated_allowed_zero_parent_keeps_source_wire400_before_service_query",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionHttpTests.Zero_parent_keeps_authentication_and_live_denial_before_input_validation(authenticated: False, expected: Unauthorized)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionHttpTests",
+      "name": "Zero_parent_keeps_authentication_and_live_denial_before_input_validation",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionHttpTests.Zero_parent_keeps_authentication_and_live_denial_before_input_validation(authenticated: True, expected: Forbidden)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemCollectionHttpTests",
+      "name": "Zero_parent_keeps_authentication_and_live_denial_before_input_validation",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemMutationVersionHttpTests.Line_version_advances_at_database_precision_and_rejects_replayed_tokens(clockOffsetTicks: -864000000000)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemMutationVersionHttpTests",
+      "name": "Line_version_advances_at_database_precision_and_rejects_replayed_tokens",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemMutationVersionHttpTests.Line_version_advances_at_database_precision_and_rejects_replayed_tokens(clockOffsetTicks: 0)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemMutationVersionHttpTests",
+      "name": "Line_version_advances_at_database_precision_and_rejects_replayed_tokens",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemMutationVersionHttpTests.Line_version_advances_at_database_precision_and_rejects_replayed_tokens(clockOffsetTicks: 9)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationOrderItemMutationVersionHttpTests",
+      "name": "Line_version_advances_at_database_precision_and_rejects_replayed_tokens",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses(clockOffsetTicks: -864000000000)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses(clockOffsetTicks: 0)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    },
+    "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests.Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses(clockOffsetTicks: 9)": {
+      "className": "Legacy.Maliev.QuotationService.Tests.Controllers.QuotationRequestTriageHttpTests",
+      "name": "Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses",
+      "assembly": "Legacy.Maliev.QuotationService.Tests.dll"
+    }
+  }
+}

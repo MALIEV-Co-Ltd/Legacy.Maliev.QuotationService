@@ -22,6 +22,10 @@ def binding(row):
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
  def redirect_request(self,*args):raise ValueError('Registry redirect refused')
+def safe_secondary_note(primary,context,secondary):
+ try:primary.add_note(context+type(secondary).__name__)
+ except BaseException:pass
+
 def fetch(url,token=None,deadline=None):
  import urllib.error
  if deadline is None:deadline=time.monotonic()+45
@@ -35,6 +39,8 @@ def fetch(url,token=None,deadline=None):
    with opener.open(urllib.request.Request(url,headers=headers),timeout=min(12,remaining)) as response:return response.read()
   except urllib.error.HTTPError as primary:
    try:
+    try:primary.safe_registry_diagnostic=safe_provider_metadata(headers=primary.headers,status=primary.code,origin='metadata-http-response')
+    except BaseException as secondary:safe_secondary_note(primary,'Secondary metadata diagnostic failure: ',secondary)
     if primary.code!=429 or attempt==2:raise
     retry_after=primary.headers.get('Retry-After')
     delay=float(retry_after) if retry_after is not None and retry_after.isdigit() else 2**(attempt+1)
@@ -64,7 +70,7 @@ def preserve_primary(operation,save):
  try:return operation()
  except BaseException as primary:
   try:save()
-  except BaseException as secondary:primary.add_note('Secondary receipt failure: '+type(secondary).__name__)
+  except BaseException as secondary:safe_secondary_note(primary,'Secondary receipt failure: ',secondary)
   raise
 def reconcile(entry,run):
  raw=run(['docker','image','inspect',entry['tag']],False)
@@ -76,14 +82,27 @@ def reconcile(entry,run):
  entry['state']='exact-reference-observed'
 def mutate(args,tag,row,run,receipt):
  # This durable intent precedes the daemon command, including failure/timeout paths.
- entry={'tag':tag,'configDigest':row['configDigest'],'preExisting':False,'state':'intent','commandSettled':False,'unresolvedLease':'until this finite ephemeral hosted job runner is destroyed; external confirmation required'}
+ entry={'tag':tag,'configDigest':row['configDigest'],'preExisting':False,'state':'intent','commandSettled':False,'cliOutcome':{'execution':'not-observed','terminalReturnCode':None,'exitConfirmed':None,'custodyResolved':None},'daemonSettlementAuthority':'unproved','unresolvedLease':'until this finite ephemeral hosted job runner is destroyed; external confirmation required'}
  receipt['createdTags'].append(entry);receipt['write']()
  try:
-  run(args);entry['commandSettled']=True;reconcile(entry,run)
+  run(args)
+  # The required runner returns only after successful completion and CLI custody
+  # cleanup. A terminal failure or recovery signal never grants daemon authority.
+  entry['cliOutcome']={'execution':'returned-success','terminalReturnCode':0,'exitConfirmed':True,'custodyResolved':True}
+  entry['commandSettled']=True;entry['daemonSettlementAuthority']='successful-cli-completion'
+  reconcile(entry,run)
   if entry['state']!='exact-reference-observed':raise ValueError('Daemon mutation not observed')
  except BaseException as primary:
   if isinstance(primary,DockerCommandFailure):entry['failureDiagnostic']=primary.diagnostic
-  if hasattr(primary,'owned_cli_resource'):entry['cliResource']=primary.owned_cli_resource
+  if not entry['commandSettled']:
+   resource=getattr(primary,'owned_cli_resource',{})
+   if resource:entry['cliResource']=resource
+   code=resource.get('terminalReturnCode',primary.diagnostic['returnCode'] if isinstance(primary,DockerCommandFailure) else None)
+   execution='not-observed'
+   if resource.get('executionOutcome')=='interrupted' or type(code) is int and code<0:execution='interrupted'
+   elif isinstance(primary,DockerCommandFailure):execution='returned-failure'
+   elif resource.get('executionOutcome')=='completed':execution='completed-custody-unresolved'
+   entry['cliOutcome']={'execution':execution,'terminalReturnCode':code,'exitConfirmed':resource.get('exitConfirmed'),'custodyResolved':not resource['unresolvedCustody'] if type(resource.get('unresolvedCustody')) is bool else None}
   try:reconcile(entry,run)
   except BaseException as secondary:primary.add_note('Secondary reconciliation failure: '+type(secondary).__name__)
   try:receipt['write']()
@@ -153,6 +172,44 @@ class DockerCommandFailure(RuntimeError):
  def __init__(self,diagnostic):
   self.diagnostic=diagnostic
   super().__init__('Owned Docker command failed: '+diagnostic['operation']+'; category='+diagnostic['category'])
+def safe_provider_metadata(text='',headers=None,status=None,origin='captured-cli-stderr'):
+ import re
+ from datetime import timezone
+ from email.utils import parsedate_to_datetime
+ # Only constant allowlisted codes and bounded retry values survive. No free-form text is retained.
+ codes={'toomanyrequests':'TOOMANYREQUESTS','throttleexception':'ThrottleException',
+  'throttlingexception':'ThrottlingException','limitexceededexception':'LimitExceededException',
+  'accessdeniedexception':'AccessDeniedException','unauthorized':'UNAUTHORIZED','denied':'DENIED','manifest_unknown':'MANIFEST_UNKNOWN'}
+ result={'origin':origin,'httpStatus':status if type(status) is int and 400<=status<=599 else None,
+  'errorCode':None,'retryAfterSeconds':None,'retryAfterHttpDate':None,
+  'rateLimitResetValue':None,'xRateLimitResetValue':None,'resetUnits':'not-inferred','rateLimitNature':'unclassified'}
+ values={}
+ if type(text) is str and len(text)<=4096:
+  match=re.search(r'(?aim)^(?:Error response from daemon:\s*)?(?:HTTP(?:/[0-9.]+)?\s+[45][0-9]{2}:?\s*)?('+ '|'.join(codes)+r')(?=\s*:|\s*$)',text)
+  if match:result['errorCode']=codes.get(match.group(1).lower())
+  for line in text.splitlines():
+   field=re.fullmatch(r'\s*(Retry-After|RateLimit-Reset|X-RateLimit-Reset):\s*(.{1,128})\s*',line,re.I)
+   if field:values.setdefault(field.group(1).lower(),field.group(2).strip())
+ if headers is not None:
+  for name in ('Retry-After','RateLimit-Reset','X-RateLimit-Reset'):
+   value=headers.get(name)
+   if type(value) is str and len(value)<=128:values[name.lower()]=value.strip()
+  value=headers.get('x-amzn-ErrorType')
+  if type(value) is str and len(value)<=128 and value.strip().lower() in codes:result['errorCode']=codes[value.strip().lower()]
+ def integer(value):
+  if type(value) is str and re.fullmatch(r'[0-9]{1,10}',value):
+   number=int(value)
+   if number<=2147483647:return number
+  return None
+ retry=values.get('retry-after')
+ result['retryAfterSeconds']=integer(retry)
+ if type(retry) is str and re.fullmatch(r'(Mon|Tue|Wed|Thu|Fri|Sat|Sun), [0-9]{2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT',retry):
+  try:result['retryAfterHttpDate']=parsedate_to_datetime(retry).astimezone(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT')
+  except (ValueError,OverflowError,TypeError):pass
+ result['rateLimitResetValue']=integer(values.get('ratelimit-reset'))
+ result['xRateLimitResetValue']=integer(values.get('x-ratelimit-reset'))
+ return result
+
 def command_failure(args,returncode,prefix,total_bytes):
  import re
  if len(prefix)>4096 or total_bytes<len(prefix):raise ValueError('Bounded diagnostic capture required')
@@ -164,7 +221,7 @@ def command_failure(args,returncode,prefix,total_bytes):
  operation=args[1] if len(args)>1 and args[1] in ('pull','tag','ps') else '-'.join(args[1:3]) if args[1:3] in (['image','inspect'],['image','rm']) else 'unknown'
  approved=set(SOURCES)|{source[2]+'/'+source[3]+'@sha256:'+source[4] for source in SOURCES.values()}
  reference=args[-1] if args and args[-1] in approved else None
- return DockerCommandFailure({'operation':operation,'imageReference':reference,'returnCode':returncode,'category':category,'explicitHttpStatus':int(status.group(1)) if status else None,'stderrBytes':total_bytes,'capturedBytes':len(prefix),'captureLimitBytes':4096,'truncated':total_bytes>len(prefix),'sha256':hashlib.sha256(prefix).hexdigest(),'hashScope':'captured-prefix','rawDisclosed':False})
+ return DockerCommandFailure({'operation':operation,'imageReference':reference,'returnCode':returncode,'category':category,'explicitHttpStatus':int(status.group(1)) if status else None,'stderrBytes':total_bytes,'capturedBytes':len(prefix),'captureLimitBytes':4096,'truncated':total_bytes>len(prefix),'sha256':hashlib.sha256(prefix).hexdigest(),'hashScope':'captured-prefix','rawDisclosed':False,'safeProviderMetadata':safe_provider_metadata(prefix.decode('utf-8',errors='replace'),status=int(status.group(1)) if status else None)})
 def observe_cli_identity(process):
  import os
  if type(process.pid) is not int or process.pid<=0:raise RuntimeError('Invalid retained CLI PID')
@@ -220,10 +277,20 @@ def run_docker_cli(args,timeout,hard_deadline=None):
  try:
   process=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
   try:identity=observe_cli_identity(process)
-  except FileNotFoundError:
+  except FileNotFoundError as observation_error:
    # A retained Popen terminal status proves this child exited even when its
    # short-lived /proc executable is already gone. Never infer a live identity.
-   if process.poll() is None:raise
+   if process.poll() is None:
+    try:
+     remaining=work_deadline-time.monotonic()
+     if remaining<=0:raise observation_error
+     process.wait(timeout=min(1,remaining))
+     terminal=process.poll() is not None
+     if terminal:identity_unavailable_after_exit=True
+     if not terminal or work_deadline-time.monotonic()<=0:raise observation_error
+    except BaseException as secondary:
+     if secondary is not observation_error:safe_secondary_note(observation_error,'Secondary identity-observation join failure: ',secondary)
+     raise observation_error
    identity_unavailable_after_exit=True
   selector=selectors.DefaultSelector()
   for stream,name in ((process.stdout,'stdout'),(process.stderr,'stderr')):
@@ -272,7 +339,11 @@ def run_docker_cli(args,timeout,hard_deadline=None):
     except BaseException as error:cleanup_errors.append(error)
  resource=None
  if process is not None:
-  resource={'pid':getattr(process,'pid',None),'executable':identity['executable'] if identity else None,'startTicks':identity['startTicks'] if identity else None,'identityObserved':identity is not None,'identityUnavailableAfterExit':identity_unavailable_after_exit,'identityDrift':identity_drift,'admissionMonotonic':started,'hardDeadlineMonotonic':deadline,'workDeadlineMonotonic':work_deadline,'recoveryReserveSeconds':3,'exitConfirmed':not identity_drift and process.returncode is not None,'cleanupErrors':len(cleanup_errors),'expiryDoesNotProveExit':True,'unresolvedCustody':identity_drift or identity is None and not identity_unavailable_after_exit or bool(cleanup_errors) or process.returncode is None}
+  resource={'pid':getattr(process,'pid',None),'executable':identity['executable'] if identity else None,'startTicks':identity['startTicks'] if identity else None,'identityObserved':identity is not None,'identityUnavailableAfterExit':identity_unavailable_after_exit,'identityDrift':identity_drift,'admissionMonotonic':started,'hardDeadlineMonotonic':deadline,'workDeadlineMonotonic':work_deadline,'recoveryReserveSeconds':3,'exitConfirmed':not identity_drift and process.returncode is not None,'cleanupErrors':len(cleanup_errors),'expiryDoesNotProveExit':True,'unresolvedCustody':identity_drift or identity is None and (not identity_unavailable_after_exit or primary is not None) or bool(cleanup_errors) or process.returncode is None}
+  # Capture whether command work completed before recovery, separately from the
+  # terminal status that may have resulted from terminate/kill during recovery.
+  resource['executionOutcome']='completed' if result is not None and result[0].returncode>=0 else 'interrupted'
+  resource['terminalReturnCode']=process.returncode
  if primary is not None:
   if resource is not None:primary.owned_cli_resource=resource
   for error in cleanup_errors:primary.add_note('Secondary owned CLI cleanup failure: '+type(error).__name__)
@@ -312,7 +383,15 @@ def main():
  data={'createdTags':[],'owner':'ordinary-hosted-job','containersStarted':False,'deadlineSeconds':240,'cleanupDeadlineSeconds':90,'cliRecoveryReserveSeconds':3,'cliReserveInsideOriginalHardDeadline':True,'cliWorkTimeoutExcludesRecoveryReserve':True,'hostedRunId':os.environ.get('GITHUB_RUN_ID'),'hostedRunAttempt':os.environ.get('GITHUB_RUN_ATTEMPT'),'hostedJob':os.environ.get('GITHUB_JOB'),'leaseExpiresUtc':(datetime.now(timezone.utc)+timedelta(minutes=30)).isoformat(),'leaseExpiryDoesNotProveDaemonSettlement':True,'settlementAuthority':'successful CLI completion or externally verified ephemeral runner destruction'}
  def save():atomic_save(path,data)
  save();receipt={'createdTags':data['createdTags'],'write':save}
- preserve_primary(lambda:preload(json.loads((ROOT/'image-pins.json').read_bytes()),run,lambda url,token=None:fetch(url,token,deadline),receipt),save)
+ def read_metadata(url,token=None):
+  try:return fetch(url,token,deadline)
+  except BaseException as primary:
+   try:
+    diagnostic=getattr(primary,'safe_registry_diagnostic',None)
+    if isinstance(diagnostic,dict):data['metadataFailureDiagnostic']=diagnostic;save()
+   except BaseException as secondary:safe_secondary_note(primary,'Secondary metadata diagnostic receipt failure: ',secondary)
+   raise
+ preserve_primary(lambda:preload(json.loads((ROOT/'image-pins.json').read_bytes()),run,read_metadata,receipt),save)
  save()
 def atomic_save(path,data):
  import os

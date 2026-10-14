@@ -45,7 +45,7 @@ public sealed partial class QuotationRepository(
     public Task<QuotationResponse?> GetQuotationByInvoiceAsync(int invoiceId, CancellationToken cancellationToken) =>
         Project(quotations.Quotations.AsNoTracking().Where(x => x.InvoiceId == invoiceId)).SingleOrDefaultAsync(cancellationToken);
 
-    public async Task<PaginatedResponse<QuotationResponse>?> GetQuotationsAsync(int? customerId, QuotationSortType? sort, string? search, int pageIndex, int pageSize, CancellationToken cancellationToken)
+    public async Task<PaginatedResponse<QuotationResponse>?> GetQuotationsAsync(int? customerId, QuotationSortType? sort, string? search, int pageIndex, int? pageSize, CancellationToken cancellationToken)
     {
         IQueryable<Quotation> query = quotations.Quotations.AsNoTracking(); if (customerId is not null) query = query.Where(x => x.CustomerId == customerId);
         if (!string.IsNullOrWhiteSpace(search))
@@ -405,7 +405,8 @@ public sealed partial class QuotationRepository(
     public async Task<UpdateResult> UpdateOrderItemAsync(int id, UpsertQuotationOrderItemRequest request, DateTimeOffset? expectedModifiedDate, CancellationToken cancellationToken)
     {
         var entity = await quotations.OrderItems.FindAsync([id], cancellationToken); if (entity is null) return UpdateResult.NotFound; if (expectedModifiedDate is not null) quotations.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified);
-        entity.QuotationId = request.QuotationId; entity.OrderId = request.OrderId; entity.Description = request.Description; entity.Quantity = request.Quantity; entity.UnitPrice = request.UnitPrice; entity.ModifiedDate = Now();
+        var nextVersion = NextDecisionVersion(Now(), entity.ModifiedDate ?? entity.CreatedDate);
+        entity.QuotationId = request.QuotationId; entity.OrderId = request.OrderId; entity.Description = request.Description; entity.Quantity = request.Quantity; entity.UnitPrice = request.UnitPrice; entity.ModifiedDate = nextVersion;
         try { await quotations.SaveChangesAsync(cancellationToken); return UpdateResult.Updated; } catch (DbUpdateConcurrencyException) { return UpdateResult.Conflict; }
     }
 
@@ -642,7 +643,7 @@ public sealed partial class QuotationRepository(
     }
     public Task<QuotationRequestResponse?> GetRequestAsync(int id, CancellationToken cancellationToken) =>
         ProjectRequests(requests.Requests.AsNoTracking().Where(x => x.Id == id)).SingleOrDefaultAsync(cancellationToken);
-    public async Task<PaginatedResponse<QuotationRequestResponse>?> GetRequestsAsync(RequestSortType? sort, string? search, int pageIndex, int pageSize, CancellationToken cancellationToken)
+    public async Task<PaginatedResponse<QuotationRequestResponse>?> GetRequestsAsync(RequestSortType? sort, string? search, int pageIndex, int? pageSize, CancellationToken cancellationToken)
     {
         IQueryable<QuotationRequest> query = requests.Requests.AsNoTracking(); if (!string.IsNullOrWhiteSpace(search)) { var value = search.Trim(); var numeric = int.TryParse(value, out var id); var pattern = $"%{EscapeRequestSearch(value)}%"; query = query.Where(x => (numeric && x.Id == id) || (!numeric && ((x.FirstName != null && EF.Functions.ILike(x.FirstName, pattern, "\\")) || (x.LastName != null && EF.Functions.ILike(x.LastName, pattern, "\\")) || (x.Message != null && EF.Functions.ILike(x.Message, pattern, "\\")) || (x.TelephoneNumber != null && EF.Functions.ILike(x.TelephoneNumber, pattern, "\\")) || (x.CompanyName != null && EF.Functions.ILike(x.CompanyName, pattern, "\\")) || (x.Email != null && EF.Functions.ILike(x.Email, pattern, "\\")) || (x.InternalComment != null && EF.Functions.ILike(x.InternalComment, pattern, "\\")) || (x.Country != null && EF.Functions.ILike(x.Country, pattern, "\\"))))); }
         query = sort switch { RequestSortType.RequestId_Descending => query.OrderByDescending(x => x.Id), RequestSortType.RequestCreatedDate_Ascending => query.OrderBy(x => x.CreatedDate), RequestSortType.RequestCreatedDate_Descending => query.OrderByDescending(x => x.CreatedDate), RequestSortType.RequestModifiedDate_Ascending => query.OrderBy(x => x.ModifiedDate), RequestSortType.RequestModifiedDate_Descending => query.OrderByDescending(x => x.ModifiedDate), _ => query.OrderBy(x => x.Id) }; return await PageAsync(ProjectRequests(query), pageIndex, pageSize, cancellationToken);
@@ -654,7 +655,8 @@ public sealed partial class QuotationRepository(
             var entity = await attempt.Requests.FindAsync([id], token);
             if (entity is null) return (UpdateResult.NotFound, false);
             if (expectedModifiedDate is not null) attempt.Entry(entity).Property(x => x.ModifiedDate).OriginalValue = DateTime.SpecifyKind(expectedModifiedDate.Value.UtcDateTime, DateTimeKind.Unspecified);
-            Map(entity, request).ModifiedDate = Now();
+            var nextVersion = NextDecisionVersion(Now(), entity.ModifiedDate ?? entity.CreatedDate);
+            Map(entity, request).ModifiedDate = nextVersion;
             try { await attempt.SaveChangesAsync(token); return (UpdateResult.Updated, true); }
             catch (DbUpdateConcurrencyException) { return (UpdateResult.Conflict, false); }
         }, cancellationToken);
@@ -856,7 +858,7 @@ public sealed partial class QuotationRepository(
             return new(QualificationUpdateStatus.NotFound, null);
         }
 
-        if (entity.QualificationVersion != request.ExpectedVersion)
+        if (entity.QualificationVersion != request.ExpectedVersion || entity.QualificationVersion == int.MaxValue)
         {
             return new(QualificationUpdateStatus.VersionConflict, null);
         }
@@ -1093,7 +1095,19 @@ public sealed partial class QuotationRepository(
     }
     private static bool IsSha256(string value) =>
         value.Length == 64 && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
-    private static async Task<PaginatedResponse<T>?> PageAsync<T>(IQueryable<T> query, int pageIndex, int pageSize, CancellationToken cancellationToken) { pageIndex = Math.Max(pageIndex, 1); pageSize = Math.Clamp(pageSize, 1, 250); var total = await query.CountAsync(cancellationToken); if (total == 0) return null; var items = await query.Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken); return new(items, pageIndex, (int)Math.Ceiling(total / (double)pageSize), total); }
+    private static async Task<PaginatedResponse<T>?> PageAsync<T>(IQueryable<T> query, int pageIndex, int? pageSize, CancellationToken cancellationToken)
+    {
+        pageIndex = Math.Max(pageIndex, 1);
+        var total = await query.CountAsync(cancellationToken);
+        if (total == 0) return null;
+        var effectivePageSize = pageSize is null ? total : Math.Max(pageSize.Value, 1);
+        var totalPages = (int)Math.Ceiling(total / (double)effectivePageSize);
+        var offset = ((long)pageIndex - 1) * effectivePageSize;
+        // Keep the existing empty-page envelope without overflowing PostgreSQL's offset input.
+        if (offset >= total) return new([], pageIndex, totalPages, total);
+        var items = await query.Skip((int)offset).Take(effectivePageSize).ToListAsync(cancellationToken);
+        return new(items, pageIndex, totalPages, total);
+    }
     private static Quotation Map(Quotation x, UpsertQuotationRequest r) { x.CustomerId = r.CustomerId; x.EmployeeId = r.EmployeeId; x.InvoiceId = r.InvoiceId; x.Period = r.Period; x.ExpirationDate = r.ExpirationDate; x.Subtotal = r.Subtotal; x.Vat = r.Vat; x.Total = r.Total; x.WithholdingTax = r.WithholdingTax; x.CurrencyId = r.CurrencyId; x.Comment = r.Comment; x.Fob = r.Fob; x.ShippedVia = r.ShippedVia; x.Terms = r.Terms; x.Accepted = r.Accepted; return x; }
     private static QuotationRequest Map(QuotationRequest x, UpsertQuotationRequestRequest r) { x.FirstName = r.FirstName; x.LastName = r.LastName; x.Email = r.Email; x.TelephoneNumber = r.TelephoneNumber; x.Country = r.Country; x.CompanyName = r.CompanyName; x.TaxIdentification = r.TaxIdentification; x.Message = r.Message; x.InternalComment = r.InternalComment; x.Done = r.Done; return x; }
     private static QuotationResponse ToResponse(Quotation x) => new(x.Id, x.CustomerId, x.EmployeeId, x.InvoiceId, x.Period, x.ExpirationDate, x.Subtotal, x.Vat, x.Total, x.WithholdingTax, x.QuotedAmount, x.CurrencyId, x.Comment, x.Fob, x.ShippedVia, x.Terms, x.Accepted, x.CreatedDate, x.ModifiedDate);

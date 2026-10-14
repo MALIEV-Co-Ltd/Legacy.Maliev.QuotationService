@@ -109,13 +109,15 @@ public sealed class DockerBindCollisionContractTests
     {
         var calls = 0;
         var trace = new List<string>();
-        var cleanup = Task.FromException(new IOException("Synthetic cleanup failure."));
+        var primary = Failure(BindCollision);
+        var cleanupFailure = new IOException("Synthetic cleanup failure.");
+        var cleanup = Task.FromException(cleanupFailure);
         var failure = await Record.ExceptionAsync(() => DisposableContainerStartup.StartAsync(
-            () => { calls++; return new ScriptedResource("one", trace, Failure(BindCollision), cleanup); },
+            () => { calls++; return new ScriptedResource("one", trace, primary, cleanup); },
             (_, _) => throw new InvalidOperationException("No backoff may occur.")));
         Assert.NotNull(failure);
-        Assert.True(failure is IOException || failure is AggregateException aggregate
-            && aggregate.Flatten().InnerExceptions.Any(error => error is IOException));
+        Assert.Same(primary, failure);
+        Assert.Contains(cleanupFailure, ContainerOperationCustody.FailuresFor(primary, "maliev.cleanup.failures"));
         Assert.Equal(1, calls);
         Assert.Equal(["one:start", "one:dispose"], trace);
     }

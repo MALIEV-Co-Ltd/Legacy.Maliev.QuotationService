@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
@@ -32,6 +33,56 @@ namespace Legacy.Maliev.QuotationService.Tests.Controllers;
 /// <summary>Normal JWT/Production HTTP lifecycle; real databases, Redis and IAM client with controlled remote IAM HTTP only.</summary>
 public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture) : IClassFixture<RequestTriageFixture>
 {
+    [Fact]
+    public async Task Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages()
+    {
+        await using var existing = fixture.Context();
+        var connection = new NpgsqlConnectionStringBuilder(existing.Database.GetDbConnection().ConnectionString)
+        {
+            Database = "empty_page_" + Guid.NewGuid().ToString("N")
+        }.ConnectionString;
+        var options = new DbContextOptionsBuilder<QuotationRequestDbContext>().UseNpgsql(connection).Options;
+        await using var database = new QuotationRequestDbContext(options);
+        Assert.False(await database.Database.CanConnectAsync());
+        Exception? primaryFailure = null;
+        try
+        {
+            await database.Database.MigrateAsync();
+            await using (var original = fixture.App())
+            await using (var app = original.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<QuotationRequestDbContext>>();
+                services.AddSingleton(options);
+            })))
+            {
+                using var client = fixture.Client(app);
+                using (var response = await client.GetAsync("/quotationrequests"))
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                using (var response = await client.GetAsync("/quotationrequests?search=absent"))
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                using (var response = await client.GetAsync("/quotationrequests?index=2147483647&size=250"))
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            }
+        }
+        catch (Exception error)
+        {
+            primaryFailure = error;
+            throw;
+        }
+        finally
+        {
+            try
+            {
+                await database.Database.EnsureDeletedAsync();
+                Assert.False(await database.Database.CanConnectAsync());
+            }
+            catch (Exception cleanup) when (primaryFailure is not null)
+            {
+                primaryFailure.Data["EmptyPageDatabaseCleanupFailure"] = cleanup;
+            }
+        }
+    }
+
     [Theory]
     [InlineData("%")]
     [InlineData("_")]
@@ -112,15 +163,137 @@ public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture
         Assert.Equal(1, json.RootElement.GetProperty("PageIndex").GetInt32());
         Assert.Equal(1, json.RootElement.GetProperty("TotalPages").GetInt32());
         using var outOfRange = await client.GetAsync($"/quotationrequests?search={row.Id}&index=2&size=1");
-        // Characterization only: source returns404; current Intranet accepts either empty-page form.
-        Assert.Equal(HttpStatusCode.OK, outOfRange.StatusCode);
-        using var empty = await JsonAsync(outOfRange);
-        Assert.Empty(Ids(empty));
-        Assert.Equal(1, empty.RootElement.GetProperty("TotalRecords").GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound, outOfRange.StatusCode);
         using var missing = await client.GetAsync("/quotationrequests?search=" + Guid.NewGuid().ToString("N"));
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
         using var missingDetail = await client.GetAsync("/quotationrequests/2147483647");
         Assert.Equal(HttpStatusCode.NotFound, missingDetail.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(100)]
+    [InlineData(101)]
+    [InlineData(250)]
+    [InlineData(251)]
+    [InlineData(int.MaxValue)]
+    public async Task Positive_explicit_size_is_not_capped_after_filtering(int size)
+    {
+        const int count = 261;
+        var marker = Guid.NewGuid().ToString("N");
+        var rows = new List<int>();
+        for (var i = 0; i < count; i++) rows.Add((await fixture.SeedAsync(marker)).Id);
+        await fixture.SeedAsync("unrelated");
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        foreach (var descending in new[] { false, true })
+        {
+            var expected = descending ? rows.AsEnumerable().Reverse().ToArray() : rows.ToArray();
+            var sort = descending ? "RequestId_Descending" : "RequestId_Ascending";
+            foreach (var index in new int?[] { null, -1, 0, 1, 2, 3, int.MaxValue })
+            {
+                var normalizedIndex = Math.Max(index ?? 1, 1);
+                var offset = ((long)normalizedIndex - 1) * size;
+                var query = $"/quotationrequests?search={marker}&sort={sort}&size={size}" + (index is null ? "" : $"&index={index}");
+                using var response = await client.GetAsync(query);
+                if (offset >= count)
+                {
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                    continue;
+                }
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                using var json = await JsonAsync(response);
+                Assert.Equal(expected.Skip((int)offset).Take(size), Ids(json));
+                Assert.Equal(count, json.RootElement.GetProperty("TotalRecords").GetInt32());
+                Assert.Equal((int)Math.Ceiling(count / (double)size), json.RootElement.GetProperty("TotalPages").GetInt32());
+                Assert.Equal(normalizedIndex, json.RootElement.GetProperty("PageIndex").GetInt32());
+                Assert.Equal(normalizedIndex > 1, json.RootElement.GetProperty("HasPreviousPage").GetBoolean());
+                Assert.Equal(normalizedIndex < (int)Math.Ceiling(count / (double)size), json.RootElement.GetProperty("HasNextPage").GetBoolean());
+                Assert.False(json.RootElement.TryGetProperty("PageSize", out _));
+                foreach (var row in json.RootElement.GetProperty("Items").EnumerateArray())
+                {
+                    Assert.NotEqual(Guid.Empty, row.GetProperty("JourneyId").GetGuid());
+                    Assert.Equal($"request-{row.GetProperty("Id").GetInt32()}", row.GetProperty("TransactionId").GetString());
+                }
+            }
+        }
+        using var missing = await client.GetAsync($"/quotationrequests?search={marker}-missing&size={size}");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        using var anonymous = fixture.Client(app, authenticated: false);
+        using var unauthenticated = await anonymous.GetAsync($"/quotationrequests?search={marker}&size={size}");
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
+        await using var deniedApp = fixture.App(allowed: false);
+        using var denied = fixture.Client(deniedApp);
+        using var forbidden = await denied.GetAsync($"/quotationrequests?search={marker}&size={size}");
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(51)]
+    [InlineData(261)]
+    public async Task Omitted_size_uses_filtered_count_without_default_or_cap(int count)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        var rows = new List<int>();
+        for (var i = 0; i < count; i++) rows.Add((await fixture.SeedAsync(marker)).Id);
+        await fixture.SeedAsync("unrelated");
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        foreach (var descending in new[] { false, true })
+        {
+            var expected = descending ? rows.AsEnumerable().Reverse().ToArray() : rows.ToArray();
+            var sort = descending ? "RequestId_Descending" : "RequestId_Ascending";
+            foreach (var index in new int?[] { null, -1, 0, 1, 2, int.MaxValue })
+            {
+                var query = $"/quotationrequests?search={marker}&sort={sort}" + (index is null ? "" : $"&index={index}");
+                using var response = await client.GetAsync(query);
+                if (count == 0 || index > 1)
+                {
+                    Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                    continue;
+                }
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                using var json = await JsonAsync(response);
+                Assert.Equal(expected, Ids(json));
+                Assert.Equal(count, json.RootElement.GetProperty("TotalRecords").GetInt32());
+                Assert.Equal(1, json.RootElement.GetProperty("TotalPages").GetInt32());
+                Assert.Equal(1, json.RootElement.GetProperty("PageIndex").GetInt32());
+                Assert.False(json.RootElement.TryGetProperty("PageSize", out _));
+            }
+            using var explicitSize = await client.GetAsync($"/quotationrequests?search={marker}&sort={sort}&size=50&index=1");
+            Assert.Equal(count == 0 ? HttpStatusCode.NotFound : HttpStatusCode.OK, explicitSize.StatusCode);
+            if (count == 0) continue;
+            using var explicitJson = await JsonAsync(explicitSize);
+            Assert.Equal(expected.Take(50), Ids(explicitJson));
+            Assert.Equal((int)Math.Ceiling(count / 50d), explicitJson.RootElement.GetProperty("TotalPages").GetInt32());
+        }
+        using var missing = await client.GetAsync($"/quotationrequests?search={marker}-missing");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(int.MaxValue, 250)]
+    [InlineData(1073741825, 4)]
+    [InlineData(int.MaxValue, 2)]
+    public async Task Distant_page_does_not_overflow_or_replay_first_page_rows(int pageIndex, int size)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        var first = await fixture.SeedAsync(marker);
+        var second = await fixture.SeedAsync(marker);
+        await using var app = fixture.App();
+        using var client = fixture.Client(app);
+        using var response = await client.GetAsync($"/quotationrequests?search={marker}&index={pageIndex}&size={size}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        using var missing = await client.GetAsync($"/quotationrequests?search={marker}-missing&index={pageIndex}&size={size}");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        using var firstPage = await client.GetAsync($"/quotationrequests?search={marker}&index=1&size=250");
+        Assert.Equal(HttpStatusCode.OK, firstPage.StatusCode);
+        using var full = await JsonAsync(firstPage);
+        Assert.Equal([first.Id, second.Id], Ids(full));
+        Assert.Equal(2, full.RootElement.GetProperty("TotalRecords").GetInt32());
+        Assert.Equal(first.JourneyId, full.RootElement.GetProperty("Items")[0].GetProperty("JourneyId").GetGuid());
+        Assert.Equal(first.TransactionId, full.RootElement.GetProperty("Items")[0].GetProperty("TransactionId").GetString());
     }
 
     [Theory]
@@ -178,6 +351,69 @@ public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture
         Assert.Equal(row.Message, persisted.Message);
         Assert.Equal(row.ModifiedDate, persisted.ModifiedDate);
         Assert.Equal(1, await db.RequestQualificationAudit.CountAsync(x => x.RequestId == row.Id));
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(9L)]
+    [InlineData(-864000000000L)]
+    public async Task Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses(long clockOffsetTicks)
+    {
+        var row = await fixture.SeedAsync(Guid.NewGuid().ToString("N"), audited: true);
+        var originalVersion = Assert.IsType<DateTime>(row.ModifiedDate);
+        var clock = new RequestMutationClock(new DateTimeOffset(DateTime.SpecifyKind(originalVersion.AddTicks(clockOffsetTicks), DateTimeKind.Utc)));
+        await using var originalApp = fixture.App();
+        await using var app = originalApp.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(clock);
+        }));
+        using var client = fixture.Client(app);
+        using var first = Update(row, true, originalVersion);
+        using var firstResponse = await client.SendAsync(first);
+        Assert.Equal(HttpStatusCode.NoContent, firstResponse.StatusCode);
+        using var firstDetail = await client.GetAsync($"/quotationrequests/{row.Id}");
+        Assert.Equal(HttpStatusCode.OK, firstDetail.StatusCode);
+        var firstState = await firstDetail.Content.ReadFromJsonAsync<QuotationRequestResponse>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(firstState);
+        Assert.Equal(originalVersion.AddTicks(10), firstState.ModifiedDate);
+        using var stale = Update(row, false, originalVersion);
+        using var staleResponse = await client.SendAsync(stale);
+        Assert.Equal(HttpStatusCode.Conflict, staleResponse.StatusCode);
+        await using (var db = fixture.Context())
+        {
+            var retained = await db.Requests.AsNoTracking().SingleAsync(x => x.Id == row.Id);
+            Assert.True(retained.Done);
+            Assert.Equal(firstState.ModifiedDate, retained.ModifiedDate);
+        }
+        using var fresh = Update(row, false, firstState.ModifiedDate);
+        using var freshResponse = await client.SendAsync(fresh);
+        Assert.Equal(HttpStatusCode.NoContent, freshResponse.StatusCode);
+        using var replay = Update(row, true, firstState.ModifiedDate);
+        using var replayResponse = await client.SendAsync(replay);
+        Assert.Equal(HttpStatusCode.Conflict, replayResponse.StatusCode);
+        using var finalDetail = await client.GetAsync($"/quotationrequests/{row.Id}");
+        Assert.Equal(HttpStatusCode.OK, finalDetail.StatusCode);
+        var finalState = await finalDetail.Content.ReadFromJsonAsync<QuotationRequestResponse>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(finalState);
+        Assert.Equal(originalVersion.AddTicks(20), finalState.ModifiedDate);
+        await using var verify = fixture.Context();
+        var persisted = await verify.Requests.AsNoTracking().SingleAsync(x => x.Id == row.Id);
+        Assert.False(persisted.Done);
+        Assert.Equal("Reviewed", persisted.Message);
+        Assert.Equal(finalState.ModifiedDate, persisted.ModifiedDate);
+        Assert.Equal(row.JourneyId, persisted.JourneyId);
+        Assert.Equal(row.TransactionId, persisted.TransactionId);
+        Assert.Equal(row.CreatedDate, persisted.CreatedDate);
+        Assert.Equal(row.QualificationState, persisted.QualificationState);
+        Assert.Equal(row.QualificationVersion, persisted.QualificationVersion);
+        Assert.Equal(row.QualificationStateChangedUtc, persisted.QualificationStateChangedUtc);
+        Assert.Equal(1, await verify.RequestQualificationAudit.CountAsync(x => x.RequestId == row.Id));
+    }
+
+    private sealed class RequestMutationClock(DateTimeOffset value) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => value;
     }
 
     [Fact]

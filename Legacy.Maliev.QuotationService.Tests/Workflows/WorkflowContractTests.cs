@@ -15,6 +15,14 @@ public sealed class WorkflowContractTests
     private static readonly string MigrationRunnerProject = File.ReadAllText(
         FindRepositoryFile("Legacy.Maliev.QuotationService.MigrationRunner", "Legacy.Maliev.QuotationService.MigrationRunner.csproj"));
 
+    [Theory]
+    [InlineData("FullyQualifiedName~QuotationAnalyticsSourceContractTests", "FullyQualifiedName~NoC6SourceContracts")]
+    [InlineData("python3 -B scripts/check_c6_source_index_results.py", "echo C6 receipt omitted")]
+    [InlineData("            TestResults/C6SourceIndex/c6-source-index.trx\n", "            TestResults/C6SourceIndex/**\n")]
+    [InlineData("'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx'", "'TestResults/QualificationCustody/qualification-custody.trx'")]
+    public void BuildAndTest_RejectsC6SourceIndexFocusBypass(string original, string replacement) =>
+        AssertMutationRejected(original, replacement);
+
     [Fact]
     public void BuildAndTest_SatisfiesStructuralContract()
     {
@@ -226,9 +234,96 @@ public sealed class WorkflowContractTests
     [InlineData("retention-days: 7", "retention-days: 90")]
     [InlineData("include-hidden-files: false", "include-hidden-files: true")]
     [InlineData("TestResults/CoverageGate/*/coverage.cobertura.xml", "TestResults/**")]
-    [InlineData("always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx') != '')", "success()")]
+    [InlineData("always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx') != '')", "success()")]
     public void BuildAndTest_RejectsCoverageEvidenceContractMutation(string original, string replacement) =>
         AssertMutationRejected(original, replacement);
+
+    [Theory]
+    [InlineData("missing-focus")]
+    [InlineData("duplicate-focus")]
+    [InlineData("reordered-after-full")]
+    [InlineData("custody-filter")]
+    [InlineData("collision-filter")]
+    [InlineData("exhaustion-filter")]
+    [InlineData("missing-guard-enrollment")]
+    [InlineData("broadened-guard-enrollment")]
+    [InlineData("log")]
+    [InlineData("ignore-failure")]
+    [InlineData("missing-artifact")]
+    [InlineData("missing-early-retention")]
+    public void BuildAndTest_RejectsQualificationCustodyFocusBypass(string mutant)
+    {
+        WorkflowContractValidator.Validate(Workflow);
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(Workflow));
+        var root = Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+        var jobs = Assert.IsType<YamlMappingNode>(ReadNode(root, "jobs"));
+        var job = Assert.IsType<YamlMappingNode>(ReadNode(jobs, "validate"));
+        var steps = Assert.IsType<YamlSequenceNode>(ReadNode(job, "steps"));
+        var collection = Assert.IsType<YamlMappingNode>(steps.Children[12]);
+        var upload = Assert.IsType<YamlMappingNode>(steps.Children[14]);
+        var inputs = Assert.IsType<YamlMappingNode>(ReadNode(upload, "with"));
+        var run = ReadScalar(collection, "run");
+        var prefix = WorkflowContractValidator.QualificationCustodyCollection.ReplaceLineEndings("\n") + "\n";
+        var c6Prefix = WorkflowContractValidator.C6SourceIndexCollection.ReplaceLineEndings("\n") + "\n";
+        Assert.StartsWith(c6Prefix, run, StringComparison.Ordinal);
+        var custodyRun = run[c6Prefix.Length..];
+        Assert.StartsWith(prefix, custodyRun, StringComparison.Ordinal);
+        var remainder = custodyRun[prefix.Length..];
+        switch (mutant)
+        {
+            case "missing-focus":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(c6Prefix + remainder);
+                break;
+            case "duplicate-focus":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(c6Prefix + prefix + custodyRun);
+                break;
+            case "reordered-after-full":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(c6Prefix + remainder.TrimEnd() + "\n" + prefix);
+                break;
+            case "custody-filter":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
+                    "FullyQualifiedName~ContainerOperationCustodyContractTests", "FullyQualifiedName~UnreviewedCustody", StringComparison.Ordinal));
+                break;
+            case "collision-filter":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
+                    "DockerBindCollisionContractTests.FailedCleanupOfHostBindAttemptNeverAdmitsBackoffOrReplacement", "DockerBindCollisionContractTests.UnreviewedCase", StringComparison.Ordinal));
+                break;
+            case "exhaustion-filter":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
+                    "QualificationBridgeConsumerHttpTests.Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap", "QualificationBridgeConsumerHttpTests.UnreviewedCase", StringComparison.Ordinal));
+                break;
+            case "missing-guard-enrollment":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
+                    "|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass", "", StringComparison.Ordinal));
+                break;
+            case "broadened-guard-enrollment":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
+                    "FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass", "FullyQualifiedName~Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests", StringComparison.Ordinal));
+                break;
+            case "log":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
+                    "LogFileName=qualification-custody.trx", "LogFileName=unreviewed.trx", StringComparison.Ordinal));
+                break;
+            case "ignore-failure":
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
+                    "--logger 'trx;LogFileName=qualification-custody.trx'", "--logger 'trx;LogFileName=qualification-custody.trx' || true", StringComparison.Ordinal));
+                break;
+            case "missing-artifact":
+                inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode(ReadScalar(inputs, "path").Replace(
+                    "TestResults/QualificationCustody/qualification-custody.trx\n", "", StringComparison.Ordinal));
+                break;
+            case "missing-early-retention":
+                upload.Children[new YamlScalarNode("if")] = new YamlScalarNode(ReadScalar(upload, "if").Replace(
+                    ", 'TestResults/QualificationCustody/qualification-custody.trx'", "", StringComparison.Ordinal));
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mutant), mutant, "Unknown qualification focus mutation.");
+        }
+        using var serialized = new StringWriter();
+        yaml.Save(serialized, assignAnchors: false);
+        Assert.Throws<InvalidOperationException>(() => WorkflowContractValidator.Validate(serialized.ToString()));
+    }
 
     [Fact]
     public void CoverageSettings_RetainGeneratedLinesAndAutomaticProperties()
@@ -284,7 +379,7 @@ public sealed class WorkflowContractTests
         var steps = Assert.IsType<YamlSequenceNode>(ReadNode(job, "steps"));
         var controlsIndex = jobName == "validate" ? 4 : 7;
         var preloadIndex = controlsIndex + 1;
-        var cleanupIndex = jobName == "validate" ? 13 : 10;
+        var cleanupIndex = jobName == "validate" ? 16 : 10;
         var uploadIndex = cleanupIndex + 1;
         var preload = Assert.IsType<YamlMappingNode>(steps.Children[preloadIndex]);
         var environment = Assert.IsType<YamlMappingNode>(ReadNode(job, "env"));
@@ -319,6 +414,171 @@ public sealed class WorkflowContractTests
 
         using var serialized = new StringWriter();
         yaml.Save(serialized, assignAnchors: false);
+        Assert.Throws<InvalidOperationException>(() => WorkflowContractValidator.Validate(serialized.ToString()));
+    }
+
+    [Theory]
+    [InlineData("controls")]
+    [InlineData("filter")]
+    [InlineData("checker")]
+    [InlineData("timeout")]
+    [InlineData("conditional")]
+    [InlineData("failure-override")]
+    [InlineData("missing-focus")]
+    [InlineData("duplicate-focus")]
+    [InlineData("reorder")]
+    [InlineData("upload-path")]
+    [InlineData("upload-condition")]
+    [InlineData("upload-overwrite")]
+    [InlineData("artifact-name")]
+    [InlineData("missing-test-log")]
+    [InlineData("extra-dotnet")]
+    [InlineData("pagination-controls")]
+    [InlineData("pagination-filter")]
+    [InlineData("pagination-checker")]
+    [InlineData("pagination-log")]
+    [InlineData("pagination-upload-trx")]
+    [InlineData("pagination-upload-manifest")]
+    [InlineData("pagination-ignore-failure")]
+    [InlineData("omitted-size-controls")]
+    [InlineData("omitted-size-filter")]
+    [InlineData("omitted-size-checker")]
+    [InlineData("omitted-size-log")]
+    [InlineData("omitted-size-upload-trx")]
+    [InlineData("omitted-size-upload-manifest")]
+    [InlineData("omitted-size-ignore-failure")]
+    [InlineData("explicit-size-controls")]
+    [InlineData("explicit-size-filter")]
+    [InlineData("explicit-size-checker")]
+    [InlineData("explicit-size-log")]
+    [InlineData("explicit-size-upload-trx")]
+    [InlineData("explicit-size-upload-manifest")]
+    [InlineData("explicit-size-ignore-failure")]
+    public void BuildAndTest_RejectsOrdinaryControllerParityBypass(string mutant)
+    {
+        WorkflowContractValidator.Validate(Workflow);
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(Workflow));
+        var root = Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+        var jobs = Assert.IsType<YamlMappingNode>(ReadNode(root, "jobs"));
+        var job = Assert.IsType<YamlMappingNode>(ReadNode(jobs, "validate"));
+        var steps = Assert.IsType<YamlSequenceNode>(ReadNode(job, "steps"));
+        var controls = Assert.IsType<YamlMappingNode>(steps.Children[7]);
+        var focus = Assert.IsType<YamlMappingNode>(steps.Children[8]);
+        var upload = Assert.IsType<YamlMappingNode>(steps.Children[9]);
+        var inputs = Assert.IsType<YamlMappingNode>(ReadNode(upload, "with"));
+        switch (mutant)
+        {
+            case "explicit-size-controls":
+                controls.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(controls, "run")
+                    .Replace("test_quotation_explicit_size_results.py", "test_unreviewed_results.py", StringComparison.Ordinal));
+                break;
+            case "explicit-size-filter":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("FullyQualifiedName~Positive_explicit_size_is_not_capped_after_filtering", "FullyQualifiedName~UnreviewedCases", StringComparison.Ordinal));
+                break;
+            case "explicit-size-checker":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("python3 -B scripts/check_quotation_explicit_size_results.py", "echo unchecked", StringComparison.Ordinal));
+                break;
+            case "explicit-size-log":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("explicit-size.trx", "unreviewed.trx", StringComparison.Ordinal));
+                break;
+            case "explicit-size-upload-trx":
+                inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode(ReadScalar(inputs, "path")
+                    .Replace("TestResults/ExplicitSize/explicit-size.trx\n", "", StringComparison.Ordinal));
+                break;
+            case "explicit-size-upload-manifest":
+                inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode(ReadScalar(inputs, "path")
+                    .Replace("scripts/quotation_explicit_size_focus.json\n", "", StringComparison.Ordinal));
+                break;
+            case "explicit-size-ignore-failure":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("python3 -B scripts/check_quotation_explicit_size_results.py TestResults/ExplicitSize/explicit-size.trx", "python3 -B scripts/check_quotation_explicit_size_results.py TestResults/ExplicitSize/explicit-size.trx || true", StringComparison.Ordinal));
+                break;
+            case "omitted-size-controls":
+                controls.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(controls, "run")
+                    .Replace("test_quotation_omitted_size_results.py", "test_unreviewed_results.py", StringComparison.Ordinal));
+                break;
+            case "omitted-size-filter":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("FullyQualifiedName~Omitted_size_uses_filtered_count_without_default_or_cap", "FullyQualifiedName~UnreviewedCases", StringComparison.Ordinal));
+                break;
+            case "omitted-size-checker":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("python3 -B scripts/check_quotation_omitted_size_results.py", "echo unchecked", StringComparison.Ordinal));
+                break;
+            case "omitted-size-log":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("omitted-size.trx", "unreviewed.trx", StringComparison.Ordinal));
+                break;
+            case "omitted-size-upload-trx":
+                inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode(ReadScalar(inputs, "path")
+                    .Replace("TestResults/OmittedSize/omitted-size.trx\n", "", StringComparison.Ordinal));
+                break;
+            case "omitted-size-upload-manifest":
+                inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode(ReadScalar(inputs, "path")
+                    .Replace("scripts/quotation_omitted_size_focus.json\n", "", StringComparison.Ordinal));
+                break;
+            case "omitted-size-ignore-failure":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("python3 -B scripts/check_quotation_omitted_size_results.py TestResults/OmittedSize/omitted-size.trx", "python3 -B scripts/check_quotation_omitted_size_results.py TestResults/OmittedSize/omitted-size.trx || true", StringComparison.Ordinal));
+                break;
+            case "pagination-controls":
+                controls.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(controls, "run")
+                    .Replace("test_quotation_pagination_parity_results.py", "test_unreviewed_results.py", StringComparison.Ordinal));
+                break;
+            case "pagination-filter":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("FullyQualifiedName~Distant_page_does_not_overflow_or_replay_first_page_rows", "FullyQualifiedName~UnreviewedCases", StringComparison.Ordinal));
+                break;
+            case "pagination-checker":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("python3 -B scripts/check_quotation_pagination_parity_results.py", "echo unchecked", StringComparison.Ordinal));
+                break;
+            case "pagination-log":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("pagination-parity.trx", "unreviewed.trx", StringComparison.Ordinal));
+                break;
+            case "pagination-upload-trx":
+                inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode(ReadScalar(inputs, "path")
+                    .Replace("TestResults/PaginationParity/pagination-parity.trx\n", "", StringComparison.Ordinal));
+                break;
+            case "pagination-upload-manifest":
+                inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode(ReadScalar(inputs, "path")
+                    .Replace("scripts/quotation_pagination_parity_focus.json\n", "", StringComparison.Ordinal));
+                break;
+            case "pagination-ignore-failure":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("python3 -B scripts/check_quotation_pagination_parity_results.py TestResults/PaginationParity/pagination-parity.trx", "python3 -B scripts/check_quotation_pagination_parity_results.py TestResults/PaginationParity/pagination-parity.trx || true", StringComparison.Ordinal));
+                break;
+            case "controls": controls.Children[new YamlScalarNode("run")] = new YamlScalarNode("echo controls skipped"); break;
+            case "filter":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("FullyQualifiedName~QuotationOrderItemMutationVersionHttpTests", "FullyQualifiedName~UnreviewedCases", StringComparison.Ordinal));
+                break;
+            case "checker":
+                focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run")
+                    .Replace("python3 -B scripts/check_quotation_controller_parity_results.py", "echo unchecked", StringComparison.Ordinal));
+                break;
+            case "timeout": focus.Children[new YamlScalarNode("timeout-minutes")] = new YamlScalarNode("30"); break;
+            case "conditional": focus.Children.Add(new YamlScalarNode("if"), new YamlScalarNode("false")); break;
+            case "failure-override": focus.Children.Add(new YamlScalarNode("continue-on-error"), new YamlScalarNode("true")); break;
+            case "missing-focus": steps.Children.RemoveAt(8); break;
+            case "duplicate-focus": steps.Children.Insert(8, focus); break;
+            case "reorder": (steps.Children[7], steps.Children[8]) = (steps.Children[8], steps.Children[7]); break;
+            case "upload-path": inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode("TestResults/**\n"); break;
+            case "upload-condition": upload.Children[new YamlScalarNode("if")] = new YamlScalarNode("success()"); break;
+            case "upload-overwrite": inputs.Children.Add(new YamlScalarNode("overwrite"), new YamlScalarNode("true")); break;
+            case "artifact-name": inputs.Children[new YamlScalarNode("name")] = new YamlScalarNode("unbound-controller-parity"); break;
+            case "missing-test-log": inputs.Children[new YamlScalarNode("path")] = new YamlScalarNode("scripts/quotation_controller_parity_focus.json\n"); break;
+            case "extra-dotnet": focus.Children[new YamlScalarNode("run")] = new YamlScalarNode(ReadScalar(focus, "run") + "\ndotnet test Unreviewed.csproj"); break;
+            default: throw new InvalidOperationException("Unexpected mutation.");
+        }
+        using var serialized = new StringWriter();
+        yaml.Save(serialized, assignAnchors: false);
+        Assert.NotEqual(Workflow, serialized.ToString());
         Assert.Throws<InvalidOperationException>(() => WorkflowContractValidator.Validate(serialized.ToString()));
     }
 
@@ -412,6 +672,34 @@ internal static partial class WorkflowContractValidator
 
     private const string CheckoutAction = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
     private const string SharedValidationAction = "MALIEV-Co-Ltd/Legacy.Maliev.Workflows/actions/dotnet-validate@53892c362a30130f582c40da7525e44f11474e8e";
+    private const string ControllerParityProof = """
+        python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_controller_parity_results.py'
+        python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_pagination_parity_results.py'
+        python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_omitted_size_results.py'
+        python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_explicit_size_results.py'
+        """;
+    private const string ControllerParityCollection = """
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~QuotationOrderItemMutationVersionHttpTests|FullyQualifiedName~Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses|FullyQualifiedName~QuotationOrderItemCollectionContractTests|FullyQualifiedName~QuotationOrderItemCollectionHttpTests' \
+          --results-directory TestResults/ControllerParity --logger 'trx;LogFileName=controller-parity.trx'
+        python3 -B scripts/check_quotation_controller_parity_results.py TestResults/ControllerParity/controller-parity.trx
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages|FullyQualifiedName~Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping|FullyQualifiedName~Distant_page_does_not_overflow_or_replay_first_page_rows|FullyQualifiedName~Numeric_search_and_page_bounds_preserve_current_consumer_contract' \
+          --results-directory TestResults/PaginationParity --logger 'trx;LogFileName=pagination-parity.trx'
+        python3 -B scripts/check_quotation_pagination_parity_results.py TestResults/PaginationParity/pagination-parity.trx
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~Omitted_size_uses_filtered_count_without_default_or_cap' \
+          --results-directory TestResults/OmittedSize --logger 'trx;LogFileName=omitted-size.trx'
+        python3 -B scripts/check_quotation_omitted_size_results.py TestResults/OmittedSize/omitted-size.trx
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~Positive_explicit_size_is_not_capped_after_filtering' \
+          --results-directory TestResults/ExplicitSize --logger 'trx;LogFileName=explicit-size.trx'
+        python3 -B scripts/check_quotation_explicit_size_results.py TestResults/ExplicitSize/explicit-size.trx
+        """;
     private const string CoverageProof = """
         python3 -m unittest discover -s scripts/tests -p 'test_*.py'
         python3 -B -m unittest discover -s tools/InvoiceCompletionProducerAcceptance/companion -p 'test_*.py'
@@ -424,7 +712,20 @@ internal static partial class WorkflowContractValidator
         python3 -B scripts/check_qualification_wire_results.py
         dotnet tools/QualificationOutcomeWireSource/bin/Release/net10.0/QualificationOutcomeWireSource.dll "$GITHUB_WORKSPACE"
         """;
-    private const string CoverageCollection = """
+    internal const string QualificationCustodyCollection = """
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~ContainerOperationCustodyContractTests|FullyQualifiedName~DockerBindCollisionContractTests.FailedCleanupOfHostBindAttemptNeverAdmitsBackoffOrReplacement|FullyQualifiedName~QualificationBridgeConsumerHttpTests.Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsC6SourceIndexFocusBypass|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsCoverageEvidenceContractMutation' \
+          --results-directory TestResults/QualificationCustody --logger 'trx;LogFileName=qualification-custody.trx'
+        """;
+    internal const string C6SourceIndexCollection = """
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~QuotationAnalyticsSourceContractTests|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Data.QuotationPostgresMigrationTests.AnalyticsSourceIndexMigration_GeneratesScriptsAndPreservesRowsAcrossUpgradeRollbackAndReupgrade' \
+          --results-directory TestResults/C6SourceIndex --logger 'trx;LogFileName=c6-source-index.trx'
+        python3 -B scripts/check_c6_source_index_results.py
+        """;
+    private const string CoverageCollection = C6SourceIndexCollection + "\n" + QualificationCustodyCollection + "\n" + """
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
           --filter 'FullyQualifiedName~QuotationInvoiceCapabilityVerifierTests' \
@@ -520,9 +821,9 @@ internal static partial class WorkflowContractValidator
         RejectDuplicatedValidationActionsAndCommands(jobs);
 
         var steps = RequireSequence(validateJob, "steps");
-        if (steps.Children.Count != 15)
+        if (steps.Children.Count != 18)
         {
-            throw new InvalidOperationException("Validate job must contain exactly fifteen caller-owned steps.");
+            throw new InvalidOperationException("Validate job must contain exactly eighteen caller-owned steps.");
         }
 
         ValidateStep(
@@ -562,7 +863,7 @@ internal static partial class WorkflowContractValidator
                 ["path"] = ".dependencies/Legacy.Maliev.AccountingService",
                 ["persist-credentials"] = "false",
             });
-        ValidateRegistrySteps(steps, controls: 4, preload: 5, cleanup: 13, upload: 14);
+        ValidateRegistrySteps(steps, controls: 4, preload: 5, cleanup: 16, upload: 17);
         ValidateStep(
             steps.Children[6],
             SharedValidationAction,
@@ -571,13 +872,35 @@ internal static partial class WorkflowContractValidator
                 ["solution"] = "Legacy.Maliev.QuotationService.slnx",
                 ["use-local-maliev-dependencies"] = "true",
             });
-        ValidateScriptStep(steps.Children[7], "Prove coverage gate failure and success behavior", CoverageProof);
-        ValidateScriptStep(steps.Children[8], "Prove actual qualification DTO and controller serializer wire",
+        ValidateScriptStep(steps.Children[7], "Verify ordinary controller parity result controls", ControllerParityProof);
+        ValidateScriptStep(steps.Children[8], "Prove ordinary controller parity independently", ControllerParityCollection, expectedTimeout: "5");
+        ValidateControllerParityEvidenceStep(steps.Children[9]);
+        ValidateScriptStep(steps.Children[10], "Prove coverage gate failure and success behavior", CoverageProof);
+        ValidateScriptStep(steps.Children[11], "Prove actual qualification DTO and controller serializer wire",
             QualificationWireCollection, expectedTimeout: "2");
-        ValidateScriptStep(steps.Children[9], "Collect QuotationService coverage", CoverageCollection);
-        ValidateScriptStep(steps.Children[10], "Enforce 80 percent owned handwritten line coverage", CoverageEnforcement);
-        ValidateCoverageEvidenceStep(steps.Children[11]);
-        ValidateWireEvidenceStep(steps.Children[12]);
+        ValidateScriptStep(steps.Children[12], "Collect QuotationService coverage", CoverageCollection);
+        ValidateScriptStep(steps.Children[13], "Enforce 80 percent owned handwritten line coverage", CoverageEnforcement);
+        ValidateCoverageEvidenceStep(steps.Children[14]);
+        ValidateWireEvidenceStep(steps.Children[15]);
+    }
+
+    private static void ValidateControllerParityEvidenceStep(YamlNode node)
+    {
+        var step = RequireMapping(node, "ordinary controller parity evidence step");
+        if (!step.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal)
+            .SetEquals(["name", "if", "uses", "with"]))
+            throw new InvalidOperationException("Controller parity evidence requires only exact reviewed keys.");
+        RequireScalarValue(step, "name", "Retain ordinary controller parity evidence");
+        RequireScalarValue(step, "if", "always() && hashFiles('TestResults/ControllerParity/controller-parity.trx') != ''");
+        RequireScalarValue(step, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+        var inputs = RequireMapping(step, "with");
+        if (!inputs.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal)
+            .SetEquals(["name", "path", "if-no-files-found", "retention-days"]))
+            throw new InvalidOperationException("Controller parity evidence requires exactly four reviewed inputs.");
+        RequireScalarValue(inputs, "name", "quotation-controller-parity-${{ github.sha }}");
+        RequireScalarValue(inputs, "path", "TestResults/ControllerParity/controller-parity.trx\nscripts/quotation_controller_parity_focus.json\nTestResults/PaginationParity/pagination-parity.trx\nscripts/quotation_pagination_parity_focus.json\nTestResults/OmittedSize/omitted-size.trx\nscripts/quotation_omitted_size_focus.json\nTestResults/ExplicitSize/explicit-size.trx\nscripts/quotation_explicit_size_focus.json\n");
+        RequireScalarValue(inputs, "if-no-files-found", "error");
+        RequireScalarValue(inputs, "retention-days", "7");
     }
 
     private static void ValidateCoverageEvidenceStep(YamlNode node)
@@ -587,13 +910,13 @@ internal static partial class WorkflowContractValidator
             .SetEquals(["name", "if", "uses", "with"]))
             throw new InvalidOperationException("Coverage evidence step must have only its reviewed keys.");
         RequireScalarValue(step, "name", "Retain complete coverage evidence");
-        RequireScalarValue(step, "if", "always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx') != '')");
+        RequireScalarValue(step, "if", "always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx') != '')");
         RequireScalarValue(step, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
         var inputs = RequireMapping(step, "with");
         if (inputs.Children.Count != 6)
             throw new InvalidOperationException("Coverage evidence action must have exactly six reviewed inputs.");
         RequireScalarValue(inputs, "name", "quotation-complete-coverage-${{ github.sha }}");
-        RequireScalarValue(inputs, "path", "TestResults/C821Verifier/c821-verifier.trx\nTestResults/C821Recipient/c821-recipient.trx\nTestResults/CompanionAdmission/companion-admission.trx\nTestResults/CompanionSigning/companion-signing.trx\nTestResults/StorageFront/storage-front.trx\nTestResults/FinancialCompletion/financial-completion.trx\nTestResults/CoverageGate/quotation-complete-coverage.trx\nTestResults/CoverageGate/*/coverage.cobertura.xml\n");
+        RequireScalarValue(inputs, "path", "TestResults/C6SourceIndex/c6-source-index.trx\nTestResults/C821Verifier/c821-verifier.trx\nTestResults/C821Recipient/c821-recipient.trx\nTestResults/QualificationCustody/qualification-custody.trx\nTestResults/CompanionAdmission/companion-admission.trx\nTestResults/CompanionSigning/companion-signing.trx\nTestResults/StorageFront/storage-front.trx\nTestResults/FinancialCompletion/financial-completion.trx\nTestResults/CoverageGate/quotation-complete-coverage.trx\nTestResults/CoverageGate/*/coverage.cobertura.xml\n");
         RequireScalarValue(inputs, "if-no-files-found", "error");
         RequireScalarValue(inputs, "retention-days", "7");
         RequireScalarValue(inputs, "include-hidden-files", "false");
@@ -768,7 +1091,7 @@ internal static partial class WorkflowContractValidator
 
                 if (GetOptional(stepNode, "run") is YamlScalarNode runNode
                     && (GetOptional(stepNode, "name") as YamlScalarNode)?.Value is not
-                        ("Collect QuotationService coverage" or "Prove actual qualification DTO and controller serializer wire"))
+                        ("Collect QuotationService coverage" or "Prove actual qualification DTO and controller serializer wire" or "Prove ordinary controller parity independently"))
                 {
                     RejectDuplicatedDotNetCommand(runNode.Value ?? string.Empty);
                 }

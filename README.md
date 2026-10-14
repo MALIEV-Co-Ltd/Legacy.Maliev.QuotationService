@@ -21,7 +21,11 @@ source and private package credentials without changing quotation contracts.
 - `/quotationrequests/files[/{requestFileId}]` and `/quotationrequests/{requestId}/files`
 
 The service preserves the original route templates, named routes, six-value sort enums,
-pagination fields, and the legacy 250-row safety ceiling. Most JSON remains PascalCase with
+pagination fields, and omitted-size behavior: the first page contains all matching rows after
+customer/search filtering, with no substituted default or cap. Supplied positive sizes pass through
+without an upper cap on global quotations, customer quotations, and requests. Supplied zero and
+negative sizes still normalize to 1; original SQL Server provider behavior for these values remains
+an open parity obligation. Most JSON remains PascalCase with
 null omission; the qualification-outcome readback intentionally retains the source's camelCase,
 null-omission receipt wire. Every action requires JWT authentication and an explicit permission.
 

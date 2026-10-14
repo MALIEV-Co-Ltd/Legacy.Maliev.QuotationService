@@ -137,6 +137,56 @@ jobs:
           solution: Legacy.Maliev.QuotationService.slnx
           use-local-maliev-dependencies: 'true'
 
+      - name: Verify ordinary controller parity result controls
+        shell: bash
+        run: |
+          python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_controller_parity_results.py'
+          python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_pagination_parity_results.py'
+          python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_omitted_size_results.py'
+          python3 -B -m unittest discover -s scripts/tests -p 'test_quotation_explicit_size_results.py'
+
+      - name: Prove ordinary controller parity independently
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~QuotationOrderItemMutationVersionHttpTests|FullyQualifiedName~Ordinary_update_advances_microsecond_version_and_rejects_replayed_token_when_clock_stalls_or_regresses|FullyQualifiedName~QuotationOrderItemCollectionContractTests|FullyQualifiedName~QuotationOrderItemCollectionHttpTests' \
+            --results-directory TestResults/ControllerParity --logger 'trx;LogFileName=controller-parity.trx'
+          python3 -B scripts/check_quotation_controller_parity_results.py TestResults/ControllerParity/controller-parity.trx
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages|FullyQualifiedName~Distant_page_preserves_customer_filter_and_source_notfound_without_wrapping|FullyQualifiedName~Distant_page_does_not_overflow_or_replay_first_page_rows|FullyQualifiedName~Numeric_search_and_page_bounds_preserve_current_consumer_contract' \
+            --results-directory TestResults/PaginationParity --logger 'trx;LogFileName=pagination-parity.trx'
+          python3 -B scripts/check_quotation_pagination_parity_results.py TestResults/PaginationParity/pagination-parity.trx
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~Omitted_size_uses_filtered_count_without_default_or_cap' \
+            --results-directory TestResults/OmittedSize --logger 'trx;LogFileName=omitted-size.trx'
+          python3 -B scripts/check_quotation_omitted_size_results.py TestResults/OmittedSize/omitted-size.trx
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~Positive_explicit_size_is_not_capped_after_filtering' \
+            --results-directory TestResults/ExplicitSize --logger 'trx;LogFileName=explicit-size.trx'
+          python3 -B scripts/check_quotation_explicit_size_results.py TestResults/ExplicitSize/explicit-size.trx
+
+      - name: Retain ordinary controller parity evidence
+        if: always() && hashFiles('TestResults/ControllerParity/controller-parity.trx') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: quotation-controller-parity-${{ github.sha }}
+          path: |
+            TestResults/ControllerParity/controller-parity.trx
+            scripts/quotation_controller_parity_focus.json
+            TestResults/PaginationParity/pagination-parity.trx
+            scripts/quotation_pagination_parity_focus.json
+            TestResults/OmittedSize/omitted-size.trx
+            scripts/quotation_omitted_size_focus.json
+            TestResults/ExplicitSize/explicit-size.trx
+            scripts/quotation_explicit_size_focus.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Prove coverage gate failure and success behavior
         shell: bash
         run: |
@@ -157,6 +207,15 @@ jobs:
       - name: Collect QuotationService coverage
         shell: bash
         run: |
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~QuotationAnalyticsSourceContractTests|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Data.QuotationPostgresMigrationTests.AnalyticsSourceIndexMigration_GeneratesScriptsAndPreservesRowsAcrossUpgradeRollbackAndReupgrade' \
+            --results-directory TestResults/C6SourceIndex --logger 'trx;LogFileName=c6-source-index.trx'
+          python3 -B scripts/check_c6_source_index_results.py
+          dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+            --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+            --filter 'FullyQualifiedName~ContainerOperationCustodyContractTests|FullyQualifiedName~DockerBindCollisionContractTests.FailedCleanupOfHostBindAttemptNeverAdmitsBackoffOrReplacement|FullyQualifiedName~QualificationBridgeConsumerHttpTests.Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsC6SourceIndexFocusBypass|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsCoverageEvidenceContractMutation' \
+            --results-directory TestResults/QualificationCustody --logger 'trx;LogFileName=qualification-custody.trx'
           dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
             --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
             --filter 'FullyQualifiedName~QuotationInvoiceCapabilityVerifierTests' \
@@ -201,13 +260,15 @@ jobs:
           python3 scripts/check_owned_coverage.py "${reports[0]}" --minimum 80 --raw
 
       - name: Retain complete coverage evidence
-        if: always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx') != '')
+        if: always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx') != '')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: quotation-complete-coverage-${{ github.sha }}
           path: |
+            TestResults/C6SourceIndex/c6-source-index.trx
             TestResults/C821Verifier/c821-verifier.trx
             TestResults/C821Recipient/c821-recipient.trx
+            TestResults/QualificationCustody/qualification-custody.trx
             TestResults/CompanionAdmission/companion-admission.trx
             TestResults/CompanionSigning/companion-signing.trx
             TestResults/StorageFront/storage-front.trx

@@ -386,6 +386,56 @@ class DockerDiagnostics(unittest.TestCase):
    if not timeout:
     self.assertEqual(entry['failureDiagnostic']['capturedBytes'],4096);self.assertTrue(entry['failureDiagnostic']['truncated'])
     self.assertEqual(entry['cliResource']['startTicks'],123);self.assertEqual(entry['cliResource']['executable'],'/usr/bin/docker')
+class MutationOutcomeControls(unittest.TestCase):
+ def scenario(self,kind,present=False,custody=False):
+  import tempfile,subprocess
+  row=json.loads((R/'image-pins.json').read_bytes())[0]
+  if kind=='rejection':primary=p.command_failure(['docker','pull',row['mirror']],1,b'toomanyrequests',15)
+  elif kind=='killed':primary=p.command_failure(['docker','pull',row['mirror']],-9,b'',0)
+  elif kind=='timeout':primary=subprocess.TimeoutExpired(['docker','pull'],1)
+  else:primary=RuntimeError('mutation interrupted')
+  if kind!='unknown':
+   primary.owned_cli_resource={'exitConfirmed':True,'unresolvedCustody':custody,'terminalReturnCode':1 if kind=='rejection' else -9 if kind=='killed' else 0 if kind=='cleanup-failure' else -15,'executionOutcome':'completed' if kind in ('rejection','cleanup-failure') else 'interrupted'}
+  def run(args,required=True):
+   if args[1]=='pull':raise primary
+   if args[1:3]==['image','inspect']:return json.dumps([{'Id':row['configDigest']}]).encode() if present else None
+   if args[1:3]==['image','rm']:self.fail('No removal expected in this absent-reference scenario')
+   return b''
+  with tempfile.TemporaryDirectory() as root:
+   path=Path(root)/'journal.json';data={'createdTags':[]}
+   def save():p.atomic_save(path,data)
+   with self.assertRaises(type(primary)) as caught:p.mutate(['docker','pull',row['mirror']],row['mirror'],row,run,{'createdTags':data['createdTags'],'write':save})
+   self.assertIs(caught.exception,primary)
+   entry=json.loads(path.read_bytes())['createdTags'][0]
+   self.assertFalse(entry['commandSettled']);self.assertEqual(entry['daemonSettlementAuthority'],'unproved')
+   self.assertIn('external confirmation required',entry['unresolvedLease'])
+   self.assertEqual(entry['state'],'exact-reference-observed' if present else 'absence-unsettled')
+   if not present:
+    with self.assertRaises(ExceptionGroup):p.cleanup(data,run,save)
+    after=json.loads(path.read_bytes())['createdTags'][0]
+    self.assertEqual(after['cliOutcome'],entry['cliOutcome']);self.assertTrue(after['unresolvedDaemonOperation'])
+   return entry['cliOutcome']
+ def test_terminal_registry_rejection_retains_daemon_hold(self):
+  self.assertEqual(self.scenario('rejection'),{'execution':'returned-failure','terminalReturnCode':1,'exitConfirmed':True,'custodyResolved':True})
+ def test_timeout_exit_after_recovery_is_not_normal_completion(self):
+  self.assertEqual(self.scenario('timeout')['execution'],'interrupted');self.assertEqual(self.scenario('timeout')['terminalReturnCode'],-15)
+ def test_killed_cli_keeps_daemon_hold(self):self.assertEqual(self.scenario('killed')['execution'],'interrupted')
+ def test_partial_mutation_keeps_unproved_authority(self):self.assertEqual(self.scenario('rejection',present=True)['execution'],'returned-failure')
+ def test_uncertain_cli_cleanup_is_separate_from_exit(self):
+  outcome=self.scenario('rejection',custody=True);self.assertTrue(outcome['exitConfirmed']);self.assertFalse(outcome['custodyResolved'])
+ def test_completed_command_with_failed_custody_does_not_grant_authority(self):
+  outcome=self.scenario('cleanup-failure',custody=True);self.assertEqual(outcome['execution'],'completed-custody-unresolved');self.assertEqual(outcome['terminalReturnCode'],0);self.assertFalse(outcome['custodyResolved'])
+ def test_unknown_failure_does_not_invent_terminal_status(self):
+  self.assertEqual(self.scenario('unknown'),{'execution':'not-observed','terminalReturnCode':None,'exitConfirmed':None,'custodyResolved':None})
+ def test_success_outcome_survives_later_reconciliation_failure(self):
+  row=json.loads((R/'image-pins.json').read_bytes())[0];data={'createdTags':[]};primary=RuntimeError('inspect unavailable')
+  def run(args,required=True):
+   if args[1]=='pull':return b''
+   raise primary
+  with self.assertRaises(RuntimeError) as caught:p.mutate(['docker','pull',row['mirror']],row['mirror'],row,run,{'createdTags':data['createdTags'],'write':lambda:None})
+  self.assertIs(caught.exception,primary);entry=data['createdTags'][0]
+  self.assertEqual(entry['cliOutcome']['execution'],'returned-success');self.assertEqual(entry['daemonSettlementAuthority'],'successful-cli-completion')
+  self.assertTrue(entry['commandSettled']);self.assertEqual(entry['state'],'intent')
 class LiveCaptureControls(unittest.TestCase):
  def observe_identity(self,ticks=(123,123),executable='/usr/bin/docker',oversize=False):
   import io,types
@@ -445,6 +495,7 @@ class LiveCaptureControls(unittest.TestCase):
   with patch('os.name','posix'),patch.object(p.subprocess,'Popen',return_value=child),patch.object(p,'observe_cli_identity',side_effect=FileNotFoundError('Exited executable')),patch.object(selectors,'DefaultSelector',return_value=Selector()),patch('os.set_blocking'):
    result,total=p.run_docker_cli(['docker','inspect'],6)
   self.assertEqual(result.returncode,7);self.assertEqual(total,0)
+  self.assertEqual(result.owned_cli_resource['executionOutcome'],'completed');self.assertEqual(result.owned_cli_resource['terminalReturnCode'],7)
   self.assertTrue(result.owned_cli_resource['exitConfirmed']);self.assertFalse(result.owned_cli_resource['unresolvedCustody'])
   self.assertTrue(result.owned_cli_resource['identityUnavailableAfterExit']);self.assertIsNone(result.owned_cli_resource['startTicks'])
   self.assertTrue(child.stdout.closed and child.stderr.closed)
@@ -495,6 +546,8 @@ class LiveCaptureControls(unittest.TestCase):
    with self.assertRaises(subprocess.TimeoutExpired if mode=='deadline' else OSError) as caught:p.run_docker_cli(['docker','pull',p.RYUK],5)
   if mode!='deadline':self.assertIs(caught.exception,primary)
   else:self.assertTrue(caught.exception.__notes__)
+  self.assertEqual(caught.exception.owned_cli_resource['executionOutcome'],'interrupted')
+  if mode=='grace-timeout':self.assertEqual(caught.exception.owned_cli_resource['terminalReturnCode'],-9)
   self.assertEqual(closed,['stdout','stderr'] if mode in ('identity-fault','identity-missing') else ['selector','stdout','stderr']);self.assertEqual(events,[] if mode in ('budget-expiry','birth-drift','exe-drift','identity-fault','identity-missing') else ['terminate','kill'] if mode in ('grace-timeout','kill-failure') else ['terminate'])
   if mode in ('birth-drift','exe-drift','kill-drift','identity-fault','identity-missing'):
    resource=caught.exception.owned_cli_resource
@@ -535,6 +588,7 @@ class LiveCaptureControls(unittest.TestCase):
   with patch.object(p.subprocess,'Popen',side_effect=launch),patch.object(p,'observe_cli_identity',side_effect=observation):
    result,total=p.run_docker_cli(['docker','inspect'],6)
   self.assertEqual((result.returncode,result.stdout,result.stderr,total),(code,b'ok',b'error',5))
+  self.assertEqual(result.owned_cli_resource['executionOutcome'],'completed');self.assertEqual(result.owned_cli_resource['terminalReturnCode'],code)
   self.assertTrue(result.owned_cli_resource['exitConfirmed']);self.assertFalse(result.owned_cli_resource['unresolvedCustody'])
   if force_race:self.assertTrue(result.owned_cli_resource['identityUnavailableAfterExit'])
   self.assertTrue(all(child.poll() is not None and child.stdout.closed and child.stderr.closed for child in children))
@@ -548,4 +602,301 @@ class LiveCaptureControls(unittest.TestCase):
   with patch('os.name','posix'),patch.object(p.time,'monotonic',return_value=10),patch.object(p.subprocess,'Popen') as launch:
    with self.assertRaises(TimeoutError):p.run_docker_cli(['docker'],90,hard_deadline=12)
    launch.assert_not_called()
+class SafeProviderMetadata(unittest.TestCase):
+ def test_main_retains_safe_http_metadata_before_any_docker_mutation(self):
+  import io,os,tempfile,urllib.error
+  from unittest.mock import patch
+  error=urllib.error.HTTPError('https://host/path?token=CANARY',403,'private reason CANARY',
+   {'Retry-After':'5','RateLimit-Reset':'30','Authorization':'Bearer CANARY'},io.BytesIO(b'CANARY'))
+  class Opener:
+   def open(self,request,timeout):raise error
+  def fake_preload(rows,run,fetch,receipt):return fetch('https://host/path?token=CANARY','CANARY')
+  with tempfile.TemporaryDirectory(prefix='quotation-safe-metadata-control-') as directory:
+   with patch.dict(os.environ,{'RUNNER_TEMP':directory,'TESTCONTAINERS_RYUK_CONTAINER_IMAGE':p.RYUK}),patch.object(sys,'argv',['preload_images.py']),patch.object(p,'preload',side_effect=fake_preload),patch.object(p.urllib.request,'build_opener',return_value=Opener()),patch.object(p,'run_docker_cli') as docker:
+    with self.assertRaises(urllib.error.HTTPError) as caught:p.main()
+    self.assertIs(caught.exception,error);docker.assert_not_called()
+   data=json.loads((Path(directory)/'quotation-registry-preload.json').read_bytes())
+   self.assertEqual(data['createdTags'],[]);self.assertEqual(data['metadataFailureDiagnostic']['httpStatus'],403)
+   self.assertEqual(data['metadataFailureDiagnostic']['retryAfterSeconds'],5)
+   self.assertNotIn('CANARY',json.dumps(data));self.assertTrue(error.fp.closed)
+ def test_cli_code_status_and_retry_are_observed_without_raw_echo(self):
+  payload=b'Error response from daemon: toomanyrequests: secret-canary token=private\nRetry-After: 120\nRateLimit-Reset: 30\nX-RateLimit-Reset: 1791936000'
+  error=p.command_failure(['docker','pull',p.RYUK],1,payload,len(payload))
+  meta=error.diagnostic['safeProviderMetadata']
+  self.assertEqual(meta['errorCode'],'TOOMANYREQUESTS');self.assertEqual(meta['retryAfterSeconds'],120)
+  self.assertEqual(meta['rateLimitResetValue'],30);self.assertEqual(meta['xRateLimitResetValue'],1791936000)
+  self.assertIsNone(meta['httpStatus']);self.assertEqual(meta['origin'],'captured-cli-stderr')
+  encoded=json.dumps(error.diagnostic)+str(error)
+  self.assertNotIn('secret-canary',encoded);self.assertNotIn('token=',encoded);self.assertNotIn('private',encoded)
+  self.assertEqual(meta['rateLimitNature'],'unclassified');self.assertEqual(meta['resetUnits'],'not-inferred')
+ def test_missing_values_stay_unknown(self):
+  meta=p.safe_provider_metadata('arbitrary sensitive provider wording')
+  for key in ('errorCode','httpStatus','retryAfterSeconds','retryAfterHttpDate','rateLimitResetValue','xRateLimitResetValue'):self.assertIsNone(meta[key])
+ def test_code_inside_credentials_or_url_is_not_provider_code(self):
+  for value in ('https://host/TOOMANYREQUESTS?token=private','username=TOOMANYREQUESTS password=private','prefixThrottlingExceptionSuffix'):
+   self.assertIsNone(p.safe_provider_metadata(value)['errorCode'])
+ def test_header_allowlist_drops_credentials_and_unknown_values(self):
+  headers={'Retry-After':'4','X-RateLimit-Reset':'1791936000','x-amzn-ErrorType':'ThrottlingException',
+   'Authorization':'Bearer CANARY','Set-Cookie':'CANARY','WWW-Authenticate':'token=CANARY','Request-ID':'customer-CANARY'}
+  meta=p.safe_provider_metadata(headers=headers,status=429,origin='metadata-http-response')
+  self.assertEqual(meta['httpStatus'],429);self.assertEqual(meta['errorCode'],'ThrottlingException');self.assertEqual(meta['retryAfterSeconds'],4)
+  self.assertNotIn('CANARY',json.dumps(meta));self.assertNotIn('Authorization',json.dumps(meta))
+ def test_invalid_or_unbounded_retry_values_are_not_retained(self):
+  for value in ('-1','0.5','1e20','9'*100,'2147483648','secret CANARY'):
+   meta=p.safe_provider_metadata(headers={'Retry-After':value,'RateLimit-Reset':value,'X-RateLimit-Reset':value})
+   self.assertIsNone(meta['retryAfterSeconds']);self.assertIsNone(meta['rateLimitResetValue']);self.assertIsNone(meta['xRateLimitResetValue'])
+   self.assertNotIn('CANARY',json.dumps(meta))
+ def test_canonical_http_date_retained_but_not_used_to_change_retry(self):
+  meta=p.safe_provider_metadata(headers={'Retry-After':'Wed, 21 Oct 2015 07:28:00 GMT'})
+  self.assertEqual(meta['retryAfterHttpDate'],'Wed, 21 Oct 2015 07:28:00 GMT');self.assertIsNone(meta['retryAfterSeconds'])
+  errors,calls,waits,invoke=MetadataThrottling().scenario([429,200],'Wed, 21 Oct 2015 07:28:00 GMT')
+  with self.assertRaises(Exception):invoke()
+  self.assertFalse(waits);self.assertTrue(errors[0].fp.closed)
+ def test_http_failure_preserves_primary_and_closes_response(self):
+  errors,calls,waits,invoke=MetadataThrottling().scenario([403,200],'5')
+  with self.assertRaises(Exception) as caught:invoke()
+  self.assertIs(caught.exception,errors[0]);self.assertEqual(errors[0].safe_registry_diagnostic['httpStatus'],403)
+  self.assertEqual(errors[0].safe_registry_diagnostic['retryAfterSeconds'],5)
+  self.assertFalse(waits);self.assertTrue(errors[0].fp.closed)
+ def test_failed_pull_still_has_one_attempt_and_unsettled_intent(self):
+  row=json.loads((R/'image-pins.json').read_bytes())[0];calls=[]
+  payload=b'TOOMANYREQUESTS: rate exceeded';error=p.command_failure(['docker','pull',row['mirror']],1,payload,len(payload))
+  def run(args,required=True):
+   calls.append(args)
+   if args[1]=='pull':raise error
+   return None
+  receipt={'createdTags':[],'write':lambda:None}
+  with self.assertRaises(p.DockerCommandFailure) as caught:p.mutate(['docker','pull',row['mirror']],row['mirror'],row,run,receipt)
+  self.assertIs(caught.exception,error);self.assertEqual(sum(a[1]=='pull' for a in calls),1)
+  self.assertFalse(receipt['createdTags'][0]['commandSettled']);self.assertTrue(receipt['createdTags'][0].get('unresolvedLease'))
+
+class SafeMetadataFailureCustody(unittest.TestCase):
+ def test_unicode_code_lookalikes_remain_unknown_without_raw_echo(self):
+  for code in ('ThrottlİngException','ThrottlıngException','MANIFEſT_UNKNOWN'):
+   with self.subTest(code=code):
+    meta=p.safe_provider_metadata('Error response from daemon: '+code+': CANARY')
+    self.assertIsNone(meta['errorCode']);self.assertNotIn('CANARY',json.dumps(meta));self.assertNotIn(code,json.dumps(meta))
+ def test_legitimate_ascii_code_case_is_preserved(self):
+  for code,expected in (('tHrOtTlInGeXcEpTiOn','ThrottlingException'),('manifest_unknown','MANIFEST_UNKNOWN'),('TOOMANYREQUESTS','TOOMANYREQUESTS')):
+   self.assertEqual(p.safe_provider_metadata('Error response from daemon: '+code+': detail')['errorCode'],expected)
+ def test_extraction_and_note_failures_keep_primary_and_close_response(self):
+  import io,urllib.error
+  from unittest.mock import patch
+  class Error(urllib.error.HTTPError):
+   def add_note(self,note):raise RuntimeError('note failure')
+  error=Error('https://host/metadata',403,'primary',{},io.BytesIO(b''))
+  class Opener:
+   def open(self,request,timeout):raise error
+  with patch.object(p.urllib.request,'build_opener',return_value=Opener()),patch.object(p,'safe_provider_metadata',side_effect=ValueError('extraction failure')):
+   with self.assertRaises(urllib.error.HTTPError) as caught:p.fetch('https://host/metadata')
+  self.assertIs(caught.exception,error);self.assertTrue(error.fp.closed)
+ def main_failure(self,kind):
+  import io,os,tempfile,urllib.error
+  from unittest.mock import patch
+  class Error(urllib.error.HTTPError):
+   def add_note(self,note):raise RuntimeError('note failure')
+  class GetterError(Error):
+   @property
+   def safe_registry_diagnostic(self):raise ValueError('getter failure')
+  error=(GetterError if kind=='getter' else Error)('https://host/metadata',403,'primary',{},io.BytesIO(b''))
+  class Opener:
+   def open(self,request,timeout):raise error
+  calls=[];original=p.atomic_save
+  def save(path,data):
+   calls.append(True)
+   if kind=='save' and len(calls)>1:raise OSError('receipt failure')
+   return original(path,data)
+  def preload(rows,run,fetch,receipt):return fetch('https://host/metadata')
+  with tempfile.TemporaryDirectory(prefix='quotation-safe-metadata-failure-') as directory:
+   with patch.dict(os.environ,{'RUNNER_TEMP':directory,'TESTCONTAINERS_RYUK_CONTAINER_IMAGE':p.RYUK}),patch.object(sys,'argv',['preload_images.py']),patch.object(p,'preload',side_effect=preload),patch.object(p.urllib.request,'build_opener',return_value=Opener()),patch.object(p,'atomic_save',side_effect=save),patch.object(p,'run_docker_cli') as docker:
+    with self.assertRaises(urllib.error.HTTPError) as caught:p.main()
+    self.assertIs(caught.exception,error);self.assertTrue(error.fp.closed);docker.assert_not_called()
+   self.assertEqual(json.loads((Path(directory)/'quotation-registry-preload.json').read_bytes())['createdTags'],[])
+  return calls
+ def test_getter_and_note_failures_keep_main_primary_and_close_response(self):
+  self.assertGreaterEqual(len(self.main_failure('getter')),2)
+ def test_permanent_save_and_note_failures_keep_main_primary_and_close_response(self):
+  self.assertEqual(len(self.main_failure('save')),3)
+ def test_extraction_failure_keeps_existing_429_retry_and_response_close(self):
+  from unittest.mock import patch
+  errors,calls,waits,invoke=MetadataThrottling().scenario([429,200],'4')
+  with patch.object(p,'safe_provider_metadata',side_effect=ValueError('extraction failure')):
+   self.assertEqual(invoke(),b'verified-response')
+  self.assertEqual(waits,[4]);self.assertTrue(errors[0].fp.closed)
+
+class LateTerminalIdentityRepair(unittest.TestCase):
+ def release_fixture_child(self,child,polls):
+  if not child.stdin.closed:
+   self.assertTrue(polls);self.assertIsNone(polls[0])
+   child.stdin.write(b'x');child.stdin.flush();child.stdin.close()
+ def settle_fixture_children(self,records,deadline,primary):
+  import time
+  errors=[]
+  for record in records:
+   child=record['child']
+   for name in ('stdin','stdout','stderr'):
+    try:getattr(child,name).close()
+    except BaseException as error:errors.append(error)
+   try:
+    retained_wait=record['wait'] or child.wait
+    retained_wait(timeout=max(0,deadline-time.monotonic()))
+    if child.poll() is None:raise RuntimeError('Fixture child exit remains unproved')
+   except BaseException as error:errors.append(error)
+  if errors:
+   if primary is None:raise BaseExceptionGroup('Late-terminal test cleanup failed',errors)
+   for error in errors:
+    try:primary.add_note('Secondary late-terminal test cleanup failure: '+type(error).__name__)
+    except BaseException:
+     try:sys.stderr.write('Late-terminal fixture cleanup unresolved\n')
+     except BaseException:pass
+  return errors
+ @unittest.skipUnless(__import__('os').name=='posix','Actual late-terminal join requires Linux hosted runner')
+ def test_real_same_child_late_join_preserves_terminal_status_and_both_pipes(self):
+  from unittest.mock import patch
+  import subprocess,time
+  original=p.subprocess.Popen;children=[];waits=[];polls=[];primary=None
+  deadline=time.monotonic()+6
+  script="import select,sys,time;ready,_,_=select.select([sys.stdin.buffer],[],[],max(0,"+repr(deadline-2)+"-time.monotonic()));released=bool(ready) and sys.stdin.buffer.read(1)==b'x';sys.stdout.buffer.write(b'out' if released else b'');sys.stderr.buffer.write(b'error' if released else b'');sys.exit(7 if released else 9)"
+  def launch(args,**kwargs):
+   child=original([sys.executable,'-c',script],stdin=subprocess.PIPE,**kwargs)
+   record={'child':child,'wait':None};children.append(record)
+   retained_wait=child.wait;retained_poll=child.poll
+   record['wait']=retained_wait
+   def poll():value=retained_poll();polls.append(value);return value
+   def wait(timeout):
+    waits.append(timeout)
+    self.release_fixture_child(child,polls)
+    return retained_wait(timeout=timeout)
+   child.wait=wait;child.poll=poll;return child
+  try:
+   with patch.object(p.subprocess,'Popen',side_effect=launch),patch.object(p,'observe_cli_identity',side_effect=FileNotFoundError('Forced unavailable executable observation')):
+    result,total=p.run_docker_cli(['docker','image','inspect',p.RYUK],6,hard_deadline=deadline)
+   self.assertEqual(len(children),1);self.assertEqual(result.returncode,7);self.assertEqual(result.stdout,b'out');self.assertEqual(result.stderr,b'error');self.assertEqual(total,5)
+   self.assertTrue(polls);self.assertIsNone(polls[0]);self.assertTrue(waits);self.assertTrue(0<waits[0]<=1)
+   resource=result.owned_cli_resource
+   self.assertTrue(resource['identityUnavailableAfterExit']);self.assertFalse(resource['identityObserved']);self.assertIsNone(resource['startTicks']);self.assertIsNone(resource['executable'])
+   self.assertTrue(resource['exitConfirmed']);self.assertFalse(resource['unresolvedCustody'])
+  except BaseException as error:primary=error;raise
+  finally:
+   self.settle_fixture_children(children,deadline,primary)
+  self.assertTrue(all(record['child'].poll()==7 and record['child'].stdin.closed and record['child'].stdout.closed and record['child'].stderr.closed for record in children))
+ def fixture_control(self,write_failure=False,close_failure=False,join_failure=False):
+  import types
+  events=[];primary=OSError('fixture release failure')
+  class Pipe:
+   closed=False
+   def __init__(self,name):self.name=name
+   def write(self,value):
+    events.append('release')
+    if write_failure:raise primary
+   def flush(self):pass
+   def close(self):
+    events.append(self.name)
+    if close_failure:raise OSError('fixture close failure')
+    self.closed=True
+  child=types.SimpleNamespace(stdin=Pipe('stdin'),stdout=Pipe('stdout'),stderr=Pipe('stderr'),returncode=None)
+  def wait(timeout):
+   events.append('join')
+   if join_failure:raise RuntimeError('fixture join failure')
+   child.returncode=9;return 9
+  child.wait=wait;child.poll=lambda:child.returncode
+  return child,{'child':child,'wait':wait},events,primary
+ def test_release_failure_preserves_primary_and_finally_closes_and_joins_fixture(self):
+  import time
+  child,record,events,primary=self.fixture_control(write_failure=True)
+  with self.assertRaises(OSError) as caught:
+   try:self.release_fixture_child(child,[None])
+   except BaseException as error:
+    try:raise
+    finally:self.settle_fixture_children([record],time.monotonic()+1,error)
+  self.assertIs(caught.exception,primary);self.assertEqual(events,['release','stdin','stdout','stderr','join'])
+  self.assertTrue(child.stdin.closed and child.stdout.closed and child.stderr.closed);self.assertEqual(child.poll(),9)
+ def test_parent_failure_survives_all_close_join_and_note_failures_with_unresolved_report(self):
+  import io,time
+  from unittest.mock import patch
+  class Primary(OSError):
+   def add_note(self,note):raise RuntimeError('fixture note failure')
+  primary=Primary('actual parent failure');child,record,events,unused=self.fixture_control(close_failure=True,join_failure=True)
+  report=io.StringIO();errors=[]
+  with patch.object(sys,'stderr',report),self.assertRaises(Primary) as caught:
+   try:raise primary
+   finally:errors.extend(self.settle_fixture_children([record],time.monotonic()+1,primary))
+  self.assertIs(caught.exception,primary);self.assertEqual(events,['stdin','stdout','stderr','join']);self.assertEqual(len(errors),4)
+  self.assertIn('cleanup unresolved',report.getvalue());self.assertIsNone(child.poll())
+ def test_cleanup_failure_without_parent_failure_is_reported_as_group(self):
+  import time
+  child,record,events,unused=self.fixture_control(close_failure=True)
+  with self.assertRaises(BaseExceptionGroup) as caught:self.settle_fixture_children([record],time.monotonic()+1,None)
+  self.assertEqual(len(caught.exception.exceptions),3);self.assertEqual(events,['stdin','stdout','stderr','join']);self.assertEqual(child.poll(),9)
+ def invoke(self,mode='natural',code=0):
+  import subprocess,selectors,types
+  from unittest.mock import patch
+  primary=FileNotFoundError('Owned executable observation disappeared')
+  clock=[0];observations=[]
+  def now():
+   observations.append(True)
+   return 3 if mode=='expired-before' and len(observations)>1 else clock[0]
+  class Pipe:
+   def __init__(self,fd):self.fd=fd;self.closed=False
+   def fileno(self):return self.fd
+   def close(self):self.closed=True
+  class Process:
+   pid=41;returncode=None
+   def __init__(self):self.stdout=Pipe(11);self.stderr=Pipe(12);self.waits=[];self.signals=[]
+   def poll(self):return self.returncode
+   def wait(self,timeout):
+    self.waits.append(timeout)
+    if mode=='live':raise subprocess.TimeoutExpired(['docker','image','inspect'],timeout)
+    self.returncode=code
+    if mode=='expired-during':clock[0]=3.1
+    return code
+   def terminate(self):self.signals.append('terminate');raise AssertionError('Unobserved executable must not be signalled')
+   def kill(self):self.signals.append('kill');raise AssertionError('Unobserved executable must not be signalled')
+  class Selector:
+   def __init__(self):self.keys={};self.closed=False
+   def register(self,stream,event,name):self.keys[stream.fd]=types.SimpleNamespace(fd=stream.fd,fileobj=stream,data=name)
+   def get_map(self):return self.keys
+   def select(self,timeout):return [(key,None) for key in list(self.keys.values())]
+   def unregister(self,stream):self.keys.pop(stream.fd)
+   def close(self):self.closed=True
+  child=Process();selector=Selector();chunks={11:[b'out',b''],12:[b'denied: CANARY',b'']}
+  def read(fd,size):return chunks[fd].pop(0)
+  with patch('os.name','posix'),patch.object(p.subprocess,'Popen',return_value=child) as launch,patch.object(p,'observe_cli_identity',side_effect=primary),patch.object(selectors,'DefaultSelector',return_value=selector),patch('os.set_blocking'),patch('os.read',side_effect=read),patch.object(p.time,'monotonic',side_effect=now):
+   if mode in ('live','expired-before','expired-during'):
+    with self.assertRaises(FileNotFoundError) as caught:p.run_docker_cli(['docker','image','inspect',p.RYUK],6,hard_deadline=6)
+    self.assertIs(caught.exception,primary);result=None;total=None;resource=primary.owned_cli_resource
+   else:
+    result,total=p.run_docker_cli(['docker','image','inspect',p.RYUK],6,hard_deadline=6);resource=result.owned_cli_resource
+   launch.assert_called_once()
+  self.assertEqual(child.signals,[]);self.assertTrue(child.stdout.closed and child.stderr.closed)
+  self.assertFalse(resource['identityObserved']);self.assertIsNone(resource['startTicks']);self.assertIsNone(resource['executable'])
+  self.assertEqual(resource['hardDeadlineMonotonic'],6);self.assertEqual(resource['workDeadlineMonotonic'],3);self.assertEqual(resource['recoveryReserveSeconds'],3)
+  return child,selector,resource,result,total
+ def test_same_owned_child_bounded_terminal_join_reuses_fast_exit_classification(self):
+  child,selector,resource,result,total=self.invoke()
+  self.assertEqual(result.returncode,0);self.assertEqual(result.stdout,b'out');self.assertEqual(result.stderr,b'denied: CANARY');self.assertEqual(total,len(result.stderr))
+  self.assertTrue(resource['identityUnavailableAfterExit']);self.assertTrue(resource['exitConfirmed']);self.assertFalse(resource['identityDrift']);self.assertFalse(resource['unresolvedCustody'])
+  self.assertEqual(resource['executionOutcome'],'completed');self.assertTrue(selector.closed);self.assertLessEqual(child.waits[0],1)
+ def test_nonzero_terminal_status_and_capture_do_not_become_required_or_optional_success(self):
+  import os,tempfile
+  from unittest.mock import patch
+  child,selector,resource,result,total=self.invoke(code=7)
+  self.assertEqual(result.returncode,7);self.assertEqual(result.stdout,b'out');self.assertEqual(result.stderr,b'denied: CANARY');self.assertEqual(total,len(result.stderr))
+  self.assertEqual(resource['terminalReturnCode'],7)
+  for required in (False,True):
+   with self.subTest(required=required),tempfile.TemporaryDirectory(prefix='quotation-late-terminal-control-') as directory:
+    def preload(rows,run,fetch,receipt):return run(['docker','image','inspect',p.RYUK],required)
+    with patch.dict(os.environ,{'RUNNER_TEMP':directory,'TESTCONTAINERS_RYUK_CONTAINER_IMAGE':p.RYUK}),patch.object(sys,'argv',['preload_images.py']),patch.object(p,'preload',side_effect=preload),patch.object(p,'run_docker_cli',return_value=(result,total)):
+     with self.assertRaises(p.DockerCommandFailure) as caught:p.main()
+     self.assertEqual(caught.exception.diagnostic['returnCode'],7);self.assertFalse(caught.exception.diagnostic['rawDisclosed'])
+ def test_live_unknown_child_is_not_accepted_or_signalled(self):
+  child,selector,resource,result,total=self.invoke('live')
+  self.assertIsNone(result);self.assertFalse(resource['exitConfirmed']);self.assertTrue(resource['unresolvedCustody']);self.assertIsNone(resource['terminalReturnCode'])
+ def test_expired_work_deadline_before_join_never_accepts_preparation(self):
+  child,selector,resource,result,total=self.invoke('expired-before')
+  self.assertIsNone(result);self.assertTrue(resource['unresolvedCustody'])
+ def test_work_deadline_expiry_during_natural_join_never_accepts_preparation(self):
+  child,selector,resource,result,total=self.invoke('expired-during')
+  self.assertIsNone(result);self.assertTrue(resource['unresolvedCustody']);self.assertEqual(resource['terminalReturnCode'],0)
+
 if __name__=='__main__':unittest.main()
