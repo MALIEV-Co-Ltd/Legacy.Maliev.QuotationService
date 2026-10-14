@@ -77,13 +77,22 @@ public sealed class QuotationPostgresMigrationTests : IAsyncLifetime
         {
             context.GoogleAnalyticsOutbox.Add(new GoogleAnalyticsOutbox
             {
-                QuotationId = 43, EventKey = "c6-source-index-contract-" + index, EventName = "close_convert_lead",
+                QuotationId = 43,
+                EventKey = "c6-source-index-contract-" + index,
+                EventName = "close_convert_lead",
                 SourceRequestId = index is 0 or 2 ? 456 : null,
                 SourceJourneyId = index is 0 or 3 ? journey : null,
-                ClientId = "123.456", SessionId = "789", Currency = "THB", Value = 10.25m,
-                OccurredUtc = time, NextAttemptUtc = time.AddSeconds(1), AttemptCount = index,
-                LeaseToken = index == 0 ? lease : null, LeaseUntilUtc = index == 0 ? time.AddMinutes(1) : null,
-                SentUtc = index == 1 ? time : null, FailedUtc = index == 2 ? time : null,
+                ClientId = "123.456",
+                SessionId = "789",
+                Currency = "THB",
+                Value = 10.25m,
+                OccurredUtc = time,
+                NextAttemptUtc = time.AddSeconds(1),
+                AttemptCount = index,
+                LeaseToken = index == 0 ? lease : null,
+                LeaseUntilUtc = index == 0 ? time.AddMinutes(1) : null,
+                SentUtc = index == 1 ? time : null,
+                FailedUtc = index == 2 ? time : null,
                 LastError = index == 2 ? "synthetic terminal marker" : null,
             });
         }

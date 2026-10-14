@@ -19,8 +19,13 @@ public sealed class QuotationAnalyticsSourceContractTests
     {
         var row = new GoogleAnalyticsOutbox
         {
-            QuotationId = 43, EventKey = "quotation-43:close_convert_lead:v1", EventName = "close_convert_lead",
-            ClientId = "123.456", SessionId = "789", Currency = "THB", Value = 10m,
+            QuotationId = 43,
+            EventKey = "quotation-43:close_convert_lead:v1",
+            EventName = "close_convert_lead",
+            ClientId = "123.456",
+            SessionId = "789",
+            Currency = "THB",
+            Value = 10m,
             OccurredUtc = new DateTime(2026, 8, 12, 3, 4, 5, DateTimeKind.Utc),
         };
         using var document = JsonDocument.Parse(GoogleAnalyticsPayloadFactory.Build(row));
