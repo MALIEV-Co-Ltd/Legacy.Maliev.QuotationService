@@ -15,6 +15,14 @@ public sealed class WorkflowContractTests
     private static readonly string MigrationRunnerProject = File.ReadAllText(
         FindRepositoryFile("Legacy.Maliev.QuotationService.MigrationRunner", "Legacy.Maliev.QuotationService.MigrationRunner.csproj"));
 
+    [Theory]
+    [InlineData("FullyQualifiedName~QuotationAnalyticsSourceContractTests", "FullyQualifiedName~NoC6SourceContracts")]
+    [InlineData("python3 -B scripts/check_c6_source_index_results.py", "echo C6 receipt omitted")]
+    [InlineData("            TestResults/C6SourceIndex/c6-source-index.trx\n", "            TestResults/C6SourceIndex/**\n")]
+    [InlineData("'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx'", "'TestResults/QualificationCustody/qualification-custody.trx'")]
+    public void BuildAndTest_RejectsC6SourceIndexFocusBypass(string original, string replacement) =>
+        AssertMutationRejected(original, replacement);
+
     [Fact]
     public void BuildAndTest_SatisfiesStructuralContract()
     {
@@ -226,7 +234,7 @@ public sealed class WorkflowContractTests
     [InlineData("retention-days: 7", "retention-days: 90")]
     [InlineData("include-hidden-files: false", "include-hidden-files: true")]
     [InlineData("TestResults/CoverageGate/*/coverage.cobertura.xml", "TestResults/**")]
-    [InlineData("always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx') != '')", "success()")]
+    [InlineData("always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx') != '')", "success()")]
     public void BuildAndTest_RejectsCoverageEvidenceContractMutation(string original, string replacement) =>
         AssertMutationRejected(original, replacement);
 
@@ -257,18 +265,21 @@ public sealed class WorkflowContractTests
         var inputs = Assert.IsType<YamlMappingNode>(ReadNode(upload, "with"));
         var run = ReadScalar(collection, "run");
         var prefix = WorkflowContractValidator.QualificationCustodyCollection.ReplaceLineEndings("\n") + "\n";
-        Assert.StartsWith(prefix, run, StringComparison.Ordinal);
-        var remainder = run[prefix.Length..];
+        var c6Prefix = WorkflowContractValidator.C6SourceIndexCollection.ReplaceLineEndings("\n") + "\n";
+        Assert.StartsWith(c6Prefix, run, StringComparison.Ordinal);
+        var custodyRun = run[c6Prefix.Length..];
+        Assert.StartsWith(prefix, custodyRun, StringComparison.Ordinal);
+        var remainder = custodyRun[prefix.Length..];
         switch (mutant)
         {
             case "missing-focus":
-                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(remainder);
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(c6Prefix + remainder);
                 break;
             case "duplicate-focus":
-                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(prefix + run);
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(c6Prefix + prefix + custodyRun);
                 break;
             case "reordered-after-full":
-                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(remainder.TrimEnd() + "\n" + prefix);
+                collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(c6Prefix + remainder.TrimEnd() + "\n" + prefix);
                 break;
             case "custody-filter":
                 collection.Children[new YamlScalarNode("run")] = new YamlScalarNode(run.Replace(
@@ -704,10 +715,17 @@ internal static partial class WorkflowContractValidator
     internal const string QualificationCustodyCollection = """
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
-          --filter 'FullyQualifiedName~ContainerOperationCustodyContractTests|FullyQualifiedName~DockerBindCollisionContractTests.FailedCleanupOfHostBindAttemptNeverAdmitsBackoffOrReplacement|FullyQualifiedName~QualificationBridgeConsumerHttpTests.Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass' \
+          --filter 'FullyQualifiedName~ContainerOperationCustodyContractTests|FullyQualifiedName~DockerBindCollisionContractTests.FailedCleanupOfHostBindAttemptNeverAdmitsBackoffOrReplacement|FullyQualifiedName~QualificationBridgeConsumerHttpTests.Last_representable_qualification_revision_is_committed_and_replayed_but_exhausted_transition_cannot_wrap|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsQualificationCustodyFocusBypass|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsC6SourceIndexFocusBypass|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Workflows.WorkflowContractTests.BuildAndTest_RejectsCoverageEvidenceContractMutation' \
           --results-directory TestResults/QualificationCustody --logger 'trx;LogFileName=qualification-custody.trx'
         """;
-    private const string CoverageCollection = QualificationCustodyCollection + "\n" + """
+    internal const string C6SourceIndexCollection = """
+        dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
+          --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
+          --filter 'FullyQualifiedName~QuotationAnalyticsSourceContractTests|FullyQualifiedName=Legacy.Maliev.QuotationService.Tests.Data.QuotationPostgresMigrationTests.AnalyticsSourceIndexMigration_GeneratesScriptsAndPreservesRowsAcrossUpgradeRollbackAndReupgrade' \
+          --results-directory TestResults/C6SourceIndex --logger 'trx;LogFileName=c6-source-index.trx'
+        python3 -B scripts/check_c6_source_index_results.py
+        """;
+    private const string CoverageCollection = C6SourceIndexCollection + "\n" + QualificationCustodyCollection + "\n" + """
         dotnet test Legacy.Maliev.QuotationService.Tests/Legacy.Maliev.QuotationService.Tests.csproj \
           --configuration Release --no-build --no-restore -p:GITHUB_ACTIONS=false \
           --filter 'FullyQualifiedName~QuotationInvoiceCapabilityVerifierTests' \
@@ -892,13 +910,13 @@ internal static partial class WorkflowContractValidator
             .SetEquals(["name", "if", "uses", "with"]))
             throw new InvalidOperationException("Coverage evidence step must have only its reviewed keys.");
         RequireScalarValue(step, "name", "Retain complete coverage evidence");
-        RequireScalarValue(step, "if", "always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx') != '')");
+        RequireScalarValue(step, "if", "always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx') != '')");
         RequireScalarValue(step, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
         var inputs = RequireMapping(step, "with");
         if (inputs.Children.Count != 6)
             throw new InvalidOperationException("Coverage evidence action must have exactly six reviewed inputs.");
         RequireScalarValue(inputs, "name", "quotation-complete-coverage-${{ github.sha }}");
-        RequireScalarValue(inputs, "path", "TestResults/C821Verifier/c821-verifier.trx\nTestResults/C821Recipient/c821-recipient.trx\nTestResults/QualificationCustody/qualification-custody.trx\nTestResults/CompanionAdmission/companion-admission.trx\nTestResults/CompanionSigning/companion-signing.trx\nTestResults/StorageFront/storage-front.trx\nTestResults/FinancialCompletion/financial-completion.trx\nTestResults/CoverageGate/quotation-complete-coverage.trx\nTestResults/CoverageGate/*/coverage.cobertura.xml\n");
+        RequireScalarValue(inputs, "path", "TestResults/C6SourceIndex/c6-source-index.trx\nTestResults/C821Verifier/c821-verifier.trx\nTestResults/C821Recipient/c821-recipient.trx\nTestResults/QualificationCustody/qualification-custody.trx\nTestResults/CompanionAdmission/companion-admission.trx\nTestResults/CompanionSigning/companion-signing.trx\nTestResults/StorageFront/storage-front.trx\nTestResults/FinancialCompletion/financial-completion.trx\nTestResults/CoverageGate/quotation-complete-coverage.trx\nTestResults/CoverageGate/*/coverage.cobertura.xml\n");
         RequireScalarValue(inputs, "if-no-files-found", "error");
         RequireScalarValue(inputs, "retention-days", "7");
         RequireScalarValue(inputs, "include-hidden-files", "false");
