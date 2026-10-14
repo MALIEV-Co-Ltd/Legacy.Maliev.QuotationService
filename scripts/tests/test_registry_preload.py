@@ -724,4 +724,179 @@ class SafeMetadataFailureCustody(unittest.TestCase):
    self.assertEqual(invoke(),b'verified-response')
   self.assertEqual(waits,[4]);self.assertTrue(errors[0].fp.closed)
 
+class LateTerminalIdentityRepair(unittest.TestCase):
+ def release_fixture_child(self,child,polls):
+  if not child.stdin.closed:
+   self.assertTrue(polls);self.assertIsNone(polls[0])
+   child.stdin.write(b'x');child.stdin.flush();child.stdin.close()
+ def settle_fixture_children(self,records,deadline,primary):
+  import time
+  errors=[]
+  for record in records:
+   child=record['child']
+   for name in ('stdin','stdout','stderr'):
+    try:getattr(child,name).close()
+    except BaseException as error:errors.append(error)
+   try:
+    retained_wait=record['wait'] or child.wait
+    retained_wait(timeout=max(0,deadline-time.monotonic()))
+    if child.poll() is None:raise RuntimeError('Fixture child exit remains unproved')
+   except BaseException as error:errors.append(error)
+  if errors:
+   if primary is None:raise BaseExceptionGroup('Late-terminal test cleanup failed',errors)
+   for error in errors:
+    try:primary.add_note('Secondary late-terminal test cleanup failure: '+type(error).__name__)
+    except BaseException:
+     try:sys.stderr.write('Late-terminal fixture cleanup unresolved\n')
+     except BaseException:pass
+  return errors
+ @unittest.skipUnless(__import__('os').name=='posix','Actual late-terminal join requires Linux hosted runner')
+ def test_real_same_child_late_join_preserves_terminal_status_and_both_pipes(self):
+  from unittest.mock import patch
+  import subprocess,time
+  original=p.subprocess.Popen;children=[];waits=[];polls=[];primary=None
+  deadline=time.monotonic()+6
+  script="import select,sys,time;ready,_,_=select.select([sys.stdin.buffer],[],[],max(0,"+repr(deadline-2)+"-time.monotonic()));released=bool(ready) and sys.stdin.buffer.read(1)==b'x';sys.stdout.buffer.write(b'out' if released else b'');sys.stderr.buffer.write(b'error' if released else b'');sys.exit(7 if released else 9)"
+  def launch(args,**kwargs):
+   child=original([sys.executable,'-c',script],stdin=subprocess.PIPE,**kwargs)
+   record={'child':child,'wait':None};children.append(record)
+   retained_wait=child.wait;retained_poll=child.poll
+   record['wait']=retained_wait
+   def poll():value=retained_poll();polls.append(value);return value
+   def wait(timeout):
+    waits.append(timeout)
+    self.release_fixture_child(child,polls)
+    return retained_wait(timeout=timeout)
+   child.wait=wait;child.poll=poll;return child
+  try:
+   with patch.object(p.subprocess,'Popen',side_effect=launch),patch.object(p,'observe_cli_identity',side_effect=FileNotFoundError('Forced unavailable executable observation')):
+    result,total=p.run_docker_cli(['docker','image','inspect',p.RYUK],6,hard_deadline=deadline)
+   self.assertEqual(len(children),1);self.assertEqual(result.returncode,7);self.assertEqual(result.stdout,b'out');self.assertEqual(result.stderr,b'error');self.assertEqual(total,5)
+   self.assertTrue(polls);self.assertIsNone(polls[0]);self.assertTrue(waits);self.assertTrue(0<waits[0]<=1)
+   resource=result.owned_cli_resource
+   self.assertTrue(resource['identityUnavailableAfterExit']);self.assertFalse(resource['identityObserved']);self.assertIsNone(resource['startTicks']);self.assertIsNone(resource['executable'])
+   self.assertTrue(resource['exitConfirmed']);self.assertFalse(resource['unresolvedCustody'])
+  except BaseException as error:primary=error;raise
+  finally:
+   self.settle_fixture_children(children,deadline,primary)
+  self.assertTrue(all(record['child'].poll()==7 and record['child'].stdin.closed and record['child'].stdout.closed and record['child'].stderr.closed for record in children))
+ def fixture_control(self,write_failure=False,close_failure=False,join_failure=False):
+  import types
+  events=[];primary=OSError('fixture release failure')
+  class Pipe:
+   closed=False
+   def __init__(self,name):self.name=name
+   def write(self,value):
+    events.append('release')
+    if write_failure:raise primary
+   def flush(self):pass
+   def close(self):
+    events.append(self.name)
+    if close_failure:raise OSError('fixture close failure')
+    self.closed=True
+  child=types.SimpleNamespace(stdin=Pipe('stdin'),stdout=Pipe('stdout'),stderr=Pipe('stderr'),returncode=None)
+  def wait(timeout):
+   events.append('join')
+   if join_failure:raise RuntimeError('fixture join failure')
+   child.returncode=9;return 9
+  child.wait=wait;child.poll=lambda:child.returncode
+  return child,{'child':child,'wait':wait},events,primary
+ def test_release_failure_preserves_primary_and_finally_closes_and_joins_fixture(self):
+  import time
+  child,record,events,primary=self.fixture_control(write_failure=True)
+  with self.assertRaises(OSError) as caught:
+   try:self.release_fixture_child(child,[None])
+   except BaseException as error:
+    try:raise
+    finally:self.settle_fixture_children([record],time.monotonic()+1,error)
+  self.assertIs(caught.exception,primary);self.assertEqual(events,['release','stdin','stdout','stderr','join'])
+  self.assertTrue(child.stdin.closed and child.stdout.closed and child.stderr.closed);self.assertEqual(child.poll(),9)
+ def test_parent_failure_survives_all_close_join_and_note_failures_with_unresolved_report(self):
+  import io,time
+  from unittest.mock import patch
+  class Primary(OSError):
+   def add_note(self,note):raise RuntimeError('fixture note failure')
+  primary=Primary('actual parent failure');child,record,events,unused=self.fixture_control(close_failure=True,join_failure=True)
+  report=io.StringIO();errors=[]
+  with patch.object(sys,'stderr',report),self.assertRaises(Primary) as caught:
+   try:raise primary
+   finally:errors.extend(self.settle_fixture_children([record],time.monotonic()+1,primary))
+  self.assertIs(caught.exception,primary);self.assertEqual(events,['stdin','stdout','stderr','join']);self.assertEqual(len(errors),4)
+  self.assertIn('cleanup unresolved',report.getvalue());self.assertIsNone(child.poll())
+ def test_cleanup_failure_without_parent_failure_is_reported_as_group(self):
+  import time
+  child,record,events,unused=self.fixture_control(close_failure=True)
+  with self.assertRaises(BaseExceptionGroup) as caught:self.settle_fixture_children([record],time.monotonic()+1,None)
+  self.assertEqual(len(caught.exception.exceptions),3);self.assertEqual(events,['stdin','stdout','stderr','join']);self.assertEqual(child.poll(),9)
+ def invoke(self,mode='natural',code=0):
+  import subprocess,selectors,types
+  from unittest.mock import patch
+  primary=FileNotFoundError('Owned executable observation disappeared')
+  clock=[0];observations=[]
+  def now():
+   observations.append(True)
+   return 3 if mode=='expired-before' and len(observations)>1 else clock[0]
+  class Pipe:
+   def __init__(self,fd):self.fd=fd;self.closed=False
+   def fileno(self):return self.fd
+   def close(self):self.closed=True
+  class Process:
+   pid=41;returncode=None
+   def __init__(self):self.stdout=Pipe(11);self.stderr=Pipe(12);self.waits=[];self.signals=[]
+   def poll(self):return self.returncode
+   def wait(self,timeout):
+    self.waits.append(timeout)
+    if mode=='live':raise subprocess.TimeoutExpired(['docker','image','inspect'],timeout)
+    self.returncode=code
+    if mode=='expired-during':clock[0]=3.1
+    return code
+   def terminate(self):self.signals.append('terminate');raise AssertionError('Unobserved executable must not be signalled')
+   def kill(self):self.signals.append('kill');raise AssertionError('Unobserved executable must not be signalled')
+  class Selector:
+   def __init__(self):self.keys={};self.closed=False
+   def register(self,stream,event,name):self.keys[stream.fd]=types.SimpleNamespace(fd=stream.fd,fileobj=stream,data=name)
+   def get_map(self):return self.keys
+   def select(self,timeout):return [(key,None) for key in list(self.keys.values())]
+   def unregister(self,stream):self.keys.pop(stream.fd)
+   def close(self):self.closed=True
+  child=Process();selector=Selector();chunks={11:[b'out',b''],12:[b'denied: CANARY',b'']}
+  def read(fd,size):return chunks[fd].pop(0)
+  with patch('os.name','posix'),patch.object(p.subprocess,'Popen',return_value=child) as launch,patch.object(p,'observe_cli_identity',side_effect=primary),patch.object(selectors,'DefaultSelector',return_value=selector),patch('os.set_blocking'),patch('os.read',side_effect=read),patch.object(p.time,'monotonic',side_effect=now):
+   if mode in ('live','expired-before','expired-during'):
+    with self.assertRaises(FileNotFoundError) as caught:p.run_docker_cli(['docker','image','inspect',p.RYUK],6,hard_deadline=6)
+    self.assertIs(caught.exception,primary);result=None;total=None;resource=primary.owned_cli_resource
+   else:
+    result,total=p.run_docker_cli(['docker','image','inspect',p.RYUK],6,hard_deadline=6);resource=result.owned_cli_resource
+   launch.assert_called_once()
+  self.assertEqual(child.signals,[]);self.assertTrue(child.stdout.closed and child.stderr.closed)
+  self.assertFalse(resource['identityObserved']);self.assertIsNone(resource['startTicks']);self.assertIsNone(resource['executable'])
+  self.assertEqual(resource['hardDeadlineMonotonic'],6);self.assertEqual(resource['workDeadlineMonotonic'],3);self.assertEqual(resource['recoveryReserveSeconds'],3)
+  return child,selector,resource,result,total
+ def test_same_owned_child_bounded_terminal_join_reuses_fast_exit_classification(self):
+  child,selector,resource,result,total=self.invoke()
+  self.assertEqual(result.returncode,0);self.assertEqual(result.stdout,b'out');self.assertEqual(result.stderr,b'denied: CANARY');self.assertEqual(total,len(result.stderr))
+  self.assertTrue(resource['identityUnavailableAfterExit']);self.assertTrue(resource['exitConfirmed']);self.assertFalse(resource['identityDrift']);self.assertFalse(resource['unresolvedCustody'])
+  self.assertEqual(resource['executionOutcome'],'completed');self.assertTrue(selector.closed);self.assertLessEqual(child.waits[0],1)
+ def test_nonzero_terminal_status_and_capture_do_not_become_required_or_optional_success(self):
+  import os,tempfile
+  from unittest.mock import patch
+  child,selector,resource,result,total=self.invoke(code=7)
+  self.assertEqual(result.returncode,7);self.assertEqual(result.stdout,b'out');self.assertEqual(result.stderr,b'denied: CANARY');self.assertEqual(total,len(result.stderr))
+  self.assertEqual(resource['terminalReturnCode'],7)
+  for required in (False,True):
+   with self.subTest(required=required),tempfile.TemporaryDirectory(prefix='quotation-late-terminal-control-') as directory:
+    def preload(rows,run,fetch,receipt):return run(['docker','image','inspect',p.RYUK],required)
+    with patch.dict(os.environ,{'RUNNER_TEMP':directory,'TESTCONTAINERS_RYUK_CONTAINER_IMAGE':p.RYUK}),patch.object(sys,'argv',['preload_images.py']),patch.object(p,'preload',side_effect=preload),patch.object(p,'run_docker_cli',return_value=(result,total)):
+     with self.assertRaises(p.DockerCommandFailure) as caught:p.main()
+     self.assertEqual(caught.exception.diagnostic['returnCode'],7);self.assertFalse(caught.exception.diagnostic['rawDisclosed'])
+ def test_live_unknown_child_is_not_accepted_or_signalled(self):
+  child,selector,resource,result,total=self.invoke('live')
+  self.assertIsNone(result);self.assertFalse(resource['exitConfirmed']);self.assertTrue(resource['unresolvedCustody']);self.assertIsNone(resource['terminalReturnCode'])
+ def test_expired_work_deadline_before_join_never_accepts_preparation(self):
+  child,selector,resource,result,total=self.invoke('expired-before')
+  self.assertIsNone(result);self.assertTrue(resource['unresolvedCustody'])
+ def test_work_deadline_expiry_during_natural_join_never_accepts_preparation(self):
+  child,selector,resource,result,total=self.invoke('expired-during')
+  self.assertIsNone(result);self.assertTrue(resource['unresolvedCustody']);self.assertEqual(resource['terminalReturnCode'],0)
+
 if __name__=='__main__':unittest.main()

@@ -277,10 +277,20 @@ def run_docker_cli(args,timeout,hard_deadline=None):
  try:
   process=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
   try:identity=observe_cli_identity(process)
-  except FileNotFoundError:
+  except FileNotFoundError as observation_error:
    # A retained Popen terminal status proves this child exited even when its
    # short-lived /proc executable is already gone. Never infer a live identity.
-   if process.poll() is None:raise
+   if process.poll() is None:
+    try:
+     remaining=work_deadline-time.monotonic()
+     if remaining<=0:raise observation_error
+     process.wait(timeout=min(1,remaining))
+     terminal=process.poll() is not None
+     if terminal:identity_unavailable_after_exit=True
+     if not terminal or work_deadline-time.monotonic()<=0:raise observation_error
+    except BaseException as secondary:
+     if secondary is not observation_error:safe_secondary_note(observation_error,'Secondary identity-observation join failure: ',secondary)
+     raise observation_error
    identity_unavailable_after_exit=True
   selector=selectors.DefaultSelector()
   for stream,name in ((process.stdout,'stdout'),(process.stderr,'stderr')):
@@ -329,7 +339,7 @@ def run_docker_cli(args,timeout,hard_deadline=None):
     except BaseException as error:cleanup_errors.append(error)
  resource=None
  if process is not None:
-  resource={'pid':getattr(process,'pid',None),'executable':identity['executable'] if identity else None,'startTicks':identity['startTicks'] if identity else None,'identityObserved':identity is not None,'identityUnavailableAfterExit':identity_unavailable_after_exit,'identityDrift':identity_drift,'admissionMonotonic':started,'hardDeadlineMonotonic':deadline,'workDeadlineMonotonic':work_deadline,'recoveryReserveSeconds':3,'exitConfirmed':not identity_drift and process.returncode is not None,'cleanupErrors':len(cleanup_errors),'expiryDoesNotProveExit':True,'unresolvedCustody':identity_drift or identity is None and not identity_unavailable_after_exit or bool(cleanup_errors) or process.returncode is None}
+  resource={'pid':getattr(process,'pid',None),'executable':identity['executable'] if identity else None,'startTicks':identity['startTicks'] if identity else None,'identityObserved':identity is not None,'identityUnavailableAfterExit':identity_unavailable_after_exit,'identityDrift':identity_drift,'admissionMonotonic':started,'hardDeadlineMonotonic':deadline,'workDeadlineMonotonic':work_deadline,'recoveryReserveSeconds':3,'exitConfirmed':not identity_drift and process.returncode is not None,'cleanupErrors':len(cleanup_errors),'expiryDoesNotProveExit':True,'unresolvedCustody':identity_drift or identity is None and (not identity_unavailable_after_exit or primary is not None) or bool(cleanup_errors) or process.returncode is None}
   # Capture whether command work completed before recovery, separately from the
   # terminal status that may have resulted from terminate/kill during recovery.
   resource['executionOutcome']='completed' if result is not None and result[0].returncode>=0 else 'interrupted'
