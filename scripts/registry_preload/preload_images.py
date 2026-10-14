@@ -26,6 +26,24 @@ def safe_secondary_note(primary,context,secondary):
  try:primary.add_note(context+type(secondary).__name__)
  except BaseException:pass
 
+def metadata_request_context(url,local_attempt):
+ # Only exact requests for the committed approved pins may disclose public context.
+ if type(local_attempt) is not int or not 1<=local_attempt<=3:raise ValueError('Local fetch attempt required')
+ result={'imageAlias':None,'hostname':None,'requestStage':None,'localAttempt':local_attempt}
+ aliases={'postgres:18-alpine':'postgres:18-alpine','redis:7-alpine':'redis:7-alpine',RYUK:'ryuk:0.14.0'}
+ for row in json.loads((ROOT/'image-pins.json').read_bytes()):
+  hub_repository,tag,registry,repository,index_pin=binding(row)
+  token_url=('https://public.ecr.aws/token/?service=public.ecr.aws&scope=repository:'+repository+':pull' if registry=='public.ecr.aws' else 'https://ghcr.io/token?service=ghcr.io&scope=repository:'+repository+':pull')
+  requests=((token_url,registry,'token'),
+   ('https://hub.docker.com/v2/repositories/'+hub_repository+'/tags/'+tag,'hub.docker.com','provenance'),
+   ('https://'+registry+'/v2/'+repository+'/manifests/'+row['indexDigest'],registry,'index'),
+   ('https://'+registry+'/v2/'+repository+'/manifests/'+row['manifestDigest'],registry,'manifest'))
+  for actual,hostname,stage in requests:
+   if url==actual:
+    result.update(imageAlias=aliases[row['tag']],hostname=hostname,requestStage=stage)
+    return result
+ return result
+
 def fetch(url,token=None,deadline=None):
  import urllib.error
  if deadline is None:deadline=time.monotonic()+45
@@ -39,7 +57,10 @@ def fetch(url,token=None,deadline=None):
    with opener.open(urllib.request.Request(url,headers=headers),timeout=min(12,remaining)) as response:return response.read()
   except urllib.error.HTTPError as primary:
    try:
-    try:primary.safe_registry_diagnostic=safe_provider_metadata(headers=primary.headers,status=primary.code,origin='metadata-http-response')
+    try:
+     primary.safe_registry_diagnostic=safe_provider_metadata(headers=primary.headers,status=primary.code,origin='metadata-http-response')
+     primary.safe_registry_diagnostic['requestContext']={'imageAlias':None,'hostname':None,'requestStage':None,'localAttempt':attempt+1}
+     primary.safe_registry_diagnostic['requestContext']=metadata_request_context(url,attempt+1)
     except BaseException as secondary:safe_secondary_note(primary,'Secondary metadata diagnostic failure: ',secondary)
     if primary.code!=429 or attempt==2:raise
     retry_after=primary.headers.get('Retry-After')
