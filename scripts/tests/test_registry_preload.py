@@ -899,4 +899,92 @@ class LateTerminalIdentityRepair(unittest.TestCase):
   child,selector,resource,result,total=self.invoke('expired-during')
   self.assertIsNone(result);self.assertTrue(resource['unresolvedCustody']);self.assertEqual(resource['terminalReturnCode'],0)
 
+
+class MetadataRequestContext(unittest.TestCase):
+ def test_actual_approved_requests_join_alias_host_and_stage_without_secrets(self):
+  import io,urllib.error
+  from unittest.mock import patch
+  rows=json.loads((R/'image-pins.json').read_bytes())
+  expected=[('postgres:18-alpine','public.ecr.aws','docker/library/postgres','library/postgres','18-alpine'),
+   ('redis:7-alpine','public.ecr.aws','docker/library/redis','library/redis','7-alpine'),
+   ('ryuk:0.14.0','ghcr.io','testcontainers/ryuk','testcontainers/ryuk','0.14.0')]
+  for row,(alias,registry,repository,hub,tag) in zip(rows,expected):
+   token=('https://public.ecr.aws/token/?service=public.ecr.aws&scope=repository:'+repository+':pull' if registry=='public.ecr.aws' else 'https://ghcr.io/token?service=ghcr.io&scope=repository:'+repository+':pull')
+   requests=[(token,registry,'token'),('https://hub.docker.com/v2/repositories/'+hub+'/tags/'+tag,'hub.docker.com','provenance'),
+    ('https://'+registry+'/v2/'+repository+'/manifests/'+row['indexDigest'],registry,'index'),
+    ('https://'+registry+'/v2/'+repository+'/manifests/'+row['manifestDigest'],registry,'manifest')]
+   for url,host,stage in requests:
+    with self.subTest(alias=alias,stage=stage):
+     error=urllib.error.HTTPError(url,403,'CANARY',{'Authorization':'Bearer CANARY','Set-Cookie':'CANARY'},io.BytesIO(b'CANARY'))
+     class Opener:
+      def open(self,request,timeout):raise error
+     with patch.object(p.urllib.request,'build_opener',return_value=Opener()):
+      with self.assertRaises(urllib.error.HTTPError) as caught:p.fetch(url,'CANARY')
+     self.assertIs(caught.exception,error);self.assertTrue(error.fp.closed)
+     self.assertEqual(error.safe_registry_diagnostic.get('requestContext'),{'imageAlias':alias,'hostname':host,'requestStage':stage,'localAttempt':1})
+     encoded=json.dumps(error.safe_registry_diagnostic)
+     self.assertNotIn('CANARY',encoded);self.assertNotIn('https://',encoded);self.assertNotIn('scope=',encoded)
+ def test_unapproved_or_decorated_url_remains_unknown_and_does_not_leak(self):
+  import io,urllib.error
+  from unittest.mock import patch
+  row=json.loads((R/'image-pins.json').read_bytes())[0]
+  approved='https://public.ecr.aws/v2/docker/library/postgres/manifests/'+row['indexDigest']
+  for url in [approved+'?token=CANARY',approved+'#CANARY',approved.replace('public.ecr.aws','CANARY@public.ecr.aws'),
+   approved.replace('public.ecr.aws','public.ecr.aws:443'),approved.replace(row['indexDigest'],'sha256:'+'0'*64),'https://CANARY.invalid/path']:
+   with self.subTest(url=url):
+    error=urllib.error.HTTPError(url,403,'CANARY',{},io.BytesIO(b'CANARY'))
+    class Opener:
+     def open(self,request,timeout):raise error
+    with patch.object(p.urllib.request,'build_opener',return_value=Opener()):
+     with self.assertRaises(urllib.error.HTTPError):p.fetch(url,'CANARY')
+    self.assertEqual(error.safe_registry_diagnostic.get('requestContext'),{'imageAlias':None,'hostname':None,'requestStage':None,'localAttempt':1})
+    self.assertNotIn('CANARY',json.dumps(error.safe_registry_diagnostic));self.assertTrue(error.fp.closed)
+  self.assertNotIn('requestContext',p.safe_provider_metadata(status=429))
+  self.assertNotIn('requestContext',p.command_failure(['docker','pull',p.RYUK],1,b'unknown',7).diagnostic['safeProviderMetadata'])
+ def test_local_retry_ordinals_preserve_three_attempts_primary_and_response_close(self):
+  import io,urllib.error
+  from unittest.mock import patch
+  row=json.loads((R/'image-pins.json').read_bytes())[0]
+  url='https://public.ecr.aws/v2/docker/library/postgres/manifests/'+row['indexDigest']
+  errors=[urllib.error.HTTPError(url,429,'CANARY',{},io.BytesIO(b'CANARY')) for _ in range(3)]
+  calls=[]
+  class Opener:
+   def open(self,request,timeout):
+    calls.append(request.full_url);raise errors[len(calls)-1]
+  with patch.object(p.urllib.request,'build_opener',return_value=Opener()),patch.object(p.time,'monotonic',return_value=0),patch.object(p.time,'sleep') as sleep:
+   with self.assertRaises(urllib.error.HTTPError) as caught:p.fetch(url,deadline=30)
+  self.assertIs(caught.exception,errors[-1]);self.assertEqual(calls,[url]*3)
+  self.assertEqual([c.args[0] for c in sleep.call_args_list],[2,4])
+  for attempt,error in enumerate(errors,1):
+   self.assertTrue(error.fp.closed);self.assertEqual(error.safe_registry_diagnostic['requestContext']['localAttempt'],attempt)
+   self.assertIsNone(error.safe_registry_diagnostic['retryAfterSeconds']);self.assertEqual(error.safe_registry_diagnostic['rateLimitNature'],'unclassified')
+ def test_main_receipt_retains_actual_context_before_any_docker_mutation(self):
+  import io,os,tempfile,urllib.error
+  from unittest.mock import patch
+  row=json.loads((R/'image-pins.json').read_bytes())[0]
+  url='https://public.ecr.aws/v2/docker/library/postgres/manifests/'+row['indexDigest']
+  error=urllib.error.HTTPError(url,403,'CANARY',{'Authorization':'CANARY'},io.BytesIO(b'CANARY'))
+  class Opener:
+   def open(self,request,timeout):raise error
+  def preload(rows,run,network,receipt):return network(url,'CANARY')
+  with tempfile.TemporaryDirectory(prefix='quotation-request-context-control-') as directory:
+   with patch.dict(os.environ,{'RUNNER_TEMP':directory,'TESTCONTAINERS_RYUK_CONTAINER_IMAGE':p.RYUK}),patch.object(sys,'argv',['preload_images.py']),patch.object(p,'preload',side_effect=preload),patch.object(p.urllib.request,'build_opener',return_value=Opener()),patch.object(p,'run_docker_cli') as docker:
+    with self.assertRaises(urllib.error.HTTPError) as caught:p.main()
+    self.assertIs(caught.exception,error);docker.assert_not_called()
+   receipt=json.loads((Path(directory)/'quotation-registry-preload.json').read_bytes())
+   self.assertEqual(receipt['createdTags'],[]);self.assertFalse(receipt['containersStarted'])
+   self.assertEqual(receipt['metadataFailureDiagnostic']['requestContext'],{'imageAlias':'postgres:18-alpine','hostname':'public.ecr.aws','requestStage':'index','localAttempt':1})
+   self.assertNotIn('CANARY',json.dumps(receipt));self.assertTrue(error.fp.closed)
+ def test_context_extraction_failure_preserves_primary_metadata_and_close(self):
+  import io,urllib.error
+  from unittest.mock import patch
+  error=urllib.error.HTTPError('https://host/metadata',403,'CANARY',{},io.BytesIO(b'CANARY'))
+  class Opener:
+   def open(self,request,timeout):raise error
+  with patch.object(p.urllib.request,'build_opener',return_value=Opener()),patch.object(p,'metadata_request_context',side_effect=ValueError('CANARY')):
+   with self.assertRaises(urllib.error.HTTPError) as caught:p.fetch('https://host/metadata')
+  self.assertIs(caught.exception,error);self.assertTrue(error.fp.closed)
+  self.assertEqual(error.safe_registry_diagnostic['httpStatus'],403);self.assertEqual(error.safe_registry_diagnostic['requestContext'],{'imageAlias':None,'hostname':None,'requestStage':None,'localAttempt':1})
+  self.assertNotIn('CANARY',json.dumps(error.safe_registry_diagnostic));self.assertNotIn('CANARY',' '.join(error.__notes__))
+
 if __name__=='__main__':unittest.main()
