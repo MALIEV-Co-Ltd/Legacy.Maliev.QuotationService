@@ -11,6 +11,7 @@ using Legacy.Maliev.QuotationService.Api.Authorization;
 using Legacy.Maliev.QuotationService.Api.Clients;
 using Legacy.Maliev.QuotationService.Api.Controllers;
 using Legacy.Maliev.QuotationService.Application.Interfaces;
+using Legacy.Maliev.QuotationService.Application.Models;
 using Legacy.Maliev.QuotationService.Application.Services;
 using Legacy.Maliev.QuotationService.Data;
 using Legacy.Maliev.QuotationService.Domain;
@@ -45,6 +46,10 @@ public sealed class QuotationInvoiceDecisionHttpPostgresTests(QuotationInvoiceDe
     private static readonly JsonSerializerOptions SourceRequestJson = new() { PropertyNamingPolicy = null };
 
     [Theory]
+    [InlineData("privacy@example.invalid", "session-opaque", null, "THB")]
+    [InlineData("client-opaque", "privacy@example.invalid", null, "THB")]
+    [InlineData(" privacy@example.invalid ", "session-opaque", null, "THB")]
+    [InlineData("client-opaque", " privacy@example.invalid ", null, "THB")]
     [InlineData("123.456", null, null, "THB")]
     [InlineData(null, "789", null, "THB")]
     [InlineData(" ", "789", null, "THB")]
@@ -75,6 +80,77 @@ public sealed class QuotationInvoiceDecisionHttpPostgresTests(QuotationInvoiceDe
         Authenticate(request);
         using var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await AssertUnchangedAsync(seeded, 0);
+        Assert.Empty(await DeliveryRowsAsync(seeded.Id));
+    }
+
+    [Fact]
+    public async Task Decision_IdentifierPrivacy_DecodedAtSignReturns400WithoutPersistence()
+    {
+        var seeded = await SeedAsync();
+        await using var app = await StartAppAsync();
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"/quotations/{seeded.Id}/decision")
+        {
+            Content = new StringContent(
+                """{"Accepted":true,"EmployeeInitiated":true,"InvoiceId":901,"ClientId":"privacy\u0040example.invalid","SessionId":"session-opaque","Currency":"THB"}""",
+                Encoding.UTF8, "application/json"),
+        };
+        Authenticate(request);
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await AssertUnchangedAsync(seeded, 0);
+        Assert.Empty(await DeliveryRowsAsync(seeded.Id));
+    }
+
+    [Fact]
+    public async Task Decision_IdentifierPrivacy_TrimmedOpaquePairPersistsNormalIntent()
+    {
+        var seeded = await SeedAsync();
+        await using var app = await StartAppAsync();
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"/quotations/{seeded.Id}/decision")
+        {
+            Content = JsonContent.Create(new
+            {
+                Accepted = true,
+                EmployeeInitiated = true,
+                InvoiceId = 901,
+                ClientId = " client-opaque ",
+                SessionId = " session-opaque ",
+                UserId = " user-opaque ",
+                Currency = "thb",
+            }, options: SourceRequestJson),
+        };
+        Authenticate(request);
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var row = Assert.Single(await DeliveryRowsAsync(seeded.Id));
+        Assert.Equal("client-opaque", row.ClientId);
+        Assert.Equal("session-opaque", row.SessionId);
+        Assert.Equal("user-opaque", row.UserId);
+        Assert.Equal("THB", row.Currency);
+    }
+
+    [Theory]
+    [InlineData("client")]
+    [InlineData("session")]
+    [InlineData("user")]
+    public async Task Decision_IdentifierPrivacy_DirectRepositoryContextCannotBypassAdmission(string field)
+    {
+        var seeded = await SeedAsync();
+        await using var app = await StartAppAsync();
+        await using var scope = app.Services.CreateAsyncScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IQuotationService>();
+        var analytics = new QuotationAnalyticsContext(
+            field == "client" ? "privacy@example.invalid" : "client-opaque",
+            field == "session" ? "privacy@example.invalid" : "session-opaque",
+            "THB", field == "user" ? "privacy@example.invalid" : "user-opaque");
+
+        var error = await Assert.ThrowsAsync<ArgumentException>(() => repository.ApplyDecisionAsync(
+            seeded.Id, true, QuotationAcceptanceOrigin.Employee, null, CancellationToken.None, 901, analytics));
+
+        Assert.Equal("analyticsContext", error.ParamName);
         await AssertUnchangedAsync(seeded, 0);
         Assert.Empty(await DeliveryRowsAsync(seeded.Id));
     }

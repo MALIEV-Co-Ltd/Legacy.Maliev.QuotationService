@@ -130,7 +130,8 @@ public sealed record QuotationDecisionRequest(bool Accepted, bool EmployeeInitia
         if (hasClient != hasSession) return false;
         if (!hasClient) return true;
         if (ClientId!.Length > 128 || SessionId!.Length > 128
-            || !string.IsNullOrWhiteSpace(UserId) && (UserId.Length > 128 || UserId.Contains('@'))
+            || !string.IsNullOrWhiteSpace(UserId) && UserId.Length > 128
+            || !QuotationAnalyticsContext.IdentifiersAreSafe(ClientId, SessionId, UserId)
             || Currency is not { Length: 3 } currency || !currency.All(char.IsLetter)) return false;
 
         context = new(ClientId.Trim(), SessionId.Trim(), currency.ToUpperInvariant(),
@@ -138,7 +139,16 @@ public sealed record QuotationDecisionRequest(bool Accepted, bool EmployeeInitia
         return true;
     }
 }
-public sealed record QuotationAnalyticsContext(string ClientId, string SessionId, string Currency, string? UserId);
+public sealed record QuotationAnalyticsContext(string ClientId, string SessionId, string Currency, string? UserId)
+{
+    /// <summary>Rejects literal email delimiters without restricting legitimate opaque identifiers.</summary>
+    /// <param name="clientId">Optional client identifier.</param>
+    /// <param name="sessionId">Optional session identifier.</param>
+    /// <param name="userId">Optional user identifier.</param>
+    /// <returns>Whether none of the identifiers contains a literal at sign.</returns>
+    public static bool IdentifiersAreSafe(string? clientId, string? sessionId, string? userId) =>
+        clientId?.Contains('@') != true && sessionId?.Contains('@') != true && userId?.Contains('@') != true;
+}
 public sealed record QuotationDecisionResponse(QuotationDecisionStatus Status, int CompletedOrders, int TotalOrders, DateTime? ModifiedDate);
 public enum QuotationDecisionStatus { Completed, NotFound, Conflict, DependencyConflict, DependencyUnavailable }
 public sealed record QuotationDecisionPersistenceResult(

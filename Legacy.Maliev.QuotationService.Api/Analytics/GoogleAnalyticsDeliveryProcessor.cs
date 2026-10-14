@@ -1,4 +1,5 @@
 using System.Text;
+using Legacy.Maliev.QuotationService.Application.Models;
 using Legacy.Maliev.QuotationService.Domain;
 using Microsoft.Extensions.Options;
 
@@ -24,6 +25,11 @@ public sealed class GoogleAnalyticsDeliveryProcessor(
         var token = row.LeaseToken!.Value;
         try
         {
+            if (!QuotationAnalyticsContext.IdentifiersAreSafe(row.ClientId, row.SessionId, row.UserId))
+            {
+                await FailAsync(row, token, false, "Unsafe analytics identifier.", 400, null, cancellationToken);
+                return;
+            }
             var endpoint = $"https://www.google-analytics.com/mp/collect?measurement_id={Uri.EscapeDataString(options.MeasurementId)}&api_secret={Uri.EscapeDataString(options.ApiSecret)}";
             using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
             {
