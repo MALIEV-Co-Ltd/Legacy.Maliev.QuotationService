@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Net;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Legacy.Maliev.QuotationService.Api.Analytics;
 using Legacy.Maliev.QuotationService.Data;
@@ -184,13 +185,203 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
         AssertDependency(Assert.Single(audit.Entries), 500);
     }
 
+    [Theory]
+    [InlineData(400, 204)]
+    [InlineData(500, 204)]
+    [InlineData(400, 400)]
+    [InlineData(500, 500)]
+    public async Task Program_ReclaimedLease_OnlyCurrentOwnerEmitsDurableTerminalFailure(int staleStatus, int currentStatus)
+    {
+        var clock = new LeaseClock();
+        var transport = new LeaseRaceTransport(staleStatus, currentStatus);
+        var audit = Audit();
+        await using var app = App(transport, audit, clock, maxAttempts: 1);
+        using var bootstrap = app.CreateClient();
+        await Seed(clock);
+        using var staleScope = app.Services.CreateScope();
+        using var currentScope = app.Services.CreateScope();
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var staleDelivery = staleScope.ServiceProvider.GetRequiredService<GoogleAnalyticsDeliveryProcessor>()
+            .DeliverBatchAsync(cancellation.Token);
+        var cleanupFailures = new List<DeliveryCleanupFailure>();
+        await RunWithDeliverySettlementAsync(async () =>
+        {
+            await transport.Entered.Task.WaitAsync(cancellation.Token);
+            var claimed = await Read();
+            Assert.Equal(1, claimed.AttemptCount);
+            Assert.NotNull(claimed.LeaseToken);
+            Assert.NotNull(claimed.LeaseUntilUtc);
+            Assert.Null(claimed.SentUtc);
+            Assert.Null(claimed.FailedUtc);
+
+            clock.Advance(TimeSpan.FromSeconds(61));
+            Assert.Equal(1, await currentScope.ServiceProvider.GetRequiredService<GoogleAnalyticsDeliveryProcessor>()
+                .DeliverBatchAsync(cancellation.Token));
+            transport.Release.TrySetResult(true);
+            Assert.Equal(1, await staleDelivery.WaitAsync(cancellation.Token));
+
+            Assert.Equal(2, transport.Calls);
+            Assert.Equal(2, transport.Ownership.Count);
+            Assert.All(transport.Ownership, Assert.True);
+            var completed = await Read();
+            Assert.Equal(2, completed.AttemptCount);
+            Assert.Equal(currentStatus == 204, completed.SentUtc is not null);
+            Assert.Equal(currentStatus != 204, completed.FailedUtc is not null);
+            Assert.Null(completed.LeaseToken);
+            Assert.Null(completed.LeaseUntilUtc);
+            Assert.Equal(currentStatus == 204 ? null : $"HTTP {currentStatus}", completed.LastError);
+            Assert.DoesNotContain(audit.Entries, entry => entry.Event.Id == 5101);
+            var terminal = audit.Entries.Where(entry => entry.Event.Id == 5201).ToArray();
+            if (currentStatus == 204) Assert.Empty(terminal);
+            else AssertTerminal(Assert.Single(terminal), currentStatus, 2);
+        }, staleDelivery,
+            () => transport.Release.TrySetResult(true),
+            () => cancellation.Cancel(),
+            task => task.WaitAsync(TimeSpan.FromSeconds(15)), cleanupFailures);
+    }
+
+    [Fact]
+    public async Task DeliverySettlement_PrimaryFailureSurvivesIndependentReleaseCancelAndDeliveryFailures()
+    {
+        var primary = new InvalidOperationException("primary-control");
+        var release = new InvalidOperationException("release-control");
+        var cancel = new InvalidOperationException("cancel-control");
+        var late = new InvalidOperationException("delivery-control");
+        var failures = new List<DeliveryCleanupFailure>();
+        var delivery = Task.FromException(late);
+        var observed = await Assert.ThrowsAsync<InvalidOperationException>(() => RunWithDeliverySettlementAsync(
+            () => Task.FromException(primary), delivery,
+            () => throw release, () => throw cancel, task => task, failures));
+        Assert.Same(primary, observed);
+        Assert.True(delivery.IsCompleted);
+        Assert.Collection(failures,
+            failure => { Assert.Equal("release-gate", failure.Phase); Assert.Same(release, failure.Error); },
+            failure => { Assert.Equal("cancel-delivery", failure.Phase); Assert.Same(cancel, failure.Error); },
+            failure => { Assert.Equal("observe-delivery", failure.Phase); Assert.Same(late, failure.Error); });
+        Assert.Same(failures, observed.Data["DeliveryCleanupFailures"]);
+    }
+
+    [Fact]
+    public async Task DeliverySettlement_TimeoutKeepsResourcesOwnedUntilActualLateTaskSettlement()
+    {
+        var primary = new InvalidOperationException("primary-control");
+        var timeout = new TimeoutException("observation-control");
+        var late = new InvalidOperationException("late-control");
+        var delivery = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var observedDeadline = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resource = new SettlementResource();
+        var failures = new List<DeliveryCleanupFailure>();
+        Exception? observed = null;
+        var completedBeforeSettlement = true;
+        var disposedBeforeSettlement = true;
+        var owner = OwnResourceAsync();
+        try
+        {
+            await observedDeadline.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            completedBeforeSettlement = owner.IsCompleted;
+            disposedBeforeSettlement = resource.Disposed;
+        }
+        finally
+        {
+            delivery.TrySetException(late);
+            try { await owner; }
+            catch (Exception error) { observed = error; }
+        }
+        Assert.False(completedBeforeSettlement);
+        Assert.False(disposedBeforeSettlement);
+        Assert.True(delivery.Task.IsCompleted);
+        Assert.True(owner.IsCompleted);
+        Assert.True(resource.Disposed);
+        Assert.Same(primary, observed);
+        Assert.Collection(failures,
+            failure => { Assert.Equal("observe-delivery", failure.Phase); Assert.Same(timeout, failure.Error); },
+            failure => { Assert.Equal("settle-delivery", failure.Phase); Assert.Same(late, failure.Error); });
+
+        async Task OwnResourceAsync()
+        {
+            using (resource)
+                await RunWithDeliverySettlementAsync(() => Task.FromException(primary), delivery.Task,
+                    () => { }, () => { }, _ =>
+                    {
+                        observedDeadline.TrySetResult(true);
+                        return Task.FromException(timeout);
+                    }, failures);
+        }
+    }
+
+    [Fact]
+    public async Task DeliverySettlement_ObserverReturnCannotHideActualFaultWhenBodySucceeded()
+    {
+        var late = new InvalidOperationException("delivery-control");
+        var failures = new List<DeliveryCleanupFailure>();
+        var delivery = Task.FromException(late);
+        var observed = await Assert.ThrowsAsync<AggregateException>(() => RunWithDeliverySettlementAsync(
+            () => Task.CompletedTask, delivery, () => { }, () => { }, _ => Task.CompletedTask, failures));
+        Assert.True(delivery.IsCompleted);
+        Assert.Same(late, Assert.Single(observed.InnerExceptions));
+        var failure = Assert.Single(failures);
+        Assert.Equal("settle-delivery", failure.Phase);
+        Assert.Same(late, failure.Error);
+    }
+
+    private static async Task RunWithDeliverySettlementAsync(Func<Task> body, Task delivery,
+        Action releaseGate, Action cancelDelivery, Func<Task, Task> observeDelivery,
+        List<DeliveryCleanupFailure> failures)
+    {
+        ExceptionDispatchInfo? primary = null;
+        Exception? observedDeliveryFailure = null;
+        try { await body(); }
+        catch (Exception error) { primary = ExceptionDispatchInfo.Capture(error); }
+
+        try { releaseGate(); }
+        catch (Exception error) { failures.Add(new("release-gate", error)); }
+        try { cancelDelivery(); }
+        catch (Exception error) { failures.Add(new("cancel-delivery", error)); }
+        try { await observeDelivery(delivery); }
+        catch (Exception error)
+        {
+            observedDeliveryFailure = error;
+            failures.Add(new("observe-delivery", error));
+        }
+
+        // A deadline is not settlement. Keep the owning test frame (and its using scopes/app)
+        // alive until this same actual task becomes terminal. No detached continuation or
+        // unqualified fixture/provider handoff can authorize resource disposal here.
+        // If cancellation/release is ignored, the test remains pending under the finite
+        // hosted-job lifetime; timeout/runner exit is never reported as task settlement.
+        try { await delivery; }
+        catch (Exception error)
+        {
+            if (!ReferenceEquals(error, observedDeliveryFailure))
+                failures.Add(new("settle-delivery", error));
+        }
+
+        if (primary is not null)
+        {
+            try { primary.SourceException.Data["DeliveryCleanupFailures"] = failures; }
+            catch (Exception error) { failures.Add(new("attach-secondary-report", error)); }
+            primary.Throw();
+        }
+        if (failures.Count != 0)
+            throw new AggregateException("Delivery cleanup failed after actual task settlement.",
+                failures.Select(failure => failure.Error));
+    }
+
+    private sealed record DeliveryCleanupFailure(string Phase, Exception Error);
+
+    private sealed class SettlementResource : IDisposable
+    {
+        public bool Disposed { get; private set; }
+        public void Dispose() => Disposed = true;
+    }
+
     private StructuredAudit Audit() => new(() =>
     {
         using var db = fixture.Context();
         return db.GoogleAnalyticsOutbox.AsNoTracking().Single().FailedUtc is not null;
     });
 
-    private WebApplicationFactory<Program> App(Transport transport, StructuredAudit audit, FakeTimeProvider clock,
+    private WebApplicationFactory<Program> App(HttpMessageHandler transport, StructuredAudit audit, TimeProvider clock,
         bool callerLogging = true, int maxAttempts = 10, bool nativeDeadline = false, FailedPersistence? fault = null) =>
         fixture.App(new()).WithWebHostBuilder(builder =>
         {
@@ -220,7 +411,7 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
             });
         });
 
-    private async Task Seed(FakeTimeProvider clock, int completedAttempts = 0)
+    private async Task Seed(TimeProvider clock, int completedAttempts = 0)
     {
         await using var db = fixture.Context();
         await db.GoogleAnalyticsOutbox.ExecuteDeleteAsync();
@@ -313,6 +504,38 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
             if (status == -3) caller!.Cancel();
             if (status is -3 or -4) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             return new((HttpStatusCode)status) { Content = new StringContent(Protected) };
+        }
+    }
+
+    // Advance lease UTC without firing the actual HTTP resilience deadline timers.
+    private sealed class LeaseClock : TimeProvider
+    {
+        private DateTimeOffset utc = Start;
+        public override DateTimeOffset GetUtcNow() => utc;
+        public void Advance(TimeSpan elapsed) => utc += elapsed;
+    }
+
+    private sealed class LeaseRaceTransport(int staleStatus, int currentStatus) : HttpMessageHandler
+    {
+        public int Calls;
+        public ConcurrentQueue<bool> Ownership { get; } = new();
+        public TaskCompletionSource<bool> Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<bool> Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var call = Interlocked.Increment(ref Calls);
+            Assert.True(request.Options.TryGetValue(new HttpRequestOptionsKey<bool>("Maliev.DependencyFailureOwnedByCaller"), out var owned));
+            Ownership.Enqueue(owned);
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("www.google-analytics.com", request.RequestUri?.Host);
+            Assert.InRange(call, 1, 2);
+            if (call == 1)
+            {
+                Entered.TrySetResult(true);
+                await Release.Task.WaitAsync(cancellationToken);
+            }
+            return new((HttpStatusCode)(call == 1 ? staleStatus : currentStatus)) { Content = new StringContent(Protected) };
         }
     }
 

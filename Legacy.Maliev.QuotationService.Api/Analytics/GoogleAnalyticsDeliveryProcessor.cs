@@ -58,7 +58,7 @@ public sealed class GoogleAnalyticsDeliveryProcessor(
             await store.MarkRetryAsync(row.Id, token, now.Add(delay), diagnostic, cancellationToken);
             return;
         }
-        await store.MarkFailedAsync(row.Id, token, now, diagnostic, cancellationToken);
+        if (!await store.MarkFailedAsync(row.Id, token, now, diagnostic, cancellationToken)) return;
         logger.LogError(new EventId(5201, "GoogleAnalyticsDeliveryFailed"),
             "{EventName} Operation={Operation} Dependency={Dependency} StatusCode={StatusCode} ExceptionType={ExceptionType} AttemptCount={AttemptCount}",
             "GoogleAnalyticsDeliveryFailed", "GA4Delivery", "GoogleAnalytics", status, exceptionType, row.AttemptCount);
