@@ -128,11 +128,29 @@
       "cases": [
         "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       ]
+    },
+    "InitialIdentityUnavailable_OriginalProcessLaterExitsSuccessfullyWithoutSignals": {
+      "parameters": [],
+      "cases": [
+        "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      ]
+    },
+    "InitialIdentityUnavailable_FailedOrPendingWorkRetainsOriginalOwnerWithoutSignals": {
+      "parameters": [
+        {
+          "name": "waitFails",
+          "type": "bool"
+        }
+      ],
+      "cases": [
+        "1c28f2eb0958c3d15db1f0f0e7f2b8998ca2b8f67ab426a1fbb3d561fe76fad9",
+        "456e2e3fa05ee1e2f4e529558008ce162bbd388a9dd4a923c79543a4a1dba618"
+      ]
     }
   },
   "sources": {
-    "Legacy.Maliev.QuotationService.Tests/Infrastructure/DockerContextInspectionContractTests.cs": "246d2f66b567423625d51dc57c4566da26fe4b24948c2c41e5de99f7d8ad8d12",
-    "Legacy.Maliev.QuotationService.Tests/Infrastructure/DockerContextInspection.cs": "5091cef0393aa27d6ca3214e9fd091f8c193c59d2464ef83c018ac845c2f8843",
+    "Legacy.Maliev.QuotationService.Tests/Infrastructure/DockerContextInspectionContractTests.cs": "1ee1d387388e646009ab9081edee11b8ee5f4c25533def4ac8fc847d2365d4ef",
+    "Legacy.Maliev.QuotationService.Tests/Infrastructure/DockerContextInspection.cs": "2ea430f94c518ffe3b9bfbf439c64ed8fee0ca845d7ad2af2af9eb901dd241e3",
     "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerStartup.cs": "565ab5168cbe2d2d0d34b413bf23e5a91fe56a302ba90a6ee92444efc807b39d"
   }
 }

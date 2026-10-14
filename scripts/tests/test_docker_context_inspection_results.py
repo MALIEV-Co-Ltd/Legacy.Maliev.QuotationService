@@ -24,7 +24,7 @@ def document():
     root = ET.Element(TAG + 'TestRun')
     summary = ET.SubElement(root, TAG + 'ResultSummary', outcome='Completed')
     counters = dict.fromkeys(COUNTERS, '0')
-    counters.update(total='23', executed='23', passed='23')
+    counters.update(total='26', executed='26', passed='26')
     ET.SubElement(summary, TAG + 'Counters', **counters)
     definitions = ET.SubElement(root, TAG + 'TestDefinitions')
     results = ET.SubElement(root, TAG + 'Results')
@@ -53,7 +53,7 @@ class InspectionResultsTests(unittest.TestCase):
         root = document()
         mutate(root)
         with self.assertRaises(ValueError): self.check(root)
-    def test_exact_23_cases_with_shared_theory_definitions_pass(self): self.check(document())
+    def test_exact_26_cases_with_shared_theory_definitions_pass(self): self.check(document())
     def test_actual_linux_case_cannot_be_replaced_by_other_passing_fact(self):
         def mutate(root):
             row = next(row for row in root.findall(TAG + 'Results/' + TAG + 'UnitTestResult') if 'ActualInspectionTimeout_' in row.get('testName'))

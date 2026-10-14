@@ -1,4 +1,4 @@
-"""Enroll the reviewed 23 inspection cases using the existing strict scalar/TRX checker."""
+"""Enroll the reviewed 26 inspection cases using the existing strict scalar/TRX checker."""
 import hashlib
 import json
 from pathlib import Path
@@ -8,8 +8,8 @@ from check_c821_focused_results import MAX_BYTES, validate_bytes
 
 def load_inventory(repository):
     specification = json.loads((repository / "scripts/docker_context_inspection_focus.json").read_bytes())
-    if sum(len(row["cases"]) for row in specification["methods"].values()) != 23:
-        raise ValueError("Expected frozen 23 inspection cases")
+    if sum(len(row["cases"]) for row in specification["methods"].values()) != 26:
+        raise ValueError("Expected frozen 26 inspection cases")
     for name, expected in specification["sources"].items():
         actual = hashlib.sha256((repository / name).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
         if actual != expected: raise ValueError("Reviewed inspection source changed")

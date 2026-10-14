@@ -107,6 +107,7 @@ internal static class DockerContextInspection
         var outputClosed = false;
         var errorClosed = false;
         Exception? primary = null;
+        Exception? initialIdentityFailure = null;
         var cleanupErrors = new List<Exception>();
         void ClosePipes()
         {
@@ -124,7 +125,13 @@ internal static class DockerContextInspection
         try
         {
             try { identity = CaptureIdentity(process); }
-            catch (Exception) when (process.HasExited) { /* Terminal retained process needs no signal identity. */ }
+            catch (Exception identityError)
+            {
+                // Signal identity is optional for a command that actually exits normally.
+                // Drain and await this original owner under the existing work deadline;
+                // a missing retained identity never authorizes either cleanup signal.
+                initialIdentityFailure = identityError;
+            }
             outputPipe = process.StandardOutput;
             stdout = DisposableContainerStartup.ReadBoundedAsync(outputPipe, lifetime.Token);
             errorPipe = process.StandardError;
@@ -145,6 +152,7 @@ internal static class DockerContextInspection
         catch (Exception error)
         {
             primary = error;
+            if (initialIdentityFailure is not null) cleanupErrors.Add(initialIdentityFailure);
             try { await CleanupAsync(process, identity, lifetime, stdout, stderr, ownedWaits, cleanupBudget, cleanupErrors, error, ClosePipes); }
             catch (Exception cleanupError) { cleanupErrors.Add(cleanupError); }
             throw; // Preserve the exact primary exception and its original stack.

@@ -53,6 +53,65 @@ public sealed class DockerContextInspectionContractTests(ITestOutputHelper outpu
     }
 
     [Fact]
+    public async Task InitialIdentityUnavailable_OriginalProcessLaterExitsSuccessfullyWithoutSignals()
+    {
+        var process = new ScriptedProcess(exited: true)
+        {
+            Exited = false,
+            IdentityUnavailable = true,
+            ExitOnFirstWait = true,
+        };
+
+        Assert.Equal("unix:///var/run/docker.sock", await Run(process));
+        Assert.True(process.WaitEntered.Task.IsCompleted);
+        Assert.True(process.Exited);
+        Assert.True(process.Output.Disposed);
+        Assert.True(process.Error.Disposed);
+        Assert.True(process.Disposed);
+        Assert.Empty(process.Signals);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task InitialIdentityUnavailable_FailedOrPendingWorkRetainsOriginalOwnerWithoutSignals(bool waitFails)
+    {
+        var identityFailure = new InvalidOperationException("Synthetic initial identity failure");
+        var workFailure = new IOException("Synthetic original exit wait failure");
+        var process = new ScriptedProcess
+        {
+            IdentityUnavailable = true,
+            IdentityFailure = identityFailure,
+            WorkFailure = waitFails ? workFailure : null,
+        };
+        Exception? primary = null;
+        try
+        {
+            if (waitFails)
+            {
+                primary = await Assert.ThrowsAsync<IOException>(() => Run(process));
+                Assert.Same(workFailure, primary);
+            }
+            else primary = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Run(process));
+            Assert.Empty(process.Signals);
+            Assert.False(process.Disposed);
+            var recovery = Assert.IsType<ContextInspectionRecovery>(DockerContextInspection.RecoveryFor(primary));
+            Assert.Same(process, recovery.Process);
+            Assert.Null(recovery.Identity);
+            Assert.NotEmpty(recovery.Tasks);
+            Assert.False(recovery.ResourceReleased.IsCompleted);
+            var failures = Assert.IsType<AggregateException>(primary.Data[DockerContextInspection.CleanupFailuresKey]);
+            Assert.Contains(identityFailure, failures.InnerExceptions);
+        }
+        finally
+        {
+            process.CompleteExit();
+            if (primary is not null) await Recover(primary, process);
+        }
+        Assert.Empty(process.Signals);
+    }
+
+    [Fact]
     public async Task CallerCancellation_AfterAllocation_StopsAndSettlesItsProcess()
     {
         var process = new ScriptedProcess();
@@ -543,6 +602,8 @@ public sealed class DockerContextInspectionContractTests(ITestOutputHelper outpu
         public bool GracefulSupported = true;
         public bool IgnoreWaitCancellation;
         public bool IdentityUnavailable;
+        public Exception? IdentityFailure;
+        public bool ExitOnFirstWait;
         public string? IdentityMutation;
         public int MutationAfter = 1;
         public Exception? WorkFailure;
@@ -558,7 +619,7 @@ public sealed class DockerContextInspectionContractTests(ITestOutputHelper outpu
         public ContextInspectionIdentity ObserveIdentity()
         {
             if (IdentityUnavailable || observations++ >= MutationAfter && IdentityMutation == "unavailable")
-                throw new InvalidOperationException("Synthetic identity unavailable");
+                throw IdentityFailure ?? new InvalidOperationException("Synthetic identity unavailable");
             if (observations > MutationAfter)
                 return IdentityMutation switch
                 {
@@ -572,7 +633,9 @@ public sealed class DockerContextInspectionContractTests(ITestOutputHelper outpu
         public Task WaitForExitAsync(CancellationToken token)
         {
             WaitEntered.TrySetResult();
-            if (waits++ == 0 && WorkFailure is not null) return Task.FromException(WorkFailure);
+            var firstWait = waits++ == 0;
+            if (firstWait && ExitOnFirstWait) CompleteExit();
+            if (firstWait && WorkFailure is not null) return Task.FromException(WorkFailure);
             CleanupWaitTokenObserver?.Invoke(token);
             return Exited ? Task.CompletedTask : IgnoreWaitCancellation ? exit.Task : exit.Task.WaitAsync(token);
         }
