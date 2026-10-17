@@ -1105,7 +1105,9 @@ public sealed partial class QuotationRepository(
         pageIndex = Math.Max(pageIndex, 1);
         var total = await query.CountAsync(cancellationToken);
         if (total == 0) return null;
-        var effectivePageSize = pageSize is null ? total : Math.Max(pageSize.Value, 1);
+        if (pageSize == 0) return null;
+        if (pageSize is < 0) throw new QuotationCollectionReadException();
+        var effectivePageSize = pageSize ?? total;
         var totalPages = (int)Math.Ceiling(total / (double)effectivePageSize);
         var offset = ((long)pageIndex - 1) * effectivePageSize;
         // Keep the existing empty-page envelope without overflowing PostgreSQL's offset input.

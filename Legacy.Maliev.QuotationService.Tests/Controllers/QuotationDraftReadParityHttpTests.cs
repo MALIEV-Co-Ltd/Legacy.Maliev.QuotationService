@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Data.Common;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
@@ -16,6 +18,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -169,7 +172,7 @@ public sealed class QuotationDraftReadParityHttpTests(DraftReadFixture fixture) 
         await fixture.SeedAsync(fixture.Customer(), marker);
         await using var app = fixture.App();
         using var client = fixture.Client(app);
-        using var response = await client.GetAsync($"/quotations/customers/{customer}?search=%20{marker}%20&index=0&size=0");
+        using var response = await client.GetAsync($"/quotations/customers/{customer}?search=%20{marker}%20&index=0&size=1");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal([match.Id], Ids(json));
@@ -177,6 +180,128 @@ public sealed class QuotationDraftReadParityHttpTests(DraftReadFixture fixture) 
         Assert.Equal(1, json.RootElement.GetProperty("TotalPages").GetInt32());
         Assert.False(json.RootElement.TryGetProperty("PageSize", out _));
         Assert.False(json.RootElement.GetProperty("Items")[0].TryGetProperty("InvoiceId", out _));
+        using var zero = await client.GetAsync($"/quotations/customers/{customer}?search=%20{marker}%20&index=0&size=0");
+        Assert.Equal(HttpStatusCode.NotFound, zero.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    [InlineData(false, 1)]
+    [InlineData(true, 1)]
+    [InlineData(false, 51)]
+    [InlineData(true, 51)]
+    [InlineData(false, 261)]
+    [InlineData(true, 261)]
+    public async Task Nonpositive_size_preserves_count_first_source_status_and_private_failure(bool scoped, int count)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        var customer = fixture.Customer();
+        for (var i = 0; i < count; i++) await fixture.SeedAsync(customer, marker);
+        await fixture.SeedAsync(customer, Guid.NewGuid().ToString("N"));
+        await fixture.SeedAsync(fixture.Customer(), scoped ? marker : Guid.NewGuid().ToString("N"));
+        await using var snapshot = fixture.Context();
+        var before = JsonSerializer.Serialize(await snapshot.Quotations.AsNoTracking()
+            .Where(row => row.Comment == marker).OrderBy(row => row.Id).ToArrayAsync());
+        var probe = new QuotationCollectionCommandProbe(marker, "Quotation");
+        await using var original = fixture.App();
+        await using var app = original.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddDbContext<QuotationDbContext>(options => options.AddInterceptors(probe))));
+        using var client = fixture.Client(app);
+        var route = scoped ? $"/quotations/customers/{customer}" : "/quotations";
+        foreach (var descending in new[] { false, true })
+        {
+            var sort = descending ? "QuotationId_Descending" : "QuotationId_Ascending";
+            foreach (var size in new[] { int.MinValue, -1, 0 })
+            {
+                foreach (var index in new int?[] { null, int.MinValue, -1, 0, 1, 2, 3, int.MaxValue })
+                {
+                    probe.Commands.Clear();
+                    var query = $"{route}?search={marker}&sort={sort}&size={size}"
+                        + (index is null ? "" : $"&index={index}");
+                    using var response = await client.GetAsync(query);
+                    Assert.Equal("count", Assert.Single(probe.Commands));
+                    if (count == 0 || size == 0)
+                    {
+                        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                        continue;
+                    }
+                    Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+                    Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+                    var body = await response.Content.ReadAsStringAsync();
+                    using var json = JsonDocument.Parse(body);
+                    Assert.Equal(["details", "error", "statusCode", "traceId"],
+                        json.RootElement.EnumerateObject().Select(property => property.Name).OrderBy(name => name).ToArray());
+                    Assert.Equal("An internal server error occurred", json.RootElement.GetProperty("error").GetString());
+                    Assert.Equal(500, json.RootElement.GetProperty("statusCode").GetInt32());
+                    Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("details").ValueKind);
+                    Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("traceId").GetString()));
+                    Assert.DoesNotContain(marker, body, StringComparison.Ordinal);
+                    Assert.DoesNotContain("QuotationCollectionReadException", body, StringComparison.Ordinal);
+                    Assert.DoesNotContain("Npgsql", body, StringComparison.Ordinal);
+                }
+                probe.Commands.Clear();
+                using var anonymous = fixture.Client(app, authenticated: false);
+                using var unauthenticated = await anonymous.GetAsync($"{route}?search={marker}&size={size}");
+                Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
+                Assert.Empty(probe.Commands);
+                using var denied = fixture.Client(app, permissions: false);
+                using var forbidden = await denied.GetAsync($"{route}?search={marker}&size={size}");
+                Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+                Assert.Empty(probe.Commands);
+            }
+        }
+        var after = JsonSerializer.Serialize(await snapshot.Quotations.AsNoTracking()
+            .Where(row => row.Comment == marker).OrderBy(row => row.Id).ToArrayAsync());
+        Assert.Equal(before, after);
+    }
+
+    [Theory]
+    [InlineData(false, int.MinValue)]
+    [InlineData(true, int.MinValue)]
+    [InlineData(false, -1)]
+    [InlineData(true, -1)]
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    public async Task Nonpositive_size_preserves_count_failure_before_classification(bool scoped, int size)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        var customer = fixture.Customer();
+        await fixture.SeedAsync(customer, marker);
+        var probe = new QuotationCollectionCommandProbe(marker, "Quotation") { FailCount = true };
+        await using var original = fixture.App();
+        await using var app = original.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddDbContext<QuotationDbContext>(options => options.AddInterceptors(probe))));
+        using var client = fixture.Client(app);
+        var route = scoped ? $"/quotations/customers/{customer}" : "/quotations";
+        using var response = await client.GetAsync($"{route}?search={marker}&size={size}");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("count", Assert.Single(probe.Commands));
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("The request cannot be processed.", json.RootElement.GetProperty("error").GetString());
+    }
+
+    [Theory]
+    [InlineData(false, -1)]
+    [InlineData(true, -1)]
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    public async Task Nonpositive_size_preserves_caller_cancellation_at_count(bool scoped, int size)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        var customer = fixture.Customer();
+        await fixture.SeedAsync(customer, marker);
+        using var cancellation = new CancellationTokenSource();
+        var probe = new QuotationCollectionCommandProbe(marker, "Quotation") { CancelCount = cancellation };
+        await using var original = fixture.App();
+        await using var app = original.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddDbContext<QuotationDbContext>(options => options.AddInterceptors(probe))));
+        using var client = fixture.Client(app);
+        var route = scoped ? $"/quotations/customers/{customer}" : "/quotations";
+        cancellation.CancelAfter(TimeSpan.FromSeconds(15));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            client.GetAsync($"{route}?search={marker}&size={size}", cancellation.Token));
+        Assert.Equal("count", Assert.Single(probe.Commands));
     }
 
     [Theory]
@@ -509,5 +634,47 @@ public sealed class DraftReadFixture : IAsyncLifetime
             }
             return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { allowed }) };
         }
+    }
+}
+
+internal sealed class QuotationCollectionCommandProbe(string marker, string table) : DbCommandInterceptor
+{
+    public ConcurrentQueue<string> Commands { get; } = new();
+    public bool FailCount { get; init; }
+    public CancellationTokenSource? CancelCount { get; init; }
+
+    private void Observe(DbCommand command)
+    {
+        if (!command.CommandText.Contains("FROM \"" + table + "\"", StringComparison.Ordinal)
+            || !command.Parameters.Cast<DbParameter>()
+                .Any(parameter => parameter.Value is string value && value.Contains(marker, StringComparison.Ordinal)))
+            return;
+        var count = command.CommandText.Contains("count(", StringComparison.OrdinalIgnoreCase);
+        Commands.Enqueue(count ? "count" : "page");
+        if (!count) return;
+        if (FailCount) throw new InvalidOperationException("Synthetic collection count failure.");
+        if (CancelCount is not null)
+        {
+            CancelCount.Cancel();
+            throw new OperationCanceledException(CancelCount.Token);
+        }
+    }
+
+    public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+        DbCommand command, CommandEventData eventData,
+        InterceptionResult<DbDataReader> result,
+        CancellationToken cancellationToken = default)
+    {
+        Observe(command);
+        return ValueTask.FromResult(result);
+    }
+
+    public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+        DbCommand command, CommandEventData eventData,
+        InterceptionResult<object> result,
+        CancellationToken cancellationToken = default)
+    {
+        Observe(command);
+        return ValueTask.FromResult(result);
     }
 }
