@@ -386,18 +386,120 @@ public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture
         var row = await fixture.SeedAsync(Guid.NewGuid().ToString("N"));
         await using var app = fixture.App();
         using var client = fixture.Client(app);
-        using var response = await client.GetAsync($"/quotationrequests?search={row.Id}&index=0&size=0");
+        using var response = await client.GetAsync($"/quotationrequests?search={row.Id}&index=0&size=1");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = await JsonAsync(response);
         Assert.Equal([row.Id], Ids(json));
         Assert.Equal(1, json.RootElement.GetProperty("PageIndex").GetInt32());
         Assert.Equal(1, json.RootElement.GetProperty("TotalPages").GetInt32());
+        using var zero = await client.GetAsync($"/quotationrequests?search={row.Id}&index=0&size=0");
+        Assert.Equal(HttpStatusCode.NotFound, zero.StatusCode);
         using var outOfRange = await client.GetAsync($"/quotationrequests?search={row.Id}&index=2&size=1");
         Assert.Equal(HttpStatusCode.NotFound, outOfRange.StatusCode);
         using var missing = await client.GetAsync("/quotationrequests?search=" + Guid.NewGuid().ToString("N"));
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
         using var missingDetail = await client.GetAsync("/quotationrequests/2147483647");
         Assert.Equal(HttpStatusCode.NotFound, missingDetail.StatusCode);
+    }
+
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(51)]
+    [InlineData(261)]
+    public async Task Nonpositive_size_preserves_count_first_source_status_and_private_failure(int count)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        for (var i = 0; i < count; i++) await fixture.SeedAsync(marker);
+        await fixture.SeedAsync(Guid.NewGuid().ToString("N"));
+        await using var snapshot = fixture.Context();
+        var before = JsonSerializer.Serialize(await snapshot.Requests.AsNoTracking()
+            .Where(row => row.Message == marker).OrderBy(row => row.Id).ToArrayAsync());
+        var probe = new QuotationCollectionCommandProbe(marker, "Request");
+        await using var app = fixture.App(interceptors: [probe]);
+        using var client = fixture.Client(app);
+        await using var deniedApp = fixture.App(allowed: false, interceptors: [probe]);
+        using var denied = fixture.Client(deniedApp);
+        foreach (var descending in new[] { false, true })
+        {
+            var sort = descending ? "RequestId_Descending" : "RequestId_Ascending";
+            foreach (var size in new[] { int.MinValue, -1, 0 })
+            {
+                foreach (var index in new int?[] { null, int.MinValue, -1, 0, 1, 2, 3, int.MaxValue })
+                {
+                    probe.Commands.Clear();
+                    var query = $"/quotationrequests?search={marker}&sort={sort}&size={size}"
+                        + (index is null ? "" : $"&index={index}");
+                    using var response = await client.GetAsync(query);
+                    Assert.Equal("count", Assert.Single(probe.Commands));
+                    if (count == 0 || size == 0)
+                    {
+                        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                        continue;
+                    }
+                    Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+                    Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+                    var body = await response.Content.ReadAsStringAsync();
+                    using var json = JsonDocument.Parse(body);
+                    Assert.Equal(["details", "error", "statusCode", "traceId"],
+                        json.RootElement.EnumerateObject().Select(property => property.Name).OrderBy(name => name).ToArray());
+                    Assert.Equal("An internal server error occurred", json.RootElement.GetProperty("error").GetString());
+                    Assert.Equal(500, json.RootElement.GetProperty("statusCode").GetInt32());
+                    Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("details").ValueKind);
+                    Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("traceId").GetString()));
+                    Assert.DoesNotContain(marker, body, StringComparison.Ordinal);
+                    Assert.DoesNotContain("QuotationCollectionReadException", body, StringComparison.Ordinal);
+                    Assert.DoesNotContain("Npgsql", body, StringComparison.Ordinal);
+                }
+                probe.Commands.Clear();
+                using var anonymous = fixture.Client(app, authenticated: false);
+                using var unauthenticated = await anonymous.GetAsync($"/quotationrequests?search={marker}&size={size}");
+                Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
+                Assert.Empty(probe.Commands);
+                using var forbidden = await denied.GetAsync($"/quotationrequests?search={marker}&size={size}");
+                Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+                Assert.Empty(probe.Commands);
+            }
+        }
+        var after = JsonSerializer.Serialize(await snapshot.Requests.AsNoTracking()
+            .Where(row => row.Message == marker).OrderBy(row => row.Id).ToArrayAsync());
+        Assert.Equal(before, after);
+    }
+
+    [Theory]
+    [InlineData(int.MinValue)]
+    [InlineData(-1)]
+    [InlineData(0)]
+    public async Task Nonpositive_size_preserves_count_failure_before_classification(int size)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        await fixture.SeedAsync(marker);
+        var probe = new QuotationCollectionCommandProbe(marker, "Request") { FailCount = true };
+        await using var app = fixture.App(interceptors: [probe]);
+        using var client = fixture.Client(app);
+        using var response = await client.GetAsync($"/quotationrequests?search={marker}&size={size}");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("count", Assert.Single(probe.Commands));
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("The request cannot be processed.", json.RootElement.GetProperty("error").GetString());
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    public async Task Nonpositive_size_preserves_caller_cancellation_at_count(int size)
+    {
+        var marker = Guid.NewGuid().ToString("N");
+        await fixture.SeedAsync(marker);
+        using var cancellation = new CancellationTokenSource();
+        var probe = new QuotationCollectionCommandProbe(marker, "Request") { CancelCount = cancellation };
+        await using var app = fixture.App(interceptors: [probe]);
+        using var client = fixture.Client(app);
+        cancellation.CancelAfter(TimeSpan.FromSeconds(15));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            client.GetAsync($"/quotationrequests?search={marker}&size={size}", cancellation.Token));
+        Assert.Equal("count", Assert.Single(probe.Commands));
     }
 
     [Theory]
