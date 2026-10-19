@@ -111,7 +111,7 @@ def validate_bytes(data, specification, report_name="captured.trx"):
 def main():
     repository = Path(__file__).resolve().parents[1]
     source = repository / "Legacy.Maliev.QuotationService.Tests/Analytics/QuotationTerminalLoggingPipelineTests.cs"
-    if hashlib.sha256(source.read_bytes().replace(b"\r\n", b"\n")).hexdigest() != "9c9c20f2d33a0a6f67aff89d222c79feac7980123d7312a77a067536c4387038":
+    if hashlib.sha256(source.read_bytes().replace(b"\r\n", b"\n")).hexdigest() != "4f5a748af28d42753c53c5628f5f919449a09ec35452b2a0dbaf5039f5647fee":
         raise ValueError("Reviewed ACK/settlement source changed")
     root = repository / "TestResults"
     validate(root / "AnalyticsLeaseReclaim/analytics-lease-reclaim.trx", RACE_SPEC, root)

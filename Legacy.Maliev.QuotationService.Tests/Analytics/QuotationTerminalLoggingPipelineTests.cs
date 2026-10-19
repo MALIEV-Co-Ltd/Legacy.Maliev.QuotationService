@@ -43,6 +43,8 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
     [InlineData(-2, 10, 1)]
     [InlineData(-4, 1, 0)]
     [InlineData(-4, 10, 1)]
+    [InlineData(-6, 1, 0)]
+    [InlineData(-6, 10, 1)]
     public async Task Program_CallerOwnedFailure_EmitsExactSafeTerminalFieldsOnlyAfterPersistence(int status, int attempt, int records)
     {
         var clock = new FakeTimeProvider(Start);
@@ -451,9 +453,9 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
         Assert.Equal("GoogleAnalytics", record.Fields["Dependency"]);
         Assert.Equal("GA4Delivery", record.Fields["Operation"]);
         Assert.Equal(attempts, record.Fields["AttemptCount"]);
-        Assert.Equal(status == -1 ? 503 : status is -2 or -4 ? 504 : status, record.Fields["StatusCode"]);
-        Assert.Equal(status == -1 ? typeof(HttpRequestException).FullName
-            : status is -2 or -4 ? typeof(TaskCanceledException).FullName : null, record.Fields["ExceptionType"]);
+        Assert.Equal(status is -1 or -6 ? 503 : status is -2 or -4 ? 504 : status, record.Fields["StatusCode"]);
+        Assert.Equal(status == -1 ? nameof(HttpRequestException)
+            : status is -2 or -4 ? nameof(TaskCanceledException) : status == -6 ? "UnknownException" : null, record.Fields["ExceptionType"]);
     }
 
     private static void AssertDependency(Record record, int status)
@@ -476,12 +478,16 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
         Assert.Equal("ERROR", json.RootElement.GetProperty("severity").GetString());
         Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("exceptionType").ValueKind);
         Assert.False(json.RootElement.TryGetProperty("State", out _));
-        Assert.False(json.RootElement.TryGetProperty("ExceptionType", out _));
+        if (record.Fields.TryGetValue("ExceptionType", out var exceptionType) && exceptionType is string)
+            Assert.Equal(JsonSerializer.Serialize(exceptionType), json.RootElement.GetProperty("ExceptionType").GetRawText());
+        else Assert.False(json.RootElement.TryGetProperty("ExceptionType", out _));
         foreach (var pair in record.Fields.Where(pair => pair.Key != "ExceptionType"))
             Assert.Equal(JsonSerializer.Serialize(pair.Value), json.RootElement.GetProperty(pair.Key).GetRawText());
-        foreach (var forbidden in new[] { Protected, "quotation-27", "123.456", "opaque-27", "measurement_id", "api_secret", "google-analytics.com" })
+        foreach (var forbidden in new[] { Protected, nameof(ProtectedProviderException), "quotation-27", "123.456", "opaque-27", "measurement_id", "api_secret", "google-analytics.com" })
             Assert.DoesNotContain(forbidden, record.Json, StringComparison.Ordinal);
     }
+
+    private sealed class ProtectedProviderException() : HttpRequestException(Protected);
 
     private sealed class Transport(int status, CancellationTokenSource? caller = null) : HttpMessageHandler
     {
@@ -494,6 +500,7 @@ public sealed class QuotationTerminalLoggingPipelineTests(QuotationNormalIamFixt
             Ownership.Enqueue(owned);
             Assert.Equal(HttpMethod.Post, request.Method);
             Assert.Equal("www.google-analytics.com", request.RequestUri?.Host);
+            if (status == -6) throw new ProtectedProviderException();
             if (status == -1) throw new HttpRequestException(Protected);
             if (status == -2) throw new TaskCanceledException(Protected);
             if (status == -5)

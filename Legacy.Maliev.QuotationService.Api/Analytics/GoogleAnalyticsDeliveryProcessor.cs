@@ -50,7 +50,9 @@ public sealed class GoogleAnalyticsDeliveryProcessor(
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
         {
             await FailAsync(row, token, true, error.GetType().Name,
-                error is TaskCanceledException ? 504 : 503, error.GetType().FullName, cancellationToken);
+                error is TaskCanceledException ? 504 : 503,
+                error.GetType() == typeof(TaskCanceledException) ? nameof(TaskCanceledException)
+                    : error.GetType() == typeof(HttpRequestException) ? nameof(HttpRequestException) : "UnknownException", cancellationToken);
         }
     }
 
