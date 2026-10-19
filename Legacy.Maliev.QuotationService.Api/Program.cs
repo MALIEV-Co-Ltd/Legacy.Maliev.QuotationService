@@ -73,6 +73,7 @@ return await QuotationStartupBoundary.RunAsync(async () =>
         options.SerializerOptions.DictionaryKeyPolicy = null;
     });
     builder.Services.AddControllers().AddJsonOptions(options => { options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull; options.JsonSerializerOptions.PropertyNamingPolicy = null; options.JsonSerializerOptions.DictionaryKeyPolicy = null; });
+    builder.Services.ConfigureOptions<Legacy.Maliev.QuotationService.Api.Serialization.QuotationRequestOriginalBodyMvcOptionsSetup>();
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddScoped<DistributedQuotationCache>();
     builder.Services.AddScoped<IQuotationCache>(provider => provider.GetRequiredService<DistributedQuotationCache>());

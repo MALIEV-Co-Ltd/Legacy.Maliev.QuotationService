@@ -36,6 +36,68 @@ namespace Legacy.Maliev.QuotationService.Tests.Controllers;
 /// <summary>Normal JWT/Production HTTP lifecycle; real databases, Redis and IAM client with controlled remote IAM HTTP only.</summary>
 public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture) : IClassFixture<RequestTriageFixture>
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Ordinary_body_updates_use_source_reader_without_writing_server_owned_fields(bool file)
+    {
+        var row = await fixture.SeedAsync(Guid.NewGuid().ToString("N"), audited: true);
+        await using var app = fixture.App();
+        using var client = fixture.Client(app, requestFiles: file);
+        var created = new DateTime(2001, 1, 1);
+        var fileId = 0;
+        if (file)
+        {
+            await using var seed = fixture.Context();
+            var attachment = new QuotationRequestFile
+            {
+                RequestId = row.Id, Bucket = "old", ObjectName = "old",
+                CreatedDate = created, ModifiedDate = created
+            };
+            seed.Files.Add(attachment);
+            await seed.SaveChangesAsync();
+            fileId = attachment.Id;
+        }
+        using var request = new HttpRequestMessage(HttpMethod.Put,
+            file ? $"/quotationrequests/files/{fileId}" : $"/quotationrequests/{row.Id}");
+        request.Content = new StringContent(file
+            ? "{RequestId:'" + row.Id + "',RequestId:null,Bucket:42,Bucket:null,ObjectName:false,"
+                + "Id:2147483647,CreatedDate:'2000-01-01T00:00:00Z'}"
+            : "{FirstName:42,FirstName:null,Done:'true',Done:null,JourneyId:'" + Guid.NewGuid().ToString("D")
+                + "',TransactionId:'client-forged',QualificationState:'not_qualified',QualificationVersion:'99',"
+                + "CreatedDate:'2000-01-01T00:00:00Z'}", Encoding.UTF8, "application/json");
+        if (!file)
+            request.Headers.Add("X-Expected-Modified-Date",
+                DateTime.SpecifyKind(row.ModifiedDate!.Value, DateTimeKind.Utc).ToString("O"));
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        await using var db = fixture.Context();
+        var retained = await db.Requests.AsNoTracking().SingleAsync(value => value.Id == row.Id);
+        Assert.Equal(row.JourneyId, retained.JourneyId);
+        Assert.Equal(row.TransactionId, retained.TransactionId);
+        Assert.Equal(row.CreatedDate, retained.CreatedDate);
+        Assert.Equal(row.QualificationState, retained.QualificationState);
+        Assert.Equal(row.QualificationVersion, retained.QualificationVersion);
+        if (file)
+        {
+            var attachment = await db.Files.AsNoTracking().SingleAsync(value => value.Id == fileId);
+            Assert.Equal(row.Id, attachment.RequestId);
+            Assert.Equal("42", attachment.Bucket);
+            Assert.Equal("false", attachment.ObjectName);
+            Assert.Equal(created, attachment.CreatedDate);
+            Assert.Equal(row.ModifiedDate, retained.ModifiedDate);
+        }
+        else
+        {
+            Assert.Equal("42", retained.FirstName);
+            Assert.Equal(true, retained.Done);
+            Assert.Null(retained.LastName);
+            Assert.True(retained.ModifiedDate > row.ModifiedDate);
+        }
+    }
+
     [Fact]
     public async Task Empty_database_keeps_source_notfound_for_default_filtered_and_distant_pages()
     {
@@ -1281,13 +1343,14 @@ public sealed class RequestTriageFixture : IAsyncLifetime
         return row;
     }
 
-    public HttpClient Client(WebApplicationFactory<Program> app, bool authenticated = true, bool employee = true)
+    public HttpClient Client(WebApplicationFactory<Program> app, bool authenticated = true, bool employee = true, bool requestFiles = false)
     {
         var client = app.CreateClient();
         if (authenticated)
         {
             var claims = new List<Claim> { new("sub", "employee-triage-fixture"), new("identity_kind", employee ? "employee" : "customer") };
             if (employee) claims.Add(new("role", "Employee"));
+            if (requestFiles) claims.Add(new("permissions", "legacy.quotation-files.write"));
             foreach (var permission in new[] { "read", "update", "delete" }) claims.Add(new("permissions", "legacy.quotation-requests." + permission));
             var jwt = new JwtSecurityToken("https://triage-auth.example", "triage-services", claims, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(10), new SigningCredentials(new RsaSecurityKey(key), SecurityAlgorithms.RsaSha256));
             client.DefaultRequestHeaders.Authorization = new("Bearer", new JwtSecurityTokenHandler().WriteToken(jwt));
@@ -1342,7 +1405,7 @@ public sealed class RequestTriageFixture : IAsyncLifetime
             Assert.Equal("synthetic-triage-live-check", Assert.Single(request.Headers.GetValues("X-Maliev-IAM-Live-Check-Key")));
             using var json = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
             Assert.Equal("employee-triage-fixture", json.RootElement.GetProperty("principalId").GetString());
-            Assert.Contains(json.RootElement.GetProperty("permissionId").GetString(), new[] { "legacy.quotation-requests.read", "legacy.quotation-requests.update", "legacy.quotation-requests.delete" });
+            Assert.Contains(json.RootElement.GetProperty("permissionId").GetString(), new[] { "legacy.quotation-requests.read", "legacy.quotation-requests.update", "legacy.quotation-requests.delete", "legacy.quotation-files.write" });
             Assert.True(json.RootElement.GetProperty("bypassCache").GetBoolean());
             return new(HttpStatusCode.OK) { Content = JsonContent.Create(new { allowed }) };
         }
