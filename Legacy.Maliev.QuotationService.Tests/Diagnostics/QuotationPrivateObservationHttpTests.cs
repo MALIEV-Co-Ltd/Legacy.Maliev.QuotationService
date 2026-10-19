@@ -6,12 +6,15 @@ using Legacy.Maliev.QuotationService.Api.Diagnostics;
 using Legacy.Maliev.QuotationService.Tests.Controllers;
 using Maliev.Aspire.ServiceDefaults.Logging;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Console;
@@ -135,10 +138,11 @@ public sealed class QuotationPrivateObservationHttpTests(QuotationNormalIamFixtu
     public async Task Registered_health_identity_is_host_local_and_success_is_quiet_without_cookie()
     {
         var output = new PrivateOutput();
-        using var first = App(output);
-        using var second = App(new());
-        using var client = first.CreateClient();
-        using var other = second.CreateClient();
+        await using var firstTransport = new ActualHttpHost(App(output));
+        await using var secondTransport = new ActualHttpHost(App(new()));
+        var first = firstTransport.Factory;
+        using var client = firstTransport.OpenClient();
+        using var other = secondTransport.OpenClient();
         SelectFormatter(first, output);
         client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("th");
         using var response = await client.GetAsync("/quotation/liveness");
@@ -152,6 +156,31 @@ public sealed class QuotationPrivateObservationHttpTests(QuotationNormalIamFixtu
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
         Assert.False(response.Headers.Contains("Set-Cookie"));
         Assert.Empty(Observation(output));
+        foreach (var path in new[] { "/quotation/readiness", "/quotation/liveness", "/quotation/readiness" })
+        {
+            using var health = await GetRegisteredHealthAsync(client, path, instance);
+            Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+        }
+        foreach (var entry in new[]
+        {
+            (Method: "POST", Path: "/quotation/liveness"),
+            (Method: "HEAD", Path: "/quotation/liveness"),
+            (Method: "POST", Path: "/quotation/readiness"),
+            (Method: "HEAD", Path: "/quotation/readiness"),
+            (Method: "GET", Path: "/quotation/aspire-liveness"),
+            (Method: "GET", Path: "/quotation/liveness/extra"),
+            (Method: "GET", Path: "/quotations/liveness"),
+            (Method: "GET", Path: "/quotationrequests/readiness"),
+            (Method: "GET", Path: "/liveness"),
+            (Method: "GET", Path: "/readiness"),
+        })
+        {
+            using var request = new HttpRequestMessage(new HttpMethod(entry.Method), entry.Path);
+            using var excluded = await client.SendAsync(request);
+            Assert.False(excluded.Headers.Contains("X-Maliev-Health-Instance"));
+            Assert.False(excluded.Headers.Contains("X-Maliev-Diagnostic-Id"));
+        }
+        Assert.Empty(Observation(output));
         using var ordinary = await client.GetAsync("/quotation-observability-tests/response?status=204");
         Assert.Equal(HttpStatusCode.NoContent, ordinary.StatusCode);
         Assert.False(ordinary.Headers.Contains("X-Maliev-Health-Instance"));
@@ -163,25 +192,30 @@ public sealed class QuotationPrivateObservationHttpTests(QuotationNormalIamFixtu
         var output = new PrivateOutput();
         var health = new HealthState();
         var clock = new FakeTimeProvider();
-        using var app = App(output, clock, health);
-        using var client = app.CreateClient();
+        await using var transport = new ActualHttpHost(App(output, clock, health));
+        var app = transport.Factory;
+        using var client = transport.OpenClient();
         SelectFormatter(app, output);
+        using var liveness = await client.GetAsync("/quotation/liveness");
+        Assert.Equal(HttpStatusCode.OK, liveness.StatusCode);
+        var instance = Assert.Single(liveness.Headers.GetValues("X-Maliev-Health-Instance"));
+        Assert.True(Guid.TryParseExact(instance, "N", out _));
         health.Failed = true;
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            using var response = await client.GetAsync("/quotation/readiness");
+            using var response = await GetRegisteredHealthAsync(client, "/quotation/readiness", instance);
             Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         }
         Assert.Single(Events(output, "HealthProbeFailure"));
         clock.Advance(TimeSpan.FromMinutes(5));
-        using (var response = await client.GetAsync("/quotation/readiness"))
+        using (var response = await GetRegisteredHealthAsync(client, "/quotation/readiness", instance))
             Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Equal(2, Events(output, "HealthProbeFailure").Length);
         health.Failed = false;
-        using (var response = await client.GetAsync("/quotation/readiness")) Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using (var response = await GetRegisteredHealthAsync(client, "/quotation/readiness", instance)) Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(2, Events(output, "HealthProbeFailure").Length);
         health.Failed = true;
-        using (var response = await client.GetAsync("/quotation/readiness")) Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        using (var response = await GetRegisteredHealthAsync(client, "/quotation/readiness", instance)) Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Equal(3, Events(output, "HealthProbeFailure").Length);
         Assert.All(Events(output, "HealthProbeFailure"), row => Assert.Equal("Readiness", row.GetProperty("Operation").GetString()));
         Assert.All(output.Records, row => Assert.DoesNotContain(Marker, row.GetRawText(), StringComparison.Ordinal));
@@ -225,6 +259,79 @@ public sealed class QuotationPrivateObservationHttpTests(QuotationNormalIamFixtu
         Assert.Equal(JsonValueKind.Null, failure.GetProperty("exceptionType").ValueKind);
         Assert.False(failure.TryGetProperty("ExceptionType", out _));
         Assert.All(output.Records, row => Assert.DoesNotContain(Marker, row.GetRawText(), StringComparison.Ordinal));
+    }
+
+    private static async Task<HttpResponseMessage> GetRegisteredHealthAsync(HttpClient client, string path, string instance)
+    {
+        var response = await client.GetAsync(path);
+        try
+        {
+            Assert.Equal(instance, Assert.Single(response.Headers.GetValues("X-Maliev-Health-Instance")));
+            Assert.True(response.Headers.CacheControl?.NoStore == true);
+            Assert.False(response.Headers.Contains("X-Maliev-Diagnostic-Id"));
+            Assert.False(response.Headers.Contains("Set-Cookie"));
+            return response;
+        }
+        catch { response.Dispose(); throw; }
+    }
+
+    // Only these two health Facts use actual HTTP. Existing diagnostic transport guards remain TestServer proofs.
+    private sealed class ActualHttpHost : IAsyncDisposable
+    {
+        private readonly WebApplicationFactory<Program> parent;
+        public WebApplicationFactory<Program> Factory { get; }
+
+        public ActualHttpHost(WebApplicationFactory<Program> parent)
+        {
+            this.parent = parent;
+            try
+            {
+                Factory = parent.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+                    services.Configure<HostOptions>(options =>
+                    {
+                        options.StartupTimeout = TimeSpan.FromSeconds(20);
+                        options.ShutdownTimeout = TimeSpan.FromSeconds(10);
+                    })));
+                Factory.UseKestrel(options => options.Listen(IPAddress.Loopback, 0));
+            }
+            catch (Exception primary)
+            {
+                try { parent.Dispose(); }
+                catch (Exception cleanup) { primary.Data["HealthHostCleanupFailureType"] = cleanup.GetType().Name; }
+                throw;
+            }
+        }
+
+        public HttpClient OpenClient()
+        {
+            Factory.StartServer();
+            Assert.True(Factory.Services.GetRequiredService<IHostEnvironment>().IsProduction());
+            var server = Factory.Services.GetRequiredService<IServer>();
+            Assert.IsNotType<TestServer>(server);
+            var addresses = server.Features.Get<IServerAddressesFeature>()?.Addresses
+                ?? throw new InvalidOperationException("Kestrel did not publish a bound address.");
+            var address = new Uri(Assert.Single(addresses), UriKind.Absolute);
+            Assert.Equal(Uri.UriSchemeHttp, address.Scheme);
+            Assert.True(IPAddress.TryParse(address.Host, out var peer) && peer is not null && IPAddress.IsLoopback(peer));
+            Assert.InRange(address.Port, 1, 65535);
+            Assert.Equal("/", address.AbsolutePath);
+            Assert.Empty(address.UserInfo);
+            Assert.Empty(address.Query);
+            Assert.Empty(address.Fragment);
+            var client = Factory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false,
+                BaseAddress = address,
+            });
+            try { client.Timeout = TimeSpan.FromSeconds(15); return client; }
+            catch { client.Dispose(); throw; }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            try { await Factory.DisposeAsync(); }
+            finally { await parent.DisposeAsync(); }
+        }
     }
 
     private WebApplicationFactory<Program> App(PrivateOutput output, FakeTimeProvider? clock = null,
