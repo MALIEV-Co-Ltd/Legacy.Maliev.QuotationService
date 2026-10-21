@@ -51,8 +51,11 @@ public sealed class QuotationRequestTriageHttpTests(RequestTriageFixture fixture
             await using var seed = fixture.Context();
             var attachment = new QuotationRequestFile
             {
-                RequestId = row.Id, Bucket = "old", ObjectName = "old",
-                CreatedDate = created, ModifiedDate = created
+                RequestId = row.Id,
+                Bucket = "old",
+                ObjectName = "old",
+                CreatedDate = created,
+                ModifiedDate = created
             };
             seed.Files.Add(attachment);
             await seed.SaveChangesAsync();
