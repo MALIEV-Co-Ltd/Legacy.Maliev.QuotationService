@@ -6,7 +6,7 @@ Central GitOps owns environment overlays and must replace the non-zero placehold
 
 ## Runtime projection
 
-Central GitOps projects the single Google Secret Manager JSON secret `maliev-legacy-secrets` into exactly one service-specific Kubernetes Secret named `legacy-maliev-quotation-runtime`. That projection must contain exactly the confidential/environment-specific API runtime coordinates required here:
+Central GitOps projects the single Google Secret Manager JSON secret `maliev-legacy-secrets` into exactly one service-specific Kubernetes Secret named `legacy-maliev-quotation-runtime`. The existing dormant projection contains the following confidential/environment-specific API runtime coordinates:
 
 - `ConnectionStrings__QuotationDbContext`
 - `ConnectionStrings__QuotationRequestDbContext`
@@ -16,7 +16,35 @@ Central GitOps projects the single Google Secret Manager JSON secret `maliev-leg
 - `Jwt__Audience`
 - `ServiceAuthentication__ClientSecret`
 
-The API Deployment contains no migrator credentials. It receives no signing private key, symmetric token key, analytics credentials, storage credential, or key file. Its dedicated `legacy-maliev-quotation` Kubernetes service account is tokenless and has no Google Cloud Workload Identity binding because this API does not access GCS.
+The API Deployment contains no migrator credentials. The current dormant projection supplies no signing private key, symmetric token key, analytics credentials, storage credential, or key file. Its dedicated `legacy-maliev-quotation` Kubernetes service account is tokenless and has no Google Cloud Workload Identity binding because this API does not access GCS.
+
+## Consented analytics: unprovisioned configuration boundary
+
+Issue #101 owns the implemented, separate default-off consented-delivery annex; issue #22 owns
+its dormant deployment contract. The actual options bind the following environment names:
+
+| Environment name | Existing runtime behavior |
+| --- | --- |
+| `GoogleAnalyticsMeasurementProtocol__Enabled` | Absent means disabled; credentials alone do not enable delivery. |
+| `GoogleAnalyticsMeasurementProtocol__MeasurementId` | Required only when delivery is explicitly enabled. |
+| `GoogleAnalyticsMeasurementProtocol__ApiSecret` | Required only when delivery is explicitly enabled; never commit its value. |
+
+No analytics keys are currently supplied by the committed central runtime projection.
+This document does not allocate new Secret Manager property names or assert that credentials
+have been provisioned. A reviewed central projection and secure operator provisioning remain
+future prerequisites, using the existing consolidated-secret ownership contract. Missing
+analytics credentials must not become a new startup requirement while delivery is disabled.
+When enabled, existing startup validation requires both credentials even in standby mode.
+
+Only exact ordinal `MALIEV_OBSERVABILITY_STANDBY=true` suppresses the analytics hosted worker;
+it does not bypass options validation, remove the store/processor or stop quotation expiry.
+Consent admission, identifier privacy, durable leases/retries and terminal logging remain the
+existing runtime contracts. No delivery enablement or provider call is authorized here.
+
+The existing NetworkPolicy permits no external provider egress. A separately reviewed central
+network contract is also required before enabling delivery. Keep the current internal-only
+network policy unchanged until that work and the release gates below are complete. Documentation
+and options-binding tests do not prove a deployed Secret, provider reachability or whole-source parity.
 
 ## Network assumptions
 

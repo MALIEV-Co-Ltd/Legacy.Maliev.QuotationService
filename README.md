@@ -59,12 +59,40 @@ source-attributed only when both its opaque request identifier and privacy-safe 
 present; partial keys remain unattributed. The response never exposes either identifier, customer
 or employee identifiers, contact data, event keys, or acceptance-origin detail.
 
-The migrated service deliberately does not own Google Analytics Measurement Protocol credentials
-or direct delivery. Its immutable accepted-outcome record already carries the source reconciliation
-keys and is the target-native durable business fact; analytics delivery remains an external,
-consent-governed integration consuming the aggregate/readback boundary. This preserves the source
-measurement outcome without copying GA secrets, browser identifiers, or the SQL Server-specific
-`GoogleAnalyticsOutbox` deployment into the PostgreSQL service.
+The immutable accepted-outcome record remains the provider-neutral business fact. The service also
+implements a separate default-off, consent-governed delivery annex under issue #101. Aggregate
+readback does not reconstruct consent, delivery identifiers, or a provider payload. Missing optional
+consent context creates no delivery intent; later acceptance replay does not reconstruct it.
+The PostgreSQL outbox, validated options, retry/lease fences, privacy guards and exact standby
+behavior remain separate from neutral acceptance and the always-registered expiry worker.
+
+Delivery is disabled by default. Its existing configuration names are
+`GoogleAnalyticsMeasurementProtocol__Enabled`,
+`GoogleAnalyticsMeasurementProtocol__MeasurementId` and
+`GoogleAnalyticsMeasurementProtocol__ApiSecret`. Enabled delivery requires both credentials even
+in exact standby mode. The dormant deployment does not currently project these settings or permit
+provider egress. Their reviewed central projection, secure operator provisioning and network
+contract remain prerequisites under issues #22/#101, not evidence that credentials already exist.
+See [the dormant runtime contract](deploy/README.md); this repository change does not enable delivery.
+
+Original source `b60778f9cc03f6a591b5ee03b71cf12f999a604a`, parent
+`2bb747212f8c722115e53691e10a522d8a793cf7`, added these static references to
+`Maliev.QuotationService.Api/deployment.yaml` (names only, not secret values):
+
+| Original environment setting | Original Secret / key | Migration disposition |
+| --- | --- | --- |
+| `ConnectionStrings__QuotationDbContext` | `maliev-quotationservice-runtime` / `quotation-connection-string` | Separate PostgreSQL Quotation/QuotationRequest connections through the existing target runtime projection. |
+| `ConnectionStrings__LogDbContext` | `maliev-quotationservice-runtime` / `log-connection-string` | SQL Server/NLog database logging is replaced by native private diagnostics; no logging database connection is restored. |
+| `JwtSecurity__SigningKey` | `maliev-quotationservice-runtime` / `jwt-signing-key` | RSA public-key validation replaces symmetric signing; no private or symmetric key is projected. |
+
+The original deployment test also retained the pre-existing
+`maliev-ga4-measurement-protocol` references: `enabled`, `measurement-id` and `api-secret`
+for those three analytics environment settings. These original static names do not establish
+new target Secret Manager properties or a live projection. The source test's generated XML added
+only its type/method summaries, with no runtime consumer; source `03dc9a1271c16e6535934445e9dd6e3f30e8fffe`
+later removed that generated file. Compiler-owned output and the existing six-component real
+Release XML-output tests preserve documentation emission without restoring source-root XML.
+The deployment binding and provider prerequisites remain open; this mapping does not close b60778f.
 
 The lossless source-fact import boundary is documented in
 [`docs/legacy-outcome-adoption-contract.md`](docs/legacy-outcome-adoption-contract.md).
