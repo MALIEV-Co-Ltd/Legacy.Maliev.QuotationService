@@ -149,7 +149,7 @@
     }
   },
   "sources": {
-    "Legacy.Maliev.QuotationService.Tests/Infrastructure/DockerContextInspectionContractTests.cs": "1ee1d387388e646009ab9081edee11b8ee5f4c25533def4ac8fc847d2365d4ef",
+    "Legacy.Maliev.QuotationService.Tests/Infrastructure/DockerContextInspectionContractTests.cs": "2243e282a5b5eacc4229462ccb3db072667c3d7de44a4b0286b9043411d030ef",
     "Legacy.Maliev.QuotationService.Tests/Infrastructure/DockerContextInspection.cs": "2ea430f94c518ffe3b9bfbf439c64ed8fee0ca845d7ad2af2af9eb901dd241e3",
     "Legacy.Maliev.QuotationService.Tests/Infrastructure/DisposableContainerStartup.cs": "565ab5168cbe2d2d0d34b413bf23e5a91fe56a302ba90a6ee92444efc807b39d"
   }

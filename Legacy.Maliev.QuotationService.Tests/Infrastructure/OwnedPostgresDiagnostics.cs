@@ -16,6 +16,7 @@ internal enum PostgresDiagnosticEvent
 
 internal sealed record PostgresEvent(PostgresDiagnosticEvent Event, int? Signal = null);
 
+internal enum PostgresObservationStage { Phase, Endpoint, Inspect, Ownership, MetricsRead, MetricsParse, LogsOpen, LogsRead, LogsClassify }
 internal enum PostgresCorrelation { Unknown, Matched, Mismatched }
 internal sealed record DiagnosticEndpoint(string Host, int Port);
 internal sealed record SqlBackendIdentity(int NpgsqlPid, int SqlPid, DateTimeOffset PostmasterStart, ulong SystemId);
@@ -127,7 +128,7 @@ internal static class OwnedPostgresDiagnostics
         "pid1_ppid", "pid1_start", "postmaster_pid", "postmaster_ppid", "postmaster_start",
         "memory.current", "memory.max", "pids.current", "pids.max", "memory.events.low",
         "memory.events.high", "memory.events.max", "memory.events.oom", "memory.events.oom_kill",
-        "memory.events.oom_group_kill", "shm_total", "shm_used", "shm_free", "pgdata_total",
+        "memory.events.oom_group_kill", "memory.events.sock_throttled", "shm_total", "shm_used", "shm_free", "pgdata_total",
         "pgdata_used", "pgdata_free", "pgdata_du", "wal_du"
     };
 
@@ -204,26 +205,35 @@ internal static class OwnedPostgresDiagnostics
 
     internal static async Task<string> ObserveAsync(IContainer container, string owner, string phase)
     {
+        var stage = PostgresObservationStage.Phase;
         return await PreserveFailureAsync(async () =>
         {
             if (!Phases.Contains(phase, StringComparer.Ordinal)) throw new InvalidOperationException();
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            stage = PostgresObservationStage.Endpoint;
             var endpoint = new Uri(await DisposableContainerStartup.LocalDockerEndpointAsync(deadline.Token));
             using var docker = new DockerClientBuilder().WithEndpoint(endpoint).Build();
+            stage = PostgresObservationStage.Inspect;
             var inspected = await docker.Containers.InspectContainerAsync(container.Id, deadline.Token);
+            stage = PostgresObservationStage.Ownership;
             VerifyOwnership(container.Id, owner, inspected);
             var state = inspected.State ?? throw new InvalidOperationException();
             var metrics = new Dictionary<string, string>();
             if (state.Running)
             {
                 // Fixed files/keys only; cap inside the owned container too. Stderr is never emitted.
+                stage = PostgresObservationStage.MetricsRead;
                 var result = await container.ExecAsync(["sh", "-c", "{ " + MetricsCommand + "; } 2>/dev/null | head -c 16385"], deadline.Token);
+                stage = PostgresObservationStage.MetricsParse;
                 metrics = ParseMetrics(result.Stdout);
             }
+            stage = PostgresObservationStage.LogsOpen;
             using var logs = await docker.Containers.GetContainerLogsAsync(container.Id,
                 new ContainerLogsParameters { ShowStdout = true, ShowStderr = true, Follow = false, Tail = "100" }, deadline.Token);
+            stage = PostgresObservationStage.LogsRead;
             var raw = await ReadBoundedAsync(async (buffer, token) =>
                 (await logs.ReadOutputAsync(buffer, 0, buffer.Length, token)).Count, deadline.Token);
+            stage = PostgresObservationStage.LogsClassify;
             var events = Classify(raw);
             return JsonSerializer.Serialize(new
             {
@@ -240,13 +250,25 @@ internal static class OwnedPostgresDiagnostics
                 Metrics = metrics,
                 Events = events
             });
-        });
+        }, () => stage);
     }
 
-    internal static async Task<string> PreserveFailureAsync(Func<Task<string>> observe)
+    internal static async Task<string> PreserveFailureAsync(Func<Task<string>> observe, Func<PostgresObservationStage>? stage = null)
     {
         try { return await observe(); }
-        catch (Exception) { return "{\"DiagnosticUnavailable\":true}"; }
+        catch (Exception)
+        {
+            if (stage is not null)
+            {
+                try
+                {
+                    var observed = stage();
+                    return JsonSerializer.Serialize(new { DiagnosticUnavailable = true, Stage = Enum.IsDefined(observed) ? observed.ToString() : "Unknown" });
+                }
+                catch { /* Stage observation must not replace the original safe fallback. */ }
+            }
+            return "{\"DiagnosticUnavailable\":true}";
+        }
     }
 
     internal static void VerifyOwnership(string id, string owner, ContainerInspectResponse inspected)

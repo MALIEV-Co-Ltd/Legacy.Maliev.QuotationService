@@ -290,6 +290,30 @@ public sealed class OwnedPostgresDiagnosticsTests
         else Assert.Throws<InvalidOperationException>(() => OwnedPostgresDiagnostics.ParseMetrics(input));
     }
 
+    [Theory]
+    [InlineData("0")]
+    [InlineData("17")]
+    [InlineData("18446744073709551615")]
+    public void Metrics_accept_documented_socket_throttle_counter(string value)
+    {
+        var metrics = OwnedPostgresDiagnostics.ParseMetrics("memory.events.sock_throttled=" + value + "\n");
+        Assert.Equal(value, Assert.Single(metrics).Value);
+        Assert.True(metrics.ContainsKey("memory.events.sock_throttled"));
+    }
+
+    [Theory]
+    [InlineData("memory.events.sock_throttled=max\n")]
+    [InlineData("memory.events.sock_throttled=-1\n")]
+    [InlineData("memory.events.sock_throttled=18446744073709551616\n")]
+    [InlineData("memory.events.sock_throttled=customer@example.test\n")]
+    [InlineData("memory.events.sock_throttled=0\nmemory.events.sock_throttled=1\n")]
+    [InlineData("memory.events.unrecognized=0\n")]
+    [InlineData("memory.events.SOCK_THROTTLED=0\n")]
+    public void Metrics_socket_counter_keeps_numeric_unique_and_exact_key_guards(string input)
+    {
+        Assert.Throws<InvalidOperationException>(() => OwnedPostgresDiagnostics.ParseMetrics(input));
+    }
+
     [Fact]
     public void Metrics_reject_runtime_generated_password_field()
     {
@@ -384,6 +408,34 @@ public sealed class OwnedPostgresDiagnosticsTests
             await stream.ReadAsync(buffer, token), canceled.Token));
     }
 
+    [Theory]
+    [InlineData(0, "Phase")]
+    [InlineData(5, "MetricsParse")]
+    [InlineData(-1, "Unknown")]
+    public async Task Unavailable_observation_retains_only_defined_stage_and_never_exception_body(int value, string expected)
+    {
+        var calls = 0;
+        var safe = await OwnedPostgresDiagnostics.PreserveFailureAsync(
+            () => throw new IOException("customer@example.test password=secret"),
+            () => { calls++; return (PostgresObservationStage)value; });
+        using var document = JsonDocument.Parse(safe);
+        Assert.True(document.RootElement.GetProperty("DiagnosticUnavailable").GetBoolean());
+        Assert.Equal(expected, document.RootElement.GetProperty("Stage").GetString());
+        Assert.Equal(2, document.RootElement.EnumerateObject().Count());
+        Assert.Equal(1, calls);
+        Assert.DoesNotContain("customer", safe, StringComparison.Ordinal);
+        Assert.DoesNotContain("password", safe, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Unavailable_stage_callback_failure_preserves_original_safe_fallback()
+    {
+        var safe = await OwnedPostgresDiagnostics.PreserveFailureAsync(
+            () => throw new IOException("private observer body"),
+            () => throw new InvalidOperationException("private stage body"));
+        Assert.Equal("{\"DiagnosticUnavailable\":true}", safe);
+    }
+
     [Fact]
     public async Task Actual_owned_two_database_fixture_emits_available_numeric_metadata_only()
     {
@@ -395,7 +447,7 @@ public sealed class OwnedPostgresDiagnosticsTests
             foreach (var observation in fixture.StorageDiagnostics)
             {
                 using var document = JsonDocument.Parse(observation);
-                Assert.False(document.RootElement.TryGetProperty("DiagnosticUnavailable", out _), "Owned numeric observation must be reached.");
+                Assert.False(document.RootElement.TryGetProperty("DiagnosticUnavailable", out _), observation);
                 Assert.True(document.RootElement.GetProperty("Running").GetBoolean());
                 var metrics = document.RootElement.GetProperty("Metrics");
                 Assert.True(metrics.GetProperty("postmaster_pid").GetString() is { Length: > 0 });

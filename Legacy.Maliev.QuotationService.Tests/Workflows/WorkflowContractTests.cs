@@ -83,6 +83,26 @@ public sealed class WorkflowContractTests
         Assert.Throws<InvalidOperationException>(() => WorkflowContractValidator.Validate(serialized.ToString()));
     }
 
+    [Theory]
+    [InlineData("validate", "ubuntu-latest")]
+    [InlineData("qualification-authority-joined", "ubuntu-latest")]
+    [InlineData("validate", "ubuntu-26.04")]
+    [InlineData("qualification-authority-joined", "ubuntu-26.04")]
+    public void BuildAndTest_RejectsUnqualifiedRunner(string jobName, string runner)
+    {
+        WorkflowContractValidator.Validate(Workflow);
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(Workflow));
+        var root = Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+        var jobs = Assert.IsType<YamlMappingNode>(ReadNode(root, "jobs"));
+        var job = Assert.IsType<YamlMappingNode>(ReadNode(jobs, jobName));
+        job.Children[new YamlScalarNode("runs-on")] = new YamlScalarNode(runner);
+        using var serialized = new StringWriter();
+        yaml.Save(serialized, assignAnchors: false);
+        var error = Assert.Throws<InvalidOperationException>(() => WorkflowContractValidator.Validate(serialized.ToString()));
+        Assert.Contains("runs-on must equal 'ubuntu-24.04'", error.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void BuildAndTest_SatisfiesStructuralContract()
     {
@@ -917,7 +937,7 @@ internal static partial class WorkflowContractValidator
         if (!validateJob.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal).SetEquals(validateKeys))
             throw new InvalidOperationException("Validate job must contain only exact reviewed settings.");
         RequireScalarValue(validateJob, "name", "validate");
-        RequireScalarValue(validateJob, "runs-on", "ubuntu-latest");
+        RequireScalarValue(validateJob, "runs-on", "ubuntu-24.04");
         RequireScalarValue(validateJob, "timeout-minutes", "30");
         ValidateRegistryEnvironment(validateJob, workspace: true);
         RejectDuplicatedValidationActionsAndCommands(jobs);
@@ -1075,7 +1095,7 @@ internal static partial class WorkflowContractValidator
             .SetEquals(["name", "runs-on", "timeout-minutes", "env", "steps"]))
             throw new InvalidOperationException("Joined authority gate must be unconditional with no permission or failure overrides.");
         RequireScalarValue(job, "name", "qualification-authority-joined");
-        RequireScalarValue(job, "runs-on", "ubuntu-latest");
+        RequireScalarValue(job, "runs-on", "ubuntu-24.04");
         RequireScalarValue(job, "timeout-minutes", "20");
         ValidateRegistryEnvironment(job, workspace: false);
         var steps = RequireSequence(job, "steps");

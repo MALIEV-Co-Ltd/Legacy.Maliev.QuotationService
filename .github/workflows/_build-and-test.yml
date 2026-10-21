@@ -9,7 +9,7 @@ permissions:
 jobs:
   qualification-authority-joined:
     name: qualification-authority-joined
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       TESTCONTAINERS_RYUK_CONTAINER_IMAGE: ghcr.io/testcontainers/ryuk@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0
@@ -89,7 +89,7 @@ jobs:
 
   validate:
     name: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       MalievWorkspaceRoot: ${{ github.workspace }}/.dependencies

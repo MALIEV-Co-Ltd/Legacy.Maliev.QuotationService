@@ -353,7 +353,7 @@ public sealed class DockerContextInspectionContractTests(ITestOutputHelper outpu
             UseShellExecute = false,
             CreateNoWindow = true
         };
-        foreach (var argument in new[] { "-c", "sleep 30 & child=$!; printf '%s' \"$child\" > \"$1\"; wait \"$child\"", "inspection", pidFile })
+        foreach (var argument in new[] { "-c", "/usr/bin/sleep 30 & child=$!; printf '%s' \"$child\" > \"$1\"; wait \"$child\"", "inspection", pidFile })
             start.ArgumentList.Add(argument);
         var parent = new RecordingProcess(new ContextInspectionProcess(Process.Start(start)!));
         RecordingProcess? child = null;
@@ -368,7 +368,21 @@ public sealed class DockerContextInspectionContractTests(ITestOutputHelper outpu
             var fields = status[(status.LastIndexOf(") ", StringComparison.Ordinal) + 2)..].Split(' ');
             Assert.Equal(parent.Identity!.Pid, int.Parse(fields[1]));
             child = new(new ContextInspectionProcess(Process.GetProcessById(childPid)));
-            child.ObserveIdentity();
+            var childIdentity = child.ObserveIdentity();
+            var childBirth = childIdentity.StartedUtc;
+            Assert.Equal(childPid, childIdentity.Pid);
+            // The PID file precedes exec. Admit sleep only while PID and birth stay unchanged.
+            while (childIdentity.Executable != "/usr/bin/sleep")
+            {
+                Assert.Equal(parent.Identity!.Executable, childIdentity.Executable);
+                await Task.Delay(10, admission.Token);
+                var observed = child.ObserveIdentity();
+                Assert.Equal(childPid, observed.Pid);
+                Assert.Equal(childBirth, observed.StartedUtc);
+                childIdentity = observed;
+            }
+            child.Identity = childIdentity;
+            Assert.Equal(childIdentity, child.ObserveIdentity());
             var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => DockerContextInspection.RunAsync(
                 () => parent, TimeSpan.FromMilliseconds(250), TimeSpan.FromSeconds(2)));
             var custody = Assert.IsType<ContextInspectionCustody>(error.Data[DockerContextInspection.CustodyKey]);
