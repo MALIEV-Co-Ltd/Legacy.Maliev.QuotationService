@@ -384,6 +384,34 @@ public sealed class OwnedPostgresDiagnosticsTests
             await stream.ReadAsync(buffer, token), canceled.Token));
     }
 
+    [Theory]
+    [InlineData(0, "Phase")]
+    [InlineData(5, "MetricsParse")]
+    [InlineData(-1, "Unknown")]
+    public async Task Unavailable_observation_retains_only_defined_stage_and_never_exception_body(int value, string expected)
+    {
+        var calls = 0;
+        var safe = await OwnedPostgresDiagnostics.PreserveFailureAsync(
+            () => throw new IOException("customer@example.test password=secret"),
+            () => { calls++; return (PostgresObservationStage)value; });
+        using var document = JsonDocument.Parse(safe);
+        Assert.True(document.RootElement.GetProperty("DiagnosticUnavailable").GetBoolean());
+        Assert.Equal(expected, document.RootElement.GetProperty("Stage").GetString());
+        Assert.Equal(2, document.RootElement.EnumerateObject().Count());
+        Assert.Equal(1, calls);
+        Assert.DoesNotContain("customer", safe, StringComparison.Ordinal);
+        Assert.DoesNotContain("password", safe, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Unavailable_stage_callback_failure_preserves_original_safe_fallback()
+    {
+        var safe = await OwnedPostgresDiagnostics.PreserveFailureAsync(
+            () => throw new IOException("private observer body"),
+            () => throw new InvalidOperationException("private stage body"));
+        Assert.Equal("{\"DiagnosticUnavailable\":true}", safe);
+    }
+
     [Fact]
     public async Task Actual_owned_two_database_fixture_emits_available_numeric_metadata_only()
     {
@@ -395,7 +423,7 @@ public sealed class OwnedPostgresDiagnosticsTests
             foreach (var observation in fixture.StorageDiagnostics)
             {
                 using var document = JsonDocument.Parse(observation);
-                Assert.False(document.RootElement.TryGetProperty("DiagnosticUnavailable", out _), "Owned numeric observation must be reached.");
+                Assert.False(document.RootElement.TryGetProperty("DiagnosticUnavailable", out _), observation);
                 Assert.True(document.RootElement.GetProperty("Running").GetBoolean());
                 var metrics = document.RootElement.GetProperty("Metrics");
                 Assert.True(metrics.GetProperty("postmaster_pid").GetString() is { Length: > 0 });

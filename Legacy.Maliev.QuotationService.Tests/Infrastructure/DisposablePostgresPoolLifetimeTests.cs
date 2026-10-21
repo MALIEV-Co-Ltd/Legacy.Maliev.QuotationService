@@ -130,6 +130,7 @@ public sealed class DisposablePostgresPoolLifetimeTests(ITestOutputHelper output
             var storage = await OwnedPostgresDiagnostics.ObserveAsync(container, Owner,
                 failure is null ? "ready" : "initialization-failed");
             using var snapshot = JsonDocument.Parse(storage);
+            Assert.False(snapshot.RootElement.TryGetProperty("DiagnosticUnavailable", out _), storage);
             Assert.True(snapshot.RootElement.GetProperty("Running").GetBoolean());
             Assert.False(snapshot.RootElement.GetProperty("OOMKilled").GetBoolean());
             Assert.Equal(0, snapshot.RootElement.GetProperty("RestartCount").GetInt32());
