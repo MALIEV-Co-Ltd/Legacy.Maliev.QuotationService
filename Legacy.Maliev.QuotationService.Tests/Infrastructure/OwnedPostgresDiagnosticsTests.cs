@@ -290,6 +290,30 @@ public sealed class OwnedPostgresDiagnosticsTests
         else Assert.Throws<InvalidOperationException>(() => OwnedPostgresDiagnostics.ParseMetrics(input));
     }
 
+    [Theory]
+    [InlineData("0")]
+    [InlineData("17")]
+    [InlineData("18446744073709551615")]
+    public void Metrics_accept_documented_socket_throttle_counter(string value)
+    {
+        var metrics = OwnedPostgresDiagnostics.ParseMetrics("memory.events.sock_throttled=" + value + "\n");
+        Assert.Equal(value, Assert.Single(metrics).Value);
+        Assert.True(metrics.ContainsKey("memory.events.sock_throttled"));
+    }
+
+    [Theory]
+    [InlineData("memory.events.sock_throttled=max\n")]
+    [InlineData("memory.events.sock_throttled=-1\n")]
+    [InlineData("memory.events.sock_throttled=18446744073709551616\n")]
+    [InlineData("memory.events.sock_throttled=customer@example.test\n")]
+    [InlineData("memory.events.sock_throttled=0\nmemory.events.sock_throttled=1\n")]
+    [InlineData("memory.events.unrecognized=0\n")]
+    [InlineData("memory.events.SOCK_THROTTLED=0\n")]
+    public void Metrics_socket_counter_keeps_numeric_unique_and_exact_key_guards(string input)
+    {
+        Assert.Throws<InvalidOperationException>(() => OwnedPostgresDiagnostics.ParseMetrics(input));
+    }
+
     [Fact]
     public void Metrics_reject_runtime_generated_password_field()
     {

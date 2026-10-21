@@ -128,7 +128,7 @@ internal static class OwnedPostgresDiagnostics
         "pid1_ppid", "pid1_start", "postmaster_pid", "postmaster_ppid", "postmaster_start",
         "memory.current", "memory.max", "pids.current", "pids.max", "memory.events.low",
         "memory.events.high", "memory.events.max", "memory.events.oom", "memory.events.oom_kill",
-        "memory.events.oom_group_kill", "shm_total", "shm_used", "shm_free", "pgdata_total",
+        "memory.events.oom_group_kill", "memory.events.sock_throttled", "shm_total", "shm_used", "shm_free", "pgdata_total",
         "pgdata_used", "pgdata_free", "pgdata_du", "wal_du"
     };
 
