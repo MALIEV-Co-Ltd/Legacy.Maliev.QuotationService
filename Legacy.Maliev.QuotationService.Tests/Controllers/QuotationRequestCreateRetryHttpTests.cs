@@ -28,6 +28,65 @@ namespace Legacy.Maliev.QuotationService.Tests.Controllers;
 /// <summary>Normal Production HTTP, configured retry strategy and actual IAM client; only remote IAM transport is controlled.</summary>
 public sealed class QuotationRequestCreateRetryHttpTests(RequestCreateRetryFixture fixture) : IClassFixture<RequestCreateRetryFixture>
 {
+    [Fact]
+    public async Task Create_original_body_grammar_preserves_nullable_scalars_and_server_ownership()
+    {
+        var journey = Guid.NewGuid();
+        var transport = new RequestCreateIamTransport(true);
+        var diagnostic = new RequestCreateStrategyDiagnostic();
+        await using var app = fixture.App(transport, diagnostic);
+        using var client = app.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quotationrequests");
+        request.Headers.Authorization = new("Bearer", fixture.Token());
+        request.Content = new StringContent(
+            "/* source */ {FirstName:42,FirstName:null,LastName:false,Done:'true',Done:null,JourneyId:'"
+            + journey.ToString("D")
+            + "',Id:2147483647,TransactionId:'client-forged',QualificationState:'qualified',QualificationVersion:'99',"
+            + "CreatedDate:'2000-01-01T00:00:00Z'}", Encoding.UTF8, "application/json");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        await using var db = fixture.Context();
+        var row = await db.Requests.SingleAsync(value => value.JourneyId == journey);
+        Assert.Equal("42", row.FirstName);
+        Assert.Equal("false", row.LastName);
+        Assert.Equal(true, row.Done);
+        Assert.NotEqual(int.MaxValue, row.Id);
+        Assert.Equal($"request-{row.Id}", row.TransactionId);
+        Assert.Equal("unreviewed", row.QualificationState);
+        Assert.Equal(0, row.QualificationVersion);
+        Assert.NotEqual(new DateTime(2000, 1, 1), row.CreatedDate);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(row.Id, json.RootElement.GetProperty("Id").GetInt32());
+        Assert.False(json.RootElement.TryGetProperty("id", out _));
+        Assert.True(json.RootElement.GetProperty("Done").GetBoolean());
+        Assert.False(json.RootElement.TryGetProperty("TaxIdentification", out _));
+    }
+
+    [Theory]
+    [InlineData("Done", "{'private-input-marker':1}")]
+    [InlineData("Id", "{'private-input-marker':1}")]
+    [InlineData("QualificationVersion", "{'private-input-marker':1}")]
+    public async Task Create_invalid_original_member_rejects_before_persistence_without_input_echo(string field, string value)
+    {
+        var journey = Guid.NewGuid();
+        var transport = new RequestCreateIamTransport(true);
+        await using var app = fixture.App(transport, new RequestCreateStrategyDiagnostic());
+        using var client = app.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quotationrequests");
+        request.Headers.Authorization = new("Bearer", fixture.Token());
+        request.Content = new StringContent("{JourneyId:'" + journey.ToString("D") + "',"
+            + field + ":" + value + "}", Encoding.UTF8, "application/json");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.DoesNotContain("private-input-marker", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        await using var db = fixture.Context();
+        Assert.False(await db.Requests.AnyAsync(row => row.JourneyId == journey));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
