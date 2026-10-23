@@ -16,8 +16,8 @@ from unittest.mock import patch
 HERE = Path(__file__).resolve().parent
 COMPANION = HERE.parent
 PINS = {
-    'held_host_lifetime.py': 'bed2886e551809beeb24517722d1f8101ad66c0b08399672f5e7011cc1ba6a07',
-    'owned_front_host.py': '18e2626756b55f0e3921e4c5bd2d5f4d53844d01a2c22a181d981dcdd71e1699',
+    'held_host_lifetime.py': 'd9d15c362550339bdf7ce3a85b07a79c4cce6536915125f75ab912800548e5d4',
+    'owned_front_host.py': '7b06c9abce7aed3cca7cc90944a75b2d01d4c91ec95b1286486444a29f04392b',
     'owned_normal_hosts.py': 'e5fee39ac7ced3b1304698c734abfd192660a29e94e7e1dcb366b34f15205988',
     'held_linux_exit.py': 'e7c809d0a1a9c8e8673ed5ef299dd530774d68a48196a739a90f0eaaf5e11515',
     'hosted_companion_resources.py': '58c1050a64b84096b84800a567fb7054d4915dd9f611ac1698b90513a392b26f',
