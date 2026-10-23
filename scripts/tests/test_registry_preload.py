@@ -227,6 +227,11 @@ class RegistryBindings(unittest.TestCase):
     old=copy.deepcopy(row);old['indexDigest']='sha256:'+previous[row['tag']]
     old['mirror']=row['mirror'].split('@')[0]+'@'+old['indexDigest']
     with self.assertRaisesRegex(ValueError,'Repository or immutable index substitution'):p.binding(old)
+ def test_ordinary_http_fixture_uses_committed_immutable_images(self):
+  source=(R.parents[1]/'Legacy.Maliev.QuotationService.Tests/Controllers/QualificationBridgeConsumerHttpTests.cs').read_text(encoding='utf-8')
+  for row in self.rows[:2]:
+   with self.subTest(tag=row['tag']):self.assertEqual(source.count('"'+row['mirror']+'"'),1)
+  self.assertEqual(source.count('.WithImagePullPolicy(_ => false)'),2)
  def test_all_original_raw_provenance(self):
   for row in self.rows:
    name={'postgres:18-alpine':'18-alpine','redis:7-alpine':'redis7',p.RYUK:'ryuk014'}[row['tag']]

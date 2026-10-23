@@ -62,3 +62,8 @@ fixtures retain those public bytes. Existing raw-provenance tests validate their
 checksums and associations; the added rejection test preserves refusal of both
 superseded indexes. No container or image was created during metadata observation.
 Mutable upstream tags can move again; the existing drift rejection remains required.
+
+The ordinary qualification HTTP fixture selects the same two immutable mirror
+references with image pulling disabled. A cross-boundary consistency regression
+checks both references against the preload inventory. Hosted application and real
+HTTP/container tests remain the acceptance evidence for this fixture.
