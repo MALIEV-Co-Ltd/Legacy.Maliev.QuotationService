@@ -152,7 +152,7 @@ jobs:
           timeout --signal=TERM --kill-after=5s 810s python3 -B tools/FinancialCompositionAdapter.Qualification/qualify.py
       - name: Retain only explicit sanitized public qualification and owned controls
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: financial-composition-compile-${{ github.event.pull_request.head.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
