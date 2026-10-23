@@ -230,8 +230,9 @@ public sealed class DeliveryContractTests
     }
 
     [Fact]
-    public void DormantManifests_DoNotClaimUnprovisionedAnalyticsConfiguration()
+    public void DormantManifests_DoNotExplicitlyDeclareAnalyticsKeys()
     {
+        // envFrom can still supply these keys; this checks literals, not effective configuration.
         var manifests = string.Join('\n', Directory.EnumerateFiles(DeployRoot(), "*.yaml", SearchOption.AllDirectories).Select(File.ReadAllText));
         foreach (var forbidden in new[] { "MeasurementProtocol", "MeasurementId", "ApiSecret" })
         {

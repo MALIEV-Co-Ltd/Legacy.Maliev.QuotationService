@@ -70,9 +70,12 @@ Delivery is disabled by default. Its existing configuration names are
 `GoogleAnalyticsMeasurementProtocol__Enabled`,
 `GoogleAnalyticsMeasurementProtocol__MeasurementId` and
 `GoogleAnalyticsMeasurementProtocol__ApiSecret`. Enabled delivery requires both credentials even
-in exact standby mode. The dormant deployment does not currently project these settings or permit
-provider egress. Their reviewed central projection, secure operator provisioning and network
-contract remain prerequisites under issues #22/#101, not evidence that credentials already exist.
+in exact standby mode. The base manifest does not explicitly list these settings, but its
+`envFrom` imports all keys from the centrally managed runtime Secret. This repository cannot
+establish whether that Secret supplies analytics settings or enables delivery. Effective
+configuration needs separate central-overlay verification under issues #22/#101; neither absent
+YAML literals nor option defaults prove it is disabled in a configured environment. The committed
+NetworkPolicy does not permit provider egress.
 See [the dormant runtime contract](deploy/README.md); this repository change does not enable delivery.
 
 Original source `b60778f9cc03f6a591b5ee03b71cf12f999a604a`, parent

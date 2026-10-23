@@ -6,7 +6,7 @@ Central GitOps owns environment overlays and must replace the non-zero placehold
 
 ## Runtime projection
 
-Central GitOps projects the single Google Secret Manager JSON secret `maliev-legacy-secrets` into exactly one service-specific Kubernetes Secret named `legacy-maliev-quotation-runtime`. The existing dormant projection contains the following confidential/environment-specific API runtime coordinates:
+Central GitOps owns projection from the single Google Secret Manager JSON secret `maliev-legacy-secrets` into the service-specific Kubernetes Secret `legacy-maliev-quotation-runtime`. The base Deployment imports every key from that Secret through `envFrom`. The required runtime contract names the following confidential/environment-specific API coordinates; this list is not an enforced key allowlist or evidence of the external Secret's current contents:
 
 - `ConnectionStrings__QuotationDbContext`
 - `ConnectionStrings__QuotationRequestDbContext`
@@ -16,9 +16,9 @@ Central GitOps projects the single Google Secret Manager JSON secret `maliev-leg
 - `Jwt__Audience`
 - `ServiceAuthentication__ClientSecret`
 
-The API Deployment contains no migrator credentials. The current dormant projection supplies no signing private key, symmetric token key, analytics credentials, storage credential, or key file. Its dedicated `legacy-maliev-quotation` Kubernetes service account is tokenless and has no Google Cloud Workload Identity binding because this API does not access GCS.
+The committed API Deployment contains no literal migrator credentials, signing private key, symmetric token key, analytics credentials, storage credential, or key file. External Secret contents are not established by that observation. Its dedicated `legacy-maliev-quotation` Kubernetes service account is tokenless and has no Google Cloud Workload Identity binding because this API does not access GCS.
 
-## Consented analytics: unprovisioned configuration boundary
+## Consented analytics: centrally owned configuration boundary
 
 Issue #101 owns the implemented, separate default-off consented-delivery annex; issue #22 owns
 its dormant deployment contract. The actual options bind the following environment names:
@@ -29,10 +29,13 @@ its dormant deployment contract. The actual options bind the following environme
 | `GoogleAnalyticsMeasurementProtocol__MeasurementId` | Required only when delivery is explicitly enabled. |
 | `GoogleAnalyticsMeasurementProtocol__ApiSecret` | Required only when delivery is explicitly enabled; never commit its value. |
 
-No analytics keys are currently supplied by the committed central runtime projection.
-This document does not allocate new Secret Manager property names or assert that credentials
-have been provisioned. A reviewed central projection and secure operator provisioning remain
-future prerequisites, using the existing consolidated-secret ownership contract. Missing
+The base manifest does not explicitly name analytics keys. Its `envFrom` reference can nevertheless
+import all three settings, including `Enabled=true`, from the central runtime Secret. Scanning
+this repository's YAML cannot prove their absence or prove effective delivery is disabled.
+The current Secret and central overlay have not been verified by this source-only change.
+This document does not allocate new Secret Manager property names or assert provisioning status.
+Central configuration and secure provisioning require separate verification under the existing
+consolidated-secret ownership contract. Missing
 analytics credentials must not become a new startup requirement while delivery is disabled.
 When enabled, existing startup validation requires both credentials even in standby mode.
 
