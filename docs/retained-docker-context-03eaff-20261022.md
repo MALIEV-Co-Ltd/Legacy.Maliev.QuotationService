@@ -41,3 +41,24 @@ https://github.com/docker/buildx/blob/v0.28.0/commands/root.go
 Author checks: exact source-rule transfer/prefix preservation, original blob/parent/path identity, required-input source inspection, candidate immutable readbacks and actual inverse-tree equality. Build, focused Docker test, relevant suite, formatting, static/dependency/security, contract and coverage gates are **not run** in this source-only lane; all applicable checks remain required on the exact proposed head in GitHub Actions under Root's existing financial-stop admission rules. Preserve every threshold and protection; no unrun check is a pass.
 
 Root must first obtain Release 0 warnings / 0 errors, then run RetainedDockerBuildContextTests against real local Docker/BuildKit and inspect its admitted-file/69negative counts, followed by existing required checks and exact protected-main acceptance. No image publication/deployment, persistent data, provider/FX activation, migration execution, security configuration, dependency-pin change or SDK role is authorized by this packet. Comment/TrackingNumber remain blocked. The separate Career wire-contract producer still depends on accepted Web738.
+
+## Official test-fixture prerequisites
+
+The existing registry prerequisite rejected the superseded fixture indexes with
+`Original Hub tag drift` before the application build. The Docker-context delivery
+now refreshes only the PostgreSQL and Redis test-fixture identities and their raw
+public provenance. The three admitted image aliases, registry repositories,
+validation predicates, retry limits, process custody and cleanup rules stay intact.
+Ryuk retains its existing immutable identity.
+
+| Test alias | Official index SHA-256 | Linux/amd64 manifest SHA-256 |
+| --- | --- | --- |
+| `postgres:18-alpine` | `898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5` | `3b0ef735388b2cb097fc29b8bb421d86d57d0ddbe7aa1fbd6493e06d65028503` |
+| `redis:7-alpine` | `57e4255cc971b1c8d6f8a6ca283ac01bc3ecdd914273ef6bfaede87aaecd6541` | `8be847644e195abc4c10c8d9936cfa45332eccc6b714fa7b186ff43f1f4d5579` |
+
+Public Docker Hub tag metadata and exact immutable ECR Public index/manifest bytes
+agree on each platform, configuration digest and layer descriptor. The six `.b64`
+fixtures retain those public bytes. Existing raw-provenance tests validate their
+checksums and associations; the added rejection test preserves refusal of both
+superseded indexes. No container or image was created during metadata observation.
+Mutable upstream tags can move again; the existing drift rejection remains required.
