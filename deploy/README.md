@@ -6,7 +6,7 @@ Central GitOps owns environment overlays and must replace the non-zero placehold
 
 ## Runtime projection
 
-Central GitOps projects the single Google Secret Manager JSON secret `maliev-legacy-secrets` into exactly one service-specific Kubernetes Secret named `legacy-maliev-quotation-runtime`. That projection must contain exactly the confidential/environment-specific API runtime coordinates required here:
+Central GitOps owns projection from the single Google Secret Manager JSON secret `maliev-legacy-secrets` into the service-specific Kubernetes Secret `legacy-maliev-quotation-runtime`. The base Deployment imports every key from that Secret through `envFrom`. The required runtime contract names the following confidential/environment-specific API coordinates; this list is not an enforced key allowlist or evidence of the external Secret's current contents:
 
 - `ConnectionStrings__QuotationDbContext`
 - `ConnectionStrings__QuotationRequestDbContext`
@@ -16,7 +16,38 @@ Central GitOps projects the single Google Secret Manager JSON secret `maliev-leg
 - `Jwt__Audience`
 - `ServiceAuthentication__ClientSecret`
 
-The API Deployment contains no migrator credentials. It receives no signing private key, symmetric token key, analytics credentials, storage credential, or key file. Its dedicated `legacy-maliev-quotation` Kubernetes service account is tokenless and has no Google Cloud Workload Identity binding because this API does not access GCS.
+The committed API Deployment contains no literal migrator credentials, signing private key, symmetric token key, analytics credentials, storage credential, or key file. External Secret contents are not established by that observation. Its dedicated `legacy-maliev-quotation` Kubernetes service account is tokenless and has no Google Cloud Workload Identity binding because this API does not access GCS.
+
+## Consented analytics: centrally owned configuration boundary
+
+Issue #101 owns the implemented, separate default-off consented-delivery annex; issue #22 owns
+its dormant deployment contract. The actual options bind the following environment names:
+
+| Environment name | Existing runtime behavior |
+| --- | --- |
+| `GoogleAnalyticsMeasurementProtocol__Enabled` | Absent means disabled; credentials alone do not enable delivery. |
+| `GoogleAnalyticsMeasurementProtocol__MeasurementId` | Required only when delivery is explicitly enabled. |
+| `GoogleAnalyticsMeasurementProtocol__ApiSecret` | Required only when delivery is explicitly enabled; never commit its value. |
+
+The base manifest does not explicitly name analytics keys. Its `envFrom` reference can nevertheless
+import all three settings, including `Enabled=true`, from the central runtime Secret. Scanning
+this repository's YAML cannot prove their absence or prove effective delivery is disabled.
+The current Secret and central overlay have not been verified by this source-only change.
+This document does not allocate new Secret Manager property names or assert provisioning status.
+Central configuration and secure provisioning require separate verification under the existing
+consolidated-secret ownership contract. Missing
+analytics credentials must not become a new startup requirement while delivery is disabled.
+When enabled, existing startup validation requires both credentials even in standby mode.
+
+Only exact ordinal `MALIEV_OBSERVABILITY_STANDBY=true` suppresses the analytics hosted worker;
+it does not bypass options validation, remove the store/processor or stop quotation expiry.
+Consent admission, identifier privacy, durable leases/retries and terminal logging remain the
+existing runtime contracts. No delivery enablement or provider call is authorized here.
+
+The existing NetworkPolicy permits no external provider egress. A separately reviewed central
+network contract is also required before enabling delivery. Keep the current internal-only
+network policy unchanged until that work and the release gates below are complete. Documentation
+and options-binding tests do not prove a deployed Secret, provider reachability or whole-source parity.
 
 ## Network assumptions
 

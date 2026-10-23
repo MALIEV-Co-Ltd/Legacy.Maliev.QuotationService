@@ -1,3 +1,5 @@
+using Legacy.Maliev.QuotationService.Api.Analytics;
+using Microsoft.Extensions.Configuration;
 using YamlDotNet.RepresentationModel;
 
 namespace Legacy.Maliev.QuotationService.Tests;
@@ -194,11 +196,47 @@ public sealed class DeliveryContractTests
         foreach (var forbidden in new[]
         {
             "SqlServer", "LogDbContext", "Jwt__PrivateKey", "Jwt__Key", "Jwt__Secret",
-            "MeasurementProtocol", "MeasurementId", "ApiSecret", "GOOGLE_APPLICATION_CREDENTIALS",
+            "GOOGLE_APPLICATION_CREDENTIALS",
             "service-account.json", "gcp-service-account", ":latest", "kubectl apply", "helm install",
         })
         {
             Assert.DoesNotContain(forbidden, text, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void AnalyticsConfiguration_BindsApprovedNamesWithoutEnablingDeliveryByDefault()
+    {
+        var defaults = new GoogleAnalyticsMeasurementProtocolOptions();
+        new ConfigurationBuilder().Build().GetSection("GoogleAnalyticsMeasurementProtocol").Bind(defaults);
+        Assert.False(defaults.Enabled);
+        Assert.Empty(defaults.MeasurementId);
+        Assert.Empty(defaults.ApiSecret);
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["GoogleAnalyticsMeasurementProtocol:MeasurementId"] = "G-SYNTHETIC",
+            ["GoogleAnalyticsMeasurementProtocol:ApiSecret"] = "synthetic-not-a-credential",
+        }).Build();
+        var configured = new GoogleAnalyticsMeasurementProtocolOptions();
+        configuration.GetSection("GoogleAnalyticsMeasurementProtocol").Bind(configured);
+        Assert.False(configured.Enabled);
+        Assert.Equal("G-SYNTHETIC", configured.MeasurementId);
+        Assert.Equal("synthetic-not-a-credential", configured.ApiSecret);
+
+        configuration["GoogleAnalyticsMeasurementProtocol:Enabled"] = "true";
+        configuration.GetSection("GoogleAnalyticsMeasurementProtocol").Bind(configured);
+        Assert.True(configured.Enabled);
+    }
+
+    [Fact]
+    public void DormantManifests_DoNotExplicitlyDeclareAnalyticsKeys()
+    {
+        // envFrom can still supply these keys; this checks literals, not effective configuration.
+        var manifests = string.Join('\n', Directory.EnumerateFiles(DeployRoot(), "*.yaml", SearchOption.AllDirectories).Select(File.ReadAllText));
+        foreach (var forbidden in new[] { "MeasurementProtocol", "MeasurementId", "ApiSecret" })
+        {
+            Assert.DoesNotContain(forbidden, manifests, StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -224,7 +262,8 @@ public sealed class DeliveryContractTests
 
         Assert.Contains("GET /Quotations/outcomes/readback", readme, StringComparison.Ordinal);
         Assert.Contains("fully source-attributed and unattributed counts", readme, StringComparison.Ordinal);
-        Assert.Contains("does not own Google Analytics Measurement Protocol credentials", readme, StringComparison.Ordinal);
+        Assert.Contains("separate default-off, consent-governed delivery annex", readme, StringComparison.Ordinal);
+        Assert.Contains("does not reconstruct consent", readme, StringComparison.Ordinal);
         Assert.Contains("immutable accepted-outcome record", readme, StringComparison.Ordinal);
         Assert.Contains("never exposes either identifier", readme, StringComparison.Ordinal);
     }
