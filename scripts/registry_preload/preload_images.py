@@ -4,8 +4,8 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parent
 RYUK='ghcr.io/testcontainers/ryuk@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0'
 SOURCES={
- 'postgres:18-alpine':('library/postgres','18-alpine','public.ecr.aws','docker/library/postgres','77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873'),
- 'redis:7-alpine':('library/redis','7-alpine','public.ecr.aws','docker/library/redis','858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499'),
+ 'postgres:18-alpine':('library/postgres','18-alpine','public.ecr.aws','docker/library/postgres','898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5'),
+ 'redis:7-alpine':('library/redis','7-alpine','public.ecr.aws','docker/library/redis','57e4255cc971b1c8d6f8a6ca283ac01bc3ecdd914273ef6bfaede87aaecd6541'),
  RYUK:('testcontainers/ryuk','0.14.0','ghcr.io','testcontainers/ryuk','7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0')
 }
 def binding(row):

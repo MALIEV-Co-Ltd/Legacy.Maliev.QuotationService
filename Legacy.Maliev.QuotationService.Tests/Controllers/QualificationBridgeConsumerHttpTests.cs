@@ -605,12 +605,12 @@ public sealed class QualificationBridgeConsumerFixture : IAsyncLifetime
     {
         var expires = DateTimeOffset.UtcNow.AddMinutes(15).ToString("O");
         containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation99-qualification-bridge",
-                attempt => new PostgreSqlBuilder("public.ecr.aws/docker/library/postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873").WithDockerEndpoint(attempt.Endpoint)
+                attempt => new PostgreSqlBuilder("public.ecr.aws/docker/library/postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5").WithDockerEndpoint(attempt.Endpoint)
                     .WithImagePullPolicy(_ => false)
                     .WithName(attempt.Name).WithLabel(attempt.Labels)
                     .WithLabel("maliev.proof.expires-utc", expires)
                     .WithCreateParameterModifier(parameters => ConfigureLoopback(parameters, "5432/tcp", 512L * 1024 * 1024)).Build(),
-                attempt => new ContainerBuilder("public.ecr.aws/docker/library/redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499").WithDockerEndpoint(attempt.Endpoint)
+                attempt => new ContainerBuilder("public.ecr.aws/docker/library/redis@sha256:57e4255cc971b1c8d6f8a6ca283ac01bc3ecdd914273ef6bfaede87aaecd6541").WithDockerEndpoint(attempt.Endpoint)
                     .WithImagePullPolicy(_ => false)
                     .WithName(attempt.Name).WithLabel(attempt.Labels).WithPortBinding(6379, true)
                     .WithLabel("maliev.proof.expires-utc", expires)
