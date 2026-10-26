@@ -4,7 +4,9 @@ import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'registry_preload'))
 import preload_images as p
 R=Path(p.__file__).resolve().parent
-def raw(name):return base64.b64decode((R/name.replace('.json','.b64')).read_bytes(),validate=False)
+def raw(name):
+ current={'18-alpine-hub.json':'18-alpine-hub-10a5c69a.b64','18-alpine-index.json':'18-alpine-index-10a5c69a.b64'}
+ return base64.b64decode((R/current.get(name,name.replace('.json','.b64'))).read_bytes(),validate=False)
 class Controls(unittest.TestCase):
  def setUp(self):
   self.row=json.loads((R/'image-pins.json').read_bytes())[0];self.tag=self.row['tag'].split(':')[1]
@@ -227,6 +229,9 @@ class RegistryBindings(unittest.TestCase):
     old=copy.deepcopy(row);old['indexDigest']='sha256:'+previous[row['tag']]
     old['mirror']=row['mirror'].split('@')[0]+'@'+old['indexDigest']
     with self.assertRaisesRegex(ValueError,'Repository or immutable index substitution'):p.binding(old)
+  old=copy.deepcopy(self.rows[0]);old['indexDigest']='sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5'
+  old['mirror']=old['mirror'].split('@')[0]+'@'+old['indexDigest']
+  with self.assertRaisesRegex(ValueError,'Repository or immutable index substitution'):p.binding(old)
  def test_ordinary_http_fixture_uses_committed_immutable_images(self):
   source=(R.parents[1]/'Legacy.Maliev.QuotationService.Tests/Controllers/QualificationBridgeConsumerHttpTests.cs').read_text(encoding='utf-8')
   for row in self.rows[:2]:

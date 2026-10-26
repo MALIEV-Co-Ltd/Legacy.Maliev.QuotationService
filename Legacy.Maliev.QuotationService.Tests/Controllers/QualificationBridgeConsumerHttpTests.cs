@@ -605,7 +605,7 @@ public sealed class QualificationBridgeConsumerFixture : IAsyncLifetime
     {
         var expires = DateTimeOffset.UtcNow.AddMinutes(15).ToString("O");
         containers = await Infrastructure.DisposableContainerPair.StartAsync("quotation99-qualification-bridge",
-                attempt => new PostgreSqlBuilder("public.ecr.aws/docker/library/postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5").WithDockerEndpoint(attempt.Endpoint)
+                attempt => new PostgreSqlBuilder("public.ecr.aws/docker/library/postgres@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5").WithDockerEndpoint(attempt.Endpoint)
                     .WithImagePullPolicy(_ => false)
                     .WithName(attempt.Name).WithLabel(attempt.Labels)
                     .WithLabel("maliev.proof.expires-utc", expires)
