@@ -6,14 +6,17 @@ public sealed class ArtifactUploadWorkflowContractTests
     [Theory]
     [InlineData("Retain complete coverage evidence", "floating")]
     [InlineData("Retain complete coverage evidence", "stale")]
+    [InlineData("Retain complete coverage evidence", "previous")]
     [InlineData("Retain complete coverage evidence", "unreviewed")]
     [InlineData("Retain complete coverage evidence", "commented-pin")]
     [InlineData("Retain actual qualification wire-source evidence", "floating")]
     [InlineData("Retain actual qualification wire-source evidence", "stale")]
+    [InlineData("Retain actual qualification wire-source evidence", "previous")]
     [InlineData("Retain actual qualification wire-source evidence", "unreviewed")]
     [InlineData("Retain actual qualification wire-source evidence", "commented-pin")]
     [InlineData("Retain ordinary controller parity evidence", "floating")]
     [InlineData("Retain ordinary controller parity evidence", "stale")]
+    [InlineData("Retain ordinary controller parity evidence", "previous")]
     [InlineData("Retain ordinary controller parity evidence", "unreviewed")]
     [InlineData("Retain ordinary controller parity evidence", "commented-pin")]
     public void EvidenceUpload_RejectsAnyRevisionOtherThanReviewedPin(string stepName, string mutant)
@@ -24,7 +27,7 @@ public sealed class ArtifactUploadWorkflowContractTests
         Assert.NotNull(root);
         var workflow = File.ReadAllText(Path.Combine(root.FullName, ".github", "workflows", "_build-and-test.yml"));
         WorkflowContractValidator.Validate(workflow);
-        const string action = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+        const string action = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
         var stepIndex = workflow.IndexOf("- name: " + stepName, StringComparison.Ordinal);
         Assert.True(stepIndex >= 0);
         var actionIndex = workflow.IndexOf(action, stepIndex, StringComparison.Ordinal);
@@ -33,8 +36,9 @@ public sealed class ArtifactUploadWorkflowContractTests
         {
             "floating" => "actions/upload-artifact@v7",
             "stale" => "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+            "previous" => "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
             "unreviewed" => "actions/upload-artifact@0000000000000000000000000000000000000000",
-            "commented-pin" => "actions/upload-artifact@main # 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "commented-pin" => "actions/upload-artifact@main # cf430e030ddbb5b0abf93d22962f4752f3646cd9",
             _ => throw new ArgumentOutOfRangeException(nameof(mutant)),
         };
         var changed = workflow[..actionIndex] + replacement + workflow[(actionIndex + action.Length)..];
