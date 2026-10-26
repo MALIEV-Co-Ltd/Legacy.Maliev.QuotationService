@@ -1,7 +1,7 @@
 [
   {
     "tag": "postgres:18-alpine",
-    "indexDigest": "sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5",
+    "indexDigest": "sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5",
     "manifestDigest": "sha256:3b0ef735388b2cb097fc29b8bb421d86d57d0ddbe7aa1fbd6493e06d65028503",
     "configDigest": "sha256:57b23a0326ee442e83b3d3fa027c5a148be0a392d7c91d1ca4e1e70131ee859a",
     "layers": [
@@ -51,7 +51,7 @@
         "size": 184
       }
     ],
-    "mirror": "public.ecr.aws/docker/library/postgres@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5"
+    "mirror": "public.ecr.aws/docker/library/postgres@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5"
   },
   {
     "tag": "redis:7-alpine",
