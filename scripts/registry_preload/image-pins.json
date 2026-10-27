@@ -55,9 +55,9 @@
   },
   {
     "tag": "redis:7-alpine",
-    "indexDigest": "sha256:57e4255cc971b1c8d6f8a6ca283ac01bc3ecdd914273ef6bfaede87aaecd6541",
-    "manifestDigest": "sha256:8be847644e195abc4c10c8d9936cfa45332eccc6b714fa7b186ff43f1f4d5579",
-    "configDigest": "sha256:4df5c34dc41256fc4ed293482cb34281e17d133077e9aa3c6a87fda60a356c65",
+    "indexDigest": "sha256:6ba19c50b56777f5c11c58eff8ddb69d0d5f27ba131cffb63f180ccfd43c66af",
+    "manifestDigest": "sha256:1cf73a2f04808e55a8bd2f5706c2aa0ebb0f71938f93deb7af79f48311cd5cb9",
+    "configDigest": "sha256:98c6ca8f397f86e469be752c3e7ed5eb8b17f2479840cb69a2e413037038e9f4",
     "layers": [
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
@@ -66,22 +66,22 @@
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:964ae3503686ef4eeee7318a649cfc799fd655a5c4b18cb8aa192611b4cbb889",
-        "size": 948
+        "digest": "sha256:a239ec2b8fe1e78c4e5e0709c005f5c182baa5794886e4a6f2103d960b127dfd",
+        "size": 950
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:6577e1d2b27e8b5f279db362288e87913100e4752f44a15e7d3daaa8d271a5e0",
-        "size": 198653
+        "digest": "sha256:cef7ad5a05c66da3d345dfb693d9bd9136d1f461641d51b8896025caa1a5eece",
+        "size": 198664
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:5e61c876e61530d1da2b99556cf8484f0fbe0b26b5721584ba9f393c1a4a54d9",
-        "size": 12415971
+        "digest": "sha256:1ea868e596ec1e0fb4d6a5c38c03f4941e2bbb7628dccf45c15e376d55067335",
+        "size": 12418105
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:766c91354b275669e574ec8032781ff8115ac1db6272c8d9700b222bf3f1d536",
+        "digest": "sha256:ae75cb664c8fd47f43aa42c74e7760e3abd5d92c8524cb4c86ecada74e66c491",
         "size": 100
       },
       {
@@ -91,11 +91,11 @@
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:8bfa4f5e3c401cd5345ac2f54a6fbe530d7f3b229c1ab44b07f79e0380d9b7b5",
-        "size": 603
+        "digest": "sha256:e25d07126ba7327f8e77f091b088a39f0cbbff389dca17dc714868f08d0a7d55",
+        "size": 601
       }
     ],
-    "mirror": "public.ecr.aws/docker/library/redis@sha256:57e4255cc971b1c8d6f8a6ca283ac01bc3ecdd914273ef6bfaede87aaecd6541"
+    "mirror": "public.ecr.aws/docker/library/redis@sha256:6ba19c50b56777f5c11c58eff8ddb69d0d5f27ba131cffb63f180ccfd43c66af"
   },
   {
     "tag": "ghcr.io/testcontainers/ryuk@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0",
