@@ -4,7 +4,9 @@ import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'registry_preload'))
 import preload_images as p
 R=Path(p.__file__).resolve().parent
-def raw(name):return base64.b64decode((R/name.replace('.json','.b64')).read_bytes(),validate=False)
+def raw(name):
+ current={'18-alpine-hub.json':'18-alpine-hub-10a5c69a.b64','18-alpine-index.json':'18-alpine-index-10a5c69a.b64','redis7-hub.json':'redis7-hub-6ba19c50.b64','redis7-index.json':'redis7-index-6ba19c50.b64','redis7-manifest.json':'redis7-manifest-1cf73a2f.b64'}
+ return base64.b64decode((R/current.get(name,name.replace('.json','.b64'))).read_bytes(),validate=False)
 class Controls(unittest.TestCase):
  def setUp(self):
   self.row=json.loads((R/'image-pins.json').read_bytes())[0];self.tag=self.row['tag'].split(':')[1]
@@ -227,6 +229,23 @@ class RegistryBindings(unittest.TestCase):
     old=copy.deepcopy(row);old['indexDigest']='sha256:'+previous[row['tag']]
     old['mirror']=row['mirror'].split('@')[0]+'@'+old['indexDigest']
     with self.assertRaisesRegex(ValueError,'Repository or immutable index substitution'):p.binding(old)
+  old=copy.deepcopy(self.rows[0]);old['indexDigest']='sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5'
+  old['mirror']=old['mirror'].split('@')[0]+'@'+old['indexDigest']
+  with self.assertRaisesRegex(ValueError,'Repository or immutable index substitution'):p.binding(old)
+ def test_prior_redis_indexes_remain_rejected(self):
+  for digest in ('57e4255cc971b1c8d6f8a6ca283ac01bc3ecdd914273ef6bfaede87aaecd6541','d9436322172a5b482c187bf1f363d3c4fea086fcca6b9c8a94de8f0f39ed3193'):
+   row=copy.deepcopy(self.rows[1]);row['indexDigest']='sha256:'+digest
+   row['mirror']='public.ecr.aws/docker/library/redis@'+row['indexDigest']
+   with self.subTest(digest=digest),self.assertRaises(ValueError):p.binding(row)
+ def test_prior_redis_manifest_config_layers_and_engine_are_rejected(self):
+  row=copy.deepcopy(self.rows[1]);hub=raw('redis7-hub.json');index=raw('redis7-index.json');manifest=raw('redis7-manifest.json')
+  with self.assertRaises(ValueError):p.validate(row,hub,index,base64.b64decode((R/'redis7-manifest.b64').read_bytes()))
+  old=json.loads(base64.b64decode((R/'redis7-manifest.b64').read_bytes()))
+  changed=copy.deepcopy(row);changed['configDigest']=old['config']['digest']
+  with self.assertRaises(ValueError):p.validate(changed,hub,index,manifest)
+  changed=copy.deepcopy(row);changed['layers'][1]=old['layers'][1]
+  with self.assertRaises(ValueError):p.validate(changed,hub,index,manifest)
+  with self.assertRaises(ValueError):p.inspect_ok(row,{'Id':old['config']['digest'],'Os':'linux','Architecture':'amd64','RepoDigests':[row['mirror']]})
  def test_ordinary_http_fixture_uses_committed_immutable_images(self):
   source=(R.parents[1]/'Legacy.Maliev.QuotationService.Tests/Controllers/QualificationBridgeConsumerHttpTests.cs').read_text(encoding='utf-8')
   for row in self.rows[:2]:

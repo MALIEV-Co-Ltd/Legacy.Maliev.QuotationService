@@ -770,7 +770,7 @@ internal static partial class WorkflowContractValidator
             throw new InvalidOperationException("Registry custody upload must have only exact reviewed keys.");
         RequireScalarValue(evidence, "name", "Retain registry custody evidence");
         RequireScalarValue(evidence, "if", "always()");
-        RequireScalarValue(evidence, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+        RequireScalarValue(evidence, "uses", "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9");
         var inputs = RequireMapping(evidence, "with");
         if (inputs.Children.Count != 5) throw new InvalidOperationException("Registry custody upload requires exactly five inputs.");
         RequireScalarValue(inputs, "name", "quotation-registry-custody-${{ github.job }}-${{ github.sha }}");
@@ -1020,7 +1020,7 @@ internal static partial class WorkflowContractValidator
             throw new InvalidOperationException("Inspection evidence requires exact reviewed settings.");
         RequireScalarValue(step, "name", "Retain Docker context inspection evidence");
         RequireScalarValue(step, "if", "always() && hashFiles('TestResults/DockerContextInspection/docker-context-inspection.trx') != ''");
-        RequireScalarValue(step, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+        RequireScalarValue(step, "uses", "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9");
         var inputs = RequireMapping(step, "with");
         if (!inputs.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal).SetEquals(["name", "path", "if-no-files-found", "retention-days"]))
             throw new InvalidOperationException("Inspection evidence requires four exact inputs.");
@@ -1038,7 +1038,7 @@ internal static partial class WorkflowContractValidator
             throw new InvalidOperationException("Controller parity evidence requires only exact reviewed keys.");
         RequireScalarValue(step, "name", "Retain ordinary controller parity evidence");
         RequireScalarValue(step, "if", "always() && hashFiles('TestResults/ControllerParity/controller-parity.trx') != ''");
-        RequireScalarValue(step, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+        RequireScalarValue(step, "uses", "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9");
         var inputs = RequireMapping(step, "with");
         if (!inputs.Children.Keys.Select(RequireScalar).ToHashSet(StringComparer.Ordinal)
             .SetEquals(["name", "path", "if-no-files-found", "retention-days"]))
@@ -1057,7 +1057,7 @@ internal static partial class WorkflowContractValidator
             throw new InvalidOperationException("Coverage evidence step must have only its reviewed keys.");
         RequireScalarValue(step, "name", "Retain complete coverage evidence");
         RequireScalarValue(step, "if", "always() && (hashFiles('TestResults/CoverageGate/quotation-complete-coverage.trx') != '' || hashFiles('TestResults/C821Verifier/c821-verifier.trx', 'TestResults/C821Recipient/c821-recipient.trx', 'TestResults/QualificationCustody/qualification-custody.trx', 'TestResults/C6SourceIndex/c6-source-index.trx', 'TestResults/AnalyticsLeaseReclaim/analytics-lease-reclaim.trx', 'TestResults/AnalyticsDeliverySettlement/analytics-delivery-settlement.trx') != '')");
-        RequireScalarValue(step, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+        RequireScalarValue(step, "uses", "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9");
         var inputs = RequireMapping(step, "with");
         if (inputs.Children.Count != 6)
             throw new InvalidOperationException("Coverage evidence action must have exactly six reviewed inputs.");
@@ -1077,7 +1077,7 @@ internal static partial class WorkflowContractValidator
             throw new InvalidOperationException("Wire evidence step must have only its reviewed keys.");
         RequireScalarValue(step, "name", "Retain actual qualification wire-source evidence");
         RequireScalarValue(step, "if", "always() && hashFiles('TestResults/QualificationWire/qualification-wire.trx') != ''");
-        RequireScalarValue(step, "uses", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+        RequireScalarValue(step, "uses", "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9");
         var inputs = RequireMapping(step, "with");
         if (inputs.Children.Count != 6)
             throw new InvalidOperationException("Wire evidence action must have exactly six reviewed inputs.");
