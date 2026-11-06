@@ -1,87 +1,87 @@
 [
   {
     "tag": "postgres:18-alpine",
-    "indexDigest": "sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5",
-    "manifestDigest": "sha256:3b0ef735388b2cb097fc29b8bb421d86d57d0ddbe7aa1fbd6493e06d65028503",
-    "configDigest": "sha256:57b23a0326ee442e83b3d3fa027c5a148be0a392d7c91d1ca4e1e70131ee859a",
+    "indexDigest": "sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395",
+    "manifestDigest": "sha256:300ebd02c6d4de9ee27ad7f6855d5d21b4d3a4a5117767c1197d284c635d9736",
+    "configDigest": "sha256:38b9ffe2d4c13d7c445b66306be6763dfa6f503689ea0c5b9f84544ccf3ca8e4",
     "layers": [
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:7b229517ed222597277036d94892173207d01a731ab3a88eeb1de2e963a2c788",
-        "size": 3853109
+        "digest": "sha256:881fc932939efef04ca120ad44bbd2c0917851eb247aa4995428afb1e80ede17",
+        "size": 3853673
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:9b7e1e6003c93d7d6d29ceddd88f54da5af3ef40c9a7c117ba25feeddefdde90",
-        "size": 969
+        "digest": "sha256:f9a5f8f89c069fdaa449d6191dce8751a40ff81e750a73a010d2b60fa5d9c320",
+        "size": 968
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:c636fe474156f1a3e19326edfd3bcc4dbdf4ce2ef649704ae14929fd948977c5",
-        "size": 900002
+        "digest": "sha256:63677b2e422dcc313c982a9f276c5344201e017d48035fb320d0fda846ece913",
+        "size": 900007
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:8a06bdb27c21d9177c4cc4d01ae0013d5e35c73466587536174120bb368b2445",
+        "digest": "sha256:ef1860e97cefa5caf816631e64a1803a9f1a5c30aa4c77d05d9d83195fe6ecf8",
         "size": 116
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:242c5d565900091c2cf94a3d5525d2de099cad11e58238fce17558da98a9da5d",
-        "size": 115266573
+        "digest": "sha256:269f116f693d41b319c0fd5c804aa076dc3c3996a17c0f49a4c0aa8bd2920b40",
+        "size": 115289273
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:f0f97016fb12c736e2b2854c567c4020620205ce50c3c5f5513ae151de385520",
-        "size": 19007
+        "digest": "sha256:84314b29d42166e310db70993819c128034677b2aa21b691669c40b4936db591",
+        "size": 19005
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:ca102eb59e0eb094f714b42cebd5a63a12dd83bea4de64f34f8682ff96f66a92",
-        "size": 129
+        "digest": "sha256:08007d924193a5e83793bf258918e8f93dc4b73bf5f1e81bcecbb2b6ec7018dc",
+        "size": 127
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:13930ab5cb14dd8cb804d951d341d54a3df5d9b4700545c3b9e60d8cbcb9d768",
-        "size": 6110
+        "digest": "sha256:8f865016089d0863f5ba57d56464ceb62252c972611983404670f22cd012f98a",
+        "size": 6103
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:04d6f1f64405f4ef0b1742cd875f748658159e2ab86ec4ee2c59564bdf2e7d99",
-        "size": 184
+        "digest": "sha256:21a876ea75ef6fffb419194907dd5da653247e227e11adf311fd5ca16a6f809c",
+        "size": 185
       }
     ],
-    "mirror": "public.ecr.aws/docker/library/postgres@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5"
+    "mirror": "public.ecr.aws/docker/library/postgres@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395"
   },
   {
     "tag": "redis:7-alpine",
-    "indexDigest": "sha256:6ba19c50b56777f5c11c58eff8ddb69d0d5f27ba131cffb63f180ccfd43c66af",
-    "manifestDigest": "sha256:1cf73a2f04808e55a8bd2f5706c2aa0ebb0f71938f93deb7af79f48311cd5cb9",
-    "configDigest": "sha256:98c6ca8f397f86e469be752c3e7ed5eb8b17f2479840cb69a2e413037038e9f4",
+    "indexDigest": "sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b",
+    "manifestDigest": "sha256:ec1c2d3603c3d7d65b153bedda0248b641aa3bd7684503406b27b9e870ac0796",
+    "configDigest": "sha256:e7b0b929eb5b1e7b18f4662e190ceeac481b72e35dfede063b09a4ce8beac79f",
     "layers": [
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:759efa4719c9a44e7f2561a03bff2434dd66e99c916d2e4d50b055bedf554144",
-        "size": 3625395
+        "digest": "sha256:871d48e9bf6b789a439a4a19c1e152009924d818e60f7c51e498573223cd7cda",
+        "size": 3625402
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:a239ec2b8fe1e78c4e5e0709c005f5c182baa5794886e4a6f2103d960b127dfd",
-        "size": 950
+        "digest": "sha256:322b6e6144f6cfaeb74a8d9eb215ea059209144d6b576fa00c4641e22f3c5f74",
+        "size": 948
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:cef7ad5a05c66da3d345dfb693d9bd9136d1f461641d51b8896025caa1a5eece",
-        "size": 198664
+        "digest": "sha256:ed20a3352991adb40f147fbc0771fcbf28d662371c8826d08ca70798f503a432",
+        "size": 198633
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:1ea868e596ec1e0fb4d6a5c38c03f4941e2bbb7628dccf45c15e376d55067335",
-        "size": 12418105
+        "digest": "sha256:eced4433665ed6236d96668e1584d29c5b4ccdc3529e9b78b754b051088cac02",
+        "size": 12418071
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:ae75cb664c8fd47f43aa42c74e7760e3abd5d92c8524cb4c86ecada74e66c491",
+        "digest": "sha256:ee92a57da3438334c96a1fac6403784e95971bf864f5fb0db09787bece7abbbc",
         "size": 100
       },
       {
@@ -91,11 +91,11 @@
       },
       {
         "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-        "digest": "sha256:e25d07126ba7327f8e77f091b088a39f0cbbff389dca17dc714868f08d0a7d55",
-        "size": 601
+        "digest": "sha256:100397b92304c355ee136bc1664a9ce4a273e9b5b73e1da0ac9ce4704757b049",
+        "size": 602
       }
     ],
-    "mirror": "public.ecr.aws/docker/library/redis@sha256:6ba19c50b56777f5c11c58eff8ddb69d0d5f27ba131cffb63f180ccfd43c66af"
+    "mirror": "public.ecr.aws/docker/library/redis@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b"
   },
   {
     "tag": "ghcr.io/testcontainers/ryuk@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0",

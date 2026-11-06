@@ -5,7 +5,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'registry_preload'))
 import preload_images as p
 R=Path(p.__file__).resolve().parent
 def raw(name):
- current={'18-alpine-hub.json':'18-alpine-hub-10a5c69a.b64','18-alpine-index.json':'18-alpine-index-10a5c69a.b64','redis7-hub.json':'redis7-hub-6ba19c50.b64','redis7-index.json':'redis7-index-6ba19c50.b64','redis7-manifest.json':'redis7-manifest-1cf73a2f.b64'}
+ current={'18-alpine-hub.json':'18-alpine-hub-123b1799.b64','18-alpine-index.json':'18-alpine-index-123b1799.b64','18-alpine-manifest.json':'18-alpine-manifest-300ebd02.b64','redis7-hub.json':'redis7-hub-c5d34a98.b64','redis7-index.json':'redis7-index-c5d34a98.b64','redis7-manifest.json':'redis7-manifest-ec1c2d36.b64'}
  return base64.b64decode((R/current.get(name,name.replace('.json','.b64'))).read_bytes(),validate=False)
 class Controls(unittest.TestCase):
  def setUp(self):
@@ -237,6 +237,20 @@ class RegistryBindings(unittest.TestCase):
    row=copy.deepcopy(self.rows[1]);row['indexDigest']='sha256:'+digest
    row['mirror']='public.ecr.aws/docker/library/redis@'+row['indexDigest']
    with self.subTest(digest=digest),self.assertRaises(ValueError):p.binding(row)
+ def test_immediately_superseded_identities_are_rejected(self):
+  previous=(('10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5','18-alpine-manifest.b64','18-alpine'),('6ba19c50b56777f5c11c58eff8ddb69d0d5f27ba131cffb63f180ccfd43c66af','redis7-manifest-1cf73a2f.b64','redis7'))
+  for row,(old_index,old_manifest,name) in zip(self.rows[:2],previous):
+   with self.subTest(tag=row['tag']):
+    old=copy.deepcopy(row);old['indexDigest']='sha256:'+old_index;old['mirror']=old['mirror'].split('@')[0]+'@'+old['indexDigest']
+    with self.assertRaises(ValueError):p.binding(old)
+    prior=base64.b64decode((R/old_manifest).read_bytes());details=json.loads(prior)
+    hub=raw(name+'-hub.json');index=raw(name+'-index.json');manifest=raw(name+'-manifest.json')
+    with self.assertRaises(ValueError):p.validate(row,hub,index,prior)
+    for key,value in (('configDigest',details['config']['digest']),('layers',details['layers'])):
+     changed=copy.deepcopy(row);changed[key]=value
+     with self.assertRaises(ValueError):p.validate(changed,hub,index,manifest)
+    engine={'Id':details['config']['digest'],'Os':'linux','Architecture':'amd64','RepoDigests':[row['mirror']]}
+    with self.assertRaises(ValueError):p.inspect_ok(row,engine)
  def test_prior_redis_manifest_config_layers_and_engine_are_rejected(self):
   row=copy.deepcopy(self.rows[1]);hub=raw('redis7-hub.json');index=raw('redis7-index.json');manifest=raw('redis7-manifest.json')
   with self.assertRaises(ValueError):p.validate(row,hub,index,base64.b64decode((R/'redis7-manifest.b64').read_bytes()))
