@@ -83,12 +83,6 @@
       "length": 37634
     },
     {
-      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/borrowed_scanner_bridge.py",
-      "sha256": "751963c8a55666577b7802ecb1ce67ab651cf1c6b05373e02a57a5d91367f6d5",
-      "gitBlob": "e275cf838ec44d88995023249e85e78ad589172f",
-      "length": 12919
-    },
-    {
       "path": "tools/HostedStorageFront.Tests/BackendObservationPureTests.cs",
       "sha256": "fc11055a43f18e9aaa90ecba39c020adeeaf81c89ec52f9efe706f63a162abad",
       "gitBlob": "3d6a8eeee5b1001e838976675adea8b90cd729e1",
@@ -175,5 +169,21 @@
     "PR143TwoPathsPreservedExactly": true,
     "NativeSourceAndValidatorBytesUnchanged": true,
     "ActualCurrentHeadSdkOrNativeExecutionAccepted": false
-  }
+  },
+  "callerIntegrationInputs": [
+    {
+      "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/borrowed_scanner_bridge.py",
+      "sha256": "6682dd2f8aa327682b3f0b89cc89fe4110b222b2a99e4a6e9f65efb4e6a45b2a",
+      "gitBlob": "18c37014d29f7724dcabed9e16aa9c76414723bc",
+      "length": 16355,
+      "historicalPreimage": {
+        "path": "tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/borrowed_scanner_bridge.py",
+        "sha256": "751963c8a55666577b7802ecb1ce67ab651cf1c6b05373e02a57a5d91367f6d5",
+        "gitBlob": "e275cf838ec44d88995023249e85e78ad589172f",
+        "length": 12919
+      },
+      "integrationBase": "4dc6d4982ad90bdd6c10fbf42c6acd5e60d0859b",
+      "reviewedPhaseSeal": "58605f6810dbb90ba7b2c3eab997a640e53ecd9b78e1293902f060d562d7367d"
+    }
+  ]
 }

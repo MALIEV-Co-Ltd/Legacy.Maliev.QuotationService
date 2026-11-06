@@ -6,6 +6,8 @@ The dedicated caller must own the existing finite normal-host expiry timer.
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
+import ipaddress
+import re
 import json
 import os
 from pathlib import Path
@@ -78,6 +80,52 @@ class FrontSpec:
     heap_limit_bytes: int
 
 
+def admit_public_profile_shape(profile):
+    """Declarations only; original owner and C# runtime still observe actual resources."""
+    keys = {"RunId", "ExpiresUtc", "FrontOrigin", "Backend", "Repository", "SourceSha",
+            "ExecutableDll", "ExecutableSha256", "ParentPid", "ParentKernelStartTicks",
+            "ParentExecutablePath", "ParentExecutableSha256", "ParentScriptPath",
+            "ParentScriptSha256", "BootstrapPipeHandle", "BootstrapPipeInode"}
+    h.require(type(profile) is dict and (set(profile) == keys
+              or set(profile) == keys | {"SharedScannerBridge"}), "Exact public front profile required")
+    if "SharedScannerBridge" not in profile:
+        return
+    shared = profile["SharedScannerBridge"]
+    fields = {"ScannerContainerId", "ScannerCreated", "ScannerStarted", "ScannerPid", "ScannerImageId",
+              "ScannerBridgeIp", "NetworkName", "Subnet", "Gateway"}
+    h.require(type(shared) is dict and set(shared) == fields, "Exact shared declaration required")
+    backend = profile["Backend"]
+    h.require(type(backend) is dict and backend.get("BindOwnedIpv4") is True,
+              "Original owned private IPv4 binding required")
+    h.require(type(shared["ScannerPid"]) is int and 0 < shared["ScannerPid"] <= 2**31 - 1
+              and type(shared["ScannerContainerId"]) is str
+              and re.fullmatch("[0-9a-f]{64}", shared["ScannerContainerId"]) is not None
+              and shared["ScannerContainerId"] != backend.get("ContainerId")
+              and type(shared["ScannerImageId"]) is str
+              and re.fullmatch("sha256:[0-9a-f]{64}", shared["ScannerImageId"]) is not None,
+              "Exact distinct shared scanner declaration required")
+    lease = backend.get("LeaseId")
+    h.require(type(lease) is str and lease == profile["RunId"]
+              and shared["NetworkName"] == "financial-scanner-" + lease[5:] + "-network",
+              "Same original shared ownership lease required")
+    issued = h.instant(backend["IssuedUtc"])
+    expires = h.instant(profile["ExpiresUtc"])
+    created, started = h.instant(shared["ScannerCreated"]), h.instant(shared["ScannerStarted"])
+    h.require(issued <= h.instant(backend["NetworkCreated"]) <= created <= started < expires,
+              "Shared original generation order required")
+    h.require(all(type(shared[key]) is str for key in ("Subnet", "Gateway", "ScannerBridgeIp")),
+              "Exact canonical shared addresses required")
+    network = ipaddress.IPv4Network(shared["Subnet"], strict=True)
+    pool = ipaddress.IPv4Network("10.253.240.0/24")
+    scanner = ipaddress.IPv4Address(shared["ScannerBridgeIp"])
+    storage = ipaddress.IPv4Address(backend["BridgeIp"])
+    h.require(str(network) == shared["Subnet"] and network.prefixlen == 28 and network.subnet_of(pool)
+              and str(network.network_address + 1) == shared["Gateway"]
+              and str(scanner) == shared["ScannerBridgeIp"] and str(storage) == backend["BridgeIp"]
+              and scanner != storage and all(network.network_address + 1 < ip < network.broadcast_address
+                                              for ip in (scanner, storage)), "Exact distinct usable shared addresses required")
+
+
 def load_public_profile(spec, context, pipe):
     path = Path(spec.profile_path)
     root = Path(spec.repository) / "TestResults" / "C821ProducerProfiles"
@@ -98,11 +146,7 @@ def load_public_profile(spec, context, pipe):
               == (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
               and all(not item.is_symlink() for item in (path, *path.parents)), "Front profile changed during read")
     profile = json.loads(encoded, object_pairs_hook=unique)
-    keys = {"RunId", "ExpiresUtc", "FrontOrigin", "Backend", "Repository", "SourceSha",
-            "ExecutableDll", "ExecutableSha256", "ParentPid", "ParentKernelStartTicks",
-            "ParentExecutablePath", "ParentExecutableSha256", "ParentScriptPath",
-            "ParentScriptSha256", "BootstrapPipeHandle", "BootstrapPipeInode"}
-    h.require(type(profile) is dict and set(profile) == keys, "Exact public front profile required")
+    admit_public_profile_shape(profile)
     h.require(profile["RunId"] == context.lease_id and profile["ExpiresUtc"] == context.expires_utc
               and profile["Repository"] == spec.repository and profile["SourceSha"] == spec.source_sha
               and profile["ExecutableDll"] == spec.executable_dll

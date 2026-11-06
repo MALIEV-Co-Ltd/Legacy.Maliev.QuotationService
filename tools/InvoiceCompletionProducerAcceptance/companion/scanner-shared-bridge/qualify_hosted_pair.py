@@ -20,7 +20,7 @@ import uuid
 
 
 LIMIT = 1048576
-MANIFEST_SHA256 = 'ff4be370d107ae6caa6d7116205b4b7c6ab92ff5bab6e60696c490027de075fc'
+MANIFEST_SHA256 = '9c1ed6441eab02c715e1341bdf0141188f97031e928b3aaf0ff9386dd2d20545'
 
 
 class Refused(ValueError):
@@ -75,7 +75,7 @@ def admit_event(environment, event, head):
     require(event.get('repository', {}).get('full_name') == environment.get('GITHUB_REPOSITORY')
             and pull.get('head', {}).get('repo', {}).get('full_name') == environment.get('GITHUB_REPOSITORY')
             and pull.get('head', {}).get('sha') == head
-            and pull.get('head', {}).get('ref') == 'codex/scanner-shared-pair-20261008'
+            and pull.get('head', {}).get('ref') in ('codex/scanner-shared-pair-20261008', 'codex/file-front-caller-join-20261009')
             and type(pull.get('number')) is int and pull['number'] > 0)
 
 
@@ -223,6 +223,104 @@ class HeldImports(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         if tracked:
             name = 'AdmissionError' if module.__name__ == 'owned_storage_backend' else 'BridgeRefused'
             self._observer_class_births[module.__name__] = (module, getattr(module, name))
+
+
+CALLER_MANIFEST_SHA256 = '675e35d3eef7971e16ab14e7d50d980c584333043ccea2f3fa8596f272afa890'
+CALLER_MODULE_PATHS = {'actual_dotnet_start': 'tools/InvoiceCompletionProducerAcceptance/companion/actual_dotnet_start.py', 'borrowed_scanner_bridge': 'tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/borrowed_scanner_bridge.py', 'held_host_lifetime': 'tools/InvoiceCompletionProducerAcceptance/companion/held_host_lifetime.py', 'held_linux_exit': 'tools/InvoiceCompletionProducerAcceptance/companion/held_linux_exit.py', 'held_pair_launcher': 'tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/held_pair_launcher.py', 'hosted_companion_resources': 'tools/InvoiceCompletionProducerAcceptance/companion/hosted_companion_resources.py', 'hosted_scanner_readiness': 'tools/InvoiceCompletionProducerAcceptance/companion/hosted_scanner_readiness.py', 'owned_front_host': 'tools/InvoiceCompletionProducerAcceptance/companion/owned_front_host.py', 'owned_normal_hosts': 'tools/InvoiceCompletionProducerAcceptance/companion/owned_normal_hosts.py', 'owned_storage_backend': 'tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/owned_storage_backend.py', 'pair_failure_diagnostic': 'tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/pair_failure_diagnostic.py', 'regular_owned_files': 'tools/InvoiceCompletionProducerAcceptance/companion/regular_owned_files.py', 'retained_file_front_consumers': 'tools/InvoiceCompletionProducerAcceptance/companion/retained_file_front_consumers.py', 'run_eight_host_financial_acceptance': 'tools/InvoiceCompletionProducerAcceptance/companion/run_eight_host_financial_acceptance.py', 'scanner_docker_command': 'tools/InvoiceCompletionProducerAcceptance/companion/scanner_docker_command.py', 'scanner_loopback_relay': 'tools/InvoiceCompletionProducerAcceptance/companion/scanner_loopback_relay.py', 'sdk_observer_command': 'tools/InvoiceCompletionProducerAcceptance/companion/sdk_observer_command.py', 'shared_file_front_configuration': 'tools/InvoiceCompletionProducerAcceptance/companion/shared_file_front_configuration.py', 'storage_owner_command': 'tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/storage_owner_command.py', 'tls_listener_admission': 'tools/InvoiceCompletionProducerAcceptance/companion/tls_listener_admission.py'}
+CALLER_CONTROL_PATHS = ('tools/InvoiceCompletionProducerAcceptance/companion/scanner-shared-bridge/test_bridge_consumers.py', 'tools/InvoiceCompletionProducerAcceptance/companion/test_actual_dotnet_start.py', 'tools/InvoiceCompletionProducerAcceptance/companion/test_caller_source_admission.py', 'tools/InvoiceCompletionProducerAcceptance/companion/test_caller_startup.py', 'tools/InvoiceCompletionProducerAcceptance/companion/test_retained_file_front_consumers.py', 'tools/InvoiceCompletionProducerAcceptance/companion/test_sdk_observer_command.py')
+
+
+def admit_caller_sources(root):
+    """Qualify source imports only; no profile, graph, resource or authority creation."""
+    path = root / 'tools/InvoiceCompletionProducerAcceptance/companion/file-front-caller-source-manifest.json'
+    encoded = bounded_read(path, LIMIT)
+    require(hashlib.sha256(encoded).hexdigest() == CALLER_MANIFEST_SHA256)
+    manifest = json.loads(encoded)
+    require(type(manifest) is dict and set(manifest) == {'schemaVersion', 'qualificationBase', 'sourceOnly', 'ordinaryFileAuthorityAccepted', 'modules', 'controls', 'reviewedPackets'}
+            and type(manifest['schemaVersion']) is int and manifest['schemaVersion'] == 1
+            and manifest['qualificationBase'] == '4dc6d4982ad90bdd6c10fbf42c6acd5e60d0859b'
+            and manifest['sourceOnly'] is True and manifest['ordinaryFileAuthorityAccepted'] is False
+            and type(manifest['modules']) is list and len(manifest['modules']) == 20)
+    held = {}
+    for row in manifest['modules']:
+        require(type(row) is dict and set(row) == {'name', 'path', 'sha256', 'length'}
+                and type(row['name']) is str and row['name'] in CALLER_MODULE_PATHS
+                and row['name'] not in held and row['path'] == CALLER_MODULE_PATHS[row['name']]
+                and type(row['sha256']) is str and re.fullmatch('[0-9a-f]{64}', row['sha256']) is not None
+                and type(row['length']) is int and 0 < row['length'] <= LIMIT)
+        source = root / row['path']
+        require(source.resolve().is_relative_to(root.resolve()))
+        data = bounded_read(source, row['length'])
+        require(len(data) == row['length'] and hashlib.sha256(data).hexdigest() == row['sha256'])
+        held[row['name']] = data
+    require(set(held) == set(CALLER_MODULE_PATHS))
+    require(type(manifest['controls']) is list and len(manifest['controls']) == len(CALLER_CONTROL_PATHS))
+    controls = set()
+    for row in manifest['controls']:
+        require(type(row) is dict and set(row) == {'path', 'sha256', 'length'}
+                and type(row['path']) is str and row['path'] in CALLER_CONTROL_PATHS and row['path'] not in controls
+                and type(row['sha256']) is str and re.fullmatch('[0-9a-f]{64}', row['sha256']) is not None
+                and type(row['length']) is int and 0 < row['length'] <= LIMIT)
+        data = bounded_read(root / row['path'], row['length'])
+        require(len(data) == row['length'] and hashlib.sha256(data).hexdigest() == row['sha256'])
+        controls.add(row['path'])
+    require(controls == set(CALLER_CONTROL_PATHS))
+    return held
+
+
+class CallerHeldImports(HeldImports):
+    def __init__(self, root, held):
+        super().__init__(held)
+        self.root = root
+        self._caller_births = {}
+
+    def exec_module(self, module):
+        # Execute only the held bytes with original class-birth custody. Exact
+        # qualified paths support original later source rechecks; disk bytes are
+        # never executed by this loader.
+        require(module.__name__ in self.held and module.__name__ not in self._caller_births)
+        self._caller_births[module.__name__] = (module, module.__dict__, False)
+        super().exec_module(module)
+        module.__file__ = str(self.root / CALLER_MODULE_PATHS[module.__name__])
+        self._caller_births[module.__name__] = (module, module.__dict__, True)
+
+
+def recheck_caller_sources(caller):
+    """Required immediately before original actor acquisition; no receipt emission."""
+    require(type(caller) is types.ModuleType and caller.__name__ == 'run_eight_host_financial_acceptance')
+    owner = caller.__spec__.loader
+    require(type(owner) is CallerHeldImports and sys.modules.get(caller.__name__) is caller)
+    require(caller.__name__ in owner._caller_births and owner._caller_births[caller.__name__][0] is caller
+            and owner._caller_births[caller.__name__][1] is caller.__dict__ and owner._caller_births[caller.__name__][2] is True)
+    current = admit_caller_sources(owner.root)
+    require(set(current) == set(owner.held)
+            and all(current[name] == owner.held[name] for name in current))
+    for name in current:
+        if name in sys.modules:
+            require(type(sys.modules[name]) is types.ModuleType and sys.modules[name].__spec__.loader is owner
+                    and name in owner._caller_births and owner._caller_births[name][0] is sys.modules[name]
+                    and owner._caller_births[name][1] is sys.modules[name].__dict__ and owner._caller_births[name][2] is True
+                    and sys.modules[name].__file__ == str(owner.root / CALLER_MODULE_PATHS[name]))
+
+
+def prepare_qualified_file_front_startup(caller, *args):
+    recheck_caller_sources(caller)
+    return caller.prepare_file_front_startup(*args)
+
+
+def admit_and_load_caller_sources():
+    root = Path.cwd()
+    head = exact_head(root)
+    event = json.loads(bounded_read(Path(os.environ['GITHUB_EVENT_PATH']), LIMIT))
+    admit_event(os.environ, event, head)
+    held = admit_caller_sources(root)
+    require(not any(name in sys.modules for name in held))
+    owner = CallerHeldImports(root, held)
+    sys.meta_path.insert(0, owner)
+    import run_eight_host_financial_acceptance as caller
+    require(caller.__spec__.loader is owner)
+    recheck_caller_sources(caller)
+    return caller, owner
 
 
 def owners_retained():
