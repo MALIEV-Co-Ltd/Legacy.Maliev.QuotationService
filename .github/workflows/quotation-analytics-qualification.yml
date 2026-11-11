@@ -178,7 +178,7 @@ jobs:
           & ./trusted-scanners/scripts/Invoke-CurrentTreeCredentialScan.ps1 -RepositoryPath "$env:GITHUB_WORKSPACE/candidate"
           if ($LASTEXITCODE -ne 0) { throw 'Current tree credential security gate failed.' }
       - name: Set up ordinary .NET version
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73
         with:
           dotnet-version: 10.0.x
       - name: Build first, qualify analytics and complete ordinary validation
