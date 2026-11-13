@@ -1,0 +1,162 @@
+name: Quotation API image build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Legacy.Maliev.QuotationService.Api/Dockerfile'
+      - '.github/workflows/quotation-image-build.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Legacy.Maliev.QuotationService.Api/Dockerfile'
+      - '.github/workflows/quotation-image-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  image-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: validation
+            defaults: 628a99803f92e17da4dd587e40638d3828b3c59c
+          - lane: publisher
+            defaults: f72be151917cb3962380971418c187e3df563f8d
+    env:
+      EXPECTED_DEFAULTS: ${{ matrix.defaults }}
+      BUILD_LANE: ${{ matrix.lane }}
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Check out pinned ServiceDefaults
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.ServiceDefaults
+          ref: ${{ matrix.defaults }}
+          path: .dependencies/Legacy.Maliev.ServiceDefaults
+          persist-credentials: false
+      - name: Check out pinned CompatibilityContracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.CompatibilityContracts
+          ref: 78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7
+          path: .dependencies/Legacy.Maliev.CompatibilityContracts
+          persist-credentials: false
+      - name: Check out pinned Accounting test dependency
+        if: matrix.lane == 'validation'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: MALIEV-Co-Ltd/Legacy.Maliev.AccountingService
+          ref: ae0826156b06c34476e95de8c53dfccfcf5a5972
+          path: .dependencies/Legacy.Maliev.AccountingService
+          persist-credentials: false
+      - name: Admit current job receipt ownership
+        id: receipt_preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in quotation-image-id quotation-image-settled quotation-image-build-started quotation-image-build.log quotation-image-remove-invoked quotation-image-remove-settled; do
+            test ! -e "$RUNNER_TEMP/$file"
+            test ! -L "$RUNNER_TEMP/$file"
+          done
+          sentinel="$RUNNER_TEMP/quotation186-receipts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${BUILD_LANE}"
+          mkdir -- "$sentinel"
+          printf 'admitted=true\n' >> "$GITHUB_OUTPUT"
+      - name: Build exact Dockerfile without publishing
+        id: build
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git -C .dependencies/Legacy.Maliev.ServiceDefaults rev-parse HEAD)" = "$EXPECTED_DEFAULTS"
+          test "$(git -C .dependencies/Legacy.Maliev.CompatibilityContracts rev-parse HEAD)" = 78e48ffc4ee000df0510cba5e7c7a3c4c4d539d7
+          case "$BUILD_LANE" in
+            validation) test "$(git -C .dependencies/Legacy.Maliev.AccountingService rev-parse HEAD)" = ae0826156b06c34476e95de8c53dfccfcf5a5972 ;;
+            publisher) test ! -e .dependencies/Legacy.Maliev.AccountingService ;;
+            *) exit 1 ;;
+          esac
+          printf 'Source head=%s tree=%s lane=%s defaults=%s\n' "$EXPECTED_HEAD" "$(git rev-parse HEAD^{tree})" "$BUILD_LANE" "$EXPECTED_DEFAULTS"
+          tag="quotation-image-build:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${BUILD_LANE}"
+          test ! -e "$RUNNER_TEMP/quotation-image-id"
+          test ! -e "$RUNNER_TEMP/quotation-image-settled"
+          test ! -e "$RUNNER_TEMP/quotation-image-build-started"
+          for marker in quotation-image-remove-invoked quotation-image-remove-settled; do
+            test ! -e "$RUNNER_TEMP/$marker"
+            test ! -L "$RUNNER_TEMP/$marker"
+          done
+          docker info >/dev/null
+          tags="$(docker image ls --format '{{.Repository}}:{{.Tag}}')"
+          if grep -Fxq -- "$tag" <<< "$tags"; then
+            echo 'Unique run tag already exists; refusing to overwrite' >&2
+            exit 1
+          fi
+          : > "$RUNNER_TEMP/quotation-image-build-started"
+          DOCKER_BUILDKIT=1 docker build --progress=plain --iidfile "$RUNNER_TEMP/quotation-image-id" \
+            --tag "$tag" --file Legacy.Maliev.QuotationService.Api/Dockerfile . 2>&1 | tee "$RUNNER_TEMP/quotation-image-build.log"
+          iid="$(cat "$RUNNER_TEMP/quotation-image-id")"
+          [[ "$iid" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "$(docker image inspect --format '{{.Id}}' "$tag")" = "$iid"
+          printf '%s\n' "$iid" > "$RUNNER_TEMP/quotation-image-settled"
+          for base in sdk:11.0 aspnet:10.0; do
+            matches="$(grep -E "^#[0-9]+ \[[^]]+\] FROM mcr[.]microsoft[.]com/dotnet/${base}@sha256:[0-9a-f]{64}" "$RUNNER_TEMP/quotation-image-build.log" | grep -Eo "mcr[.]microsoft[.]com/dotnet/${base}@sha256:[0-9a-f]{64}" | sort -u)"
+            [[ "$(printf '%s\n' "$matches" | wc -l)" -eq 1 && "$matches" =~ @sha256:[0-9a-f]{64}$ ]]
+            printf 'Resolved base: %s\n' "$matches"
+          done
+          if grep -E '(^|[[:space:]])warning (CS|NU|MSB|NETSDK)[0-9]+' "$RUNNER_TEMP/quotation-image-build.log"; then
+            echo 'Compiler or package warnings found' >&2
+            exit 1
+          fi
+          printf 'Built head=%s image=%s tag=%s\n' "$EXPECTED_HEAD" "$iid" "$tag"
+      - name: Remove exact owned image tag
+        if: always() && steps.receipt_preflight.outputs.admitted == 'true'
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "$RUNNER_TEMP/quotation186-receipts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${BUILD_LANE}"
+          tag="quotation-image-build:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${BUILD_LANE}"
+          if ! test -e "$RUNNER_TEMP/quotation-image-build-started"; then
+            echo 'Build was not invoked; no image is owned by this job.'
+            exit 0
+          fi
+          if ! test -s "$RUNNER_TEMP/quotation-image-settled"; then
+            echo 'Build settlement marker absent; daemon/image custody remains unverified' >&2
+            exit 1
+          fi
+          iid="$(cat "$RUNNER_TEMP/quotation-image-id")"
+          [[ "$iid" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "$(cat "$RUNNER_TEMP/quotation-image-settled")" = "$iid"
+          test "$(docker image inspect --format '{{.Id}}' "$tag")" = "$iid"
+          : > "$RUNNER_TEMP/quotation-image-remove-invoked"
+          timeout --signal=TERM --kill-after=5s 15s docker image rm "$tag"
+          docker info >/dev/null
+          tags="$(docker image ls --format '{{.Repository}}:{{.Tag}}')"
+          if grep -Fxq -- "$tag" <<< "$tags"; then
+            echo 'Owned image tag remains' >&2
+            exit 1
+          fi
+          : > "$RUNNER_TEMP/quotation-image-remove-settled"
+          printf 'Removed exact tag=%s for image=%s; runner/daemon destruction not asserted\n' "$tag" "$iid"
+      - name: Retain bounded image custody
+        if: always() && steps.receipt_preflight.outputs.admitted == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: quotation-image-build-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.lane }}
+          path: |
+            ${{ runner.temp }}/quotation-image-id
+            ${{ runner.temp }}/quotation-image-settled
+            ${{ runner.temp }}/quotation-image-build-started
+            ${{ runner.temp }}/quotation-image-remove-invoked
+            ${{ runner.temp }}/quotation-image-remove-settled
+          if-no-files-found: warn
+          retention-days: 7
