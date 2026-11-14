@@ -235,8 +235,8 @@ public sealed class WorkflowContractTests
     [Fact]
     public void MigrationRunner_UsesCoordinatedEfAndNpgsqlRuntimeGraph()
     {
-        Assert.Contains("Microsoft.EntityFrameworkCore\" Version=\"10.0.14", MigrationRunnerProject, StringComparison.Ordinal);
-        Assert.Contains("Microsoft.EntityFrameworkCore.Relational\" Version=\"10.0.14", MigrationRunnerProject, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.EntityFrameworkCore\" Version=\"10.0.15", MigrationRunnerProject, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.EntityFrameworkCore.Relational\" Version=\"10.0.15", MigrationRunnerProject, StringComparison.Ordinal);
         Assert.Contains("Npgsql.EntityFrameworkCore.PostgreSQL\" Version=\"10.0.3", MigrationRunnerProject, StringComparison.Ordinal);
     }
 
