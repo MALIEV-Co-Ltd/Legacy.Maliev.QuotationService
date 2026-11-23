@@ -17,7 +17,7 @@ public sealed class GeneratedDocumentationEmissionTests
         var root = FindRepository();
         var name = "Legacy.Maliev.QuotationService." + component;
         var project = Path.Combine(root, name);
-        var output = Path.Combine(project, "bin", "Release", "net10.0", name + ".xml");
+        var output = Path.Combine(project, "bin", "Release", "net11.0", name + ".xml");
         Assert.True(File.Exists(output), $"The actual Release build did not emit {name} XML documentation.");
         var document = XDocument.Load(output);
         Assert.Equal("doc", document.Root!.Name.LocalName);

@@ -16,7 +16,7 @@
 
 ## Runtime constraints
 
-- .NET 10, Scalar/OpenAPI, Npgsql, Redis, standard MALIEV service defaults, and built-in
+- .NET 11, Scalar/OpenAPI, Npgsql, Redis, standard MALIEV service defaults, and built-in
   `ILogger<T>` are required.
 - Run only in the existing GKE cluster and `maliev-legacy` namespace. No new node pool,
   Cloud SQL, or other paid infrastructure.

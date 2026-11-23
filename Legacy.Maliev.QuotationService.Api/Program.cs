@@ -63,7 +63,7 @@ return await QuotationStartupBoundary.RunAsync(async () =>
     }).AddServiceDiscovery().AddLegacyServiceAuthentication()
         .AddPrivateFailureObservation(QualificationAuthorityClient.ClientName);
     builder.AddStandardMiddleware(options => options.EnableRequestLogging = true);
-    builder.AddStandardOpenApi(title: "Legacy MALIEV Quotation Service API", description: "Temporary .NET 10 compatibility API for quotation and quotation-request contracts.");
+    builder.AddStandardOpenApi(title: "Legacy MALIEV Quotation Service API", description: "Temporary .NET 11 compatibility API for quotation and quotation-request contracts.");
     // Register in this compilation so the generator attaches API and referenced DTO XML comments.
     builder.Services.AddOpenApi("v1");
     builder.Services.ConfigureHttpJsonOptions(options =>

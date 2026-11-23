@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 COPY nuget.config .
 COPY Directory.Build.props .
@@ -15,7 +15,7 @@ COPY Legacy.Maliev.QuotationService.MigrationRunner/ Legacy.Maliev.QuotationServ
 RUN dotnet publish Legacy.Maliev.QuotationService.MigrationRunner/Legacy.Maliev.QuotationService.MigrationRunner.csproj \
     --configuration Release --no-restore --output /app /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/runtime:11.0 AS runtime
 WORKDIR /app
 COPY --from=build --chown=$APP_UID:$APP_UID /app .
 USER $APP_UID
