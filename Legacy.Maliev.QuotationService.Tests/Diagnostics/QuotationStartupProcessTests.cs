@@ -17,7 +17,7 @@ public sealed class QuotationStartupProcessTests
         string scenario, string expectedExceptionType)
     {
         var root = FindRepository();
-        var apiDirectory = Path.Combine(root, "Legacy.Maliev.QuotationService.Api", "bin", "Release", "net10.0");
+        var apiDirectory = Path.Combine(root, "Legacy.Maliev.QuotationService.Api", "bin", "Release", "net11.0");
         var api = Path.Combine(apiDirectory, "Legacy.Maliev.QuotationService.Api.dll");
         Assert.True(File.Exists(api), "The Release API must be built before its executable startup proof.");
         Assert.True(File.Exists(Path.ChangeExtension(api, ".runtimeconfig.json")));
